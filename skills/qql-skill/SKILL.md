@@ -9,15 +9,16 @@ Use this skill to turn retrieval intent into valid QQL for the current Go implem
 
 Treat QQL as a query language and execution surface, not as a retrieval strategy engine. Write the smallest correct statement for the mode the user actually needs.
 
-## Source Of Truth
+## Skill References
 
-Use [README.md](../../README.md) as the canonical public contract.
+Use these bundled references first:
 
-If you need the compact agent-facing mirror, use:
-
+- [references/qql-install.md](references/qql-install.md) for first-time CLI install
 - [references/qql-capabilities.md](references/qql-capabilities.md) for supported syntax
 - [references/qql-query-patterns.md](references/qql-query-patterns.md) for short runnable examples
 - [references/qql-gaps.md](references/qql-gaps.md) for unsupported features only
+
+If the skill is being used from the source repo checkout, [README.md](../../README.md) is the broader project overview.
 
 Supported syntax in this repo includes:
 
@@ -65,6 +66,8 @@ Use structured output:
 For human debugging, use the text path (`qql-go exec "..."`, `qql-go explain "..."`, `qql-go doctor`).
 
 `qql-go explain --quiet "<query>"` prints the raw plan text without the titled section wrapper.
+
+If `qql-go` is not installed yet, use [references/qql-install.md](references/qql-install.md) first.
 
 ## Choose The Mode Before Writing The Query
 

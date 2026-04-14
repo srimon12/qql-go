@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,8 +10,22 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-DEFAULT_QQL_BIN = REPO_ROOT / ("qql-go.exe" if os.name == "nt" else "qql-go")
-QQL_BIN = os.environ.get("QQL_BIN", str(DEFAULT_QQL_BIN))
+REPO_LOCAL_QQL_BIN = REPO_ROOT / ("qql-go.exe" if os.name == "nt" else "qql-go")
+
+
+def resolve_qql_bin() -> str:
+    override = os.environ.get("QQL_BIN")
+    if override:
+        return override
+
+    path_bin = shutil.which("qql-go")
+    if path_bin:
+        return path_bin
+
+    return str(REPO_LOCAL_QQL_BIN)
+
+
+QQL_BIN = resolve_qql_bin()
 
 
 @dataclass
