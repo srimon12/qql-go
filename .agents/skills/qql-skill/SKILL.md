@@ -7,41 +7,49 @@ description: "Use QQL to create collections, create payload indexes, insert docu
 
 Use this skill to turn retrieval intent into valid QQL for the current Go implementation.
 
-Treat QQL as a query language and execution surface, not as a full retrieval strategy engine. Decide the retrieval mode first, then write the smallest correct statement.
+Treat QQL as a query language and execution surface, not as a retrieval strategy engine. Write the smallest correct statement for the mode the user actually needs.
 
-## Work From The Actual Surface
+## Source Of Truth
 
-Use only the syntax that the current Go CLI supports:
+Use [README.md](../../../README.md) as the canonical public contract.
 
-- `CREATE COLLECTION`
-- `CREATE COLLECTION ... HYBRID`
-- `CREATE INDEX ON COLLECTION ... FOR ... TYPE ...`
+If you need the compact agent-facing mirror, use:
+
+- [references/qql-capabilities.md](references/qql-capabilities.md) for supported syntax
+- [references/qql-query-patterns.md](references/qql-query-patterns.md) for short runnable examples
+- [references/qql-gaps.md](references/qql-gaps.md) for unsupported features only
+
+Supported syntax in this repo includes:
+
+- `CREATE COLLECTION <name>`
+- `CREATE COLLECTION <name> HYBRID`
+- `CREATE COLLECTION <name> HYBRID RERANK`
+- `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE <kind>`
 - `SHOW COLLECTIONS`
-- `DROP COLLECTION`
-- `INSERT INTO COLLECTION ... VALUES ...`
-- `SEARCH ... SIMILAR TO ... LIMIT ...`
-- `DELETE FROM ... WHERE ...`
+- `DROP COLLECTION <name>`
+- `INSERT INTO COLLECTION <name> VALUES {...}`
+- `INSERT INTO COLLECTION <name> VALUES {...} USING MODEL '<model>'`
+- `INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID`
+- `INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'`
+- `INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID SPARSE MODEL '<model>'`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n>`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING MODEL '<model>'`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WHERE <filter>`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef, exact, acorn }`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK`
+- `DELETE FROM <name> WHERE ...`
 - `EXPLAIN <statement>`
 
-Current inference boundary (important):
+Current inference boundary:
 
-- In this Go implementation, text `INSERT` and text `SEARCH ... SIMILAR TO ...` are cloud inference paths.
-- `USING HYBRID` and `RERANK` should be treated as Qdrant Cloud-only behavior for now.
+- Text `INSERT` and text `SEARCH ... SIMILAR TO ...` are cloud inference paths.
+- `USING HYBRID` and `RERANK` are cloud-only behavior for now.
 - For self-hosted/local URLs, prefer non-inference statements (`SHOW`, `CREATE`, `DROP`, `CREATE INDEX`, `DELETE`).
-
-Supported search modifiers:
-
-- `USING HYBRID`
-- `WHERE`
-- `EXACT`
-- `WITH { hnsw_ef, exact, acorn }`
-- `RERANK`
-
-Read these references when needed:
-
-- [references/qql-capabilities.md](references/qql-capabilities.md)
-- [references/qql-query-patterns.md](references/qql-query-patterns.md)
-- [references/qql-gaps.md](references/qql-gaps.md)
 
 ## Agent and Script Output Contract
 

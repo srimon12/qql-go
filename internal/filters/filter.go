@@ -1,6 +1,8 @@
 package filters
 
 import (
+	"reflect"
+
 	"github.com/qdrant/go-client/qdrant"
 	"github.com/qdrant/qql-go/internal/ast"
 	"github.com/qdrant/qql-go/internal/errors"
@@ -26,63 +28,40 @@ func (fc *FilterConverter) BuildFilter(expr ast.FilterExpr) (*qdrant.Filter, err
 }
 
 func (fc *FilterConverter) buildCondition(expr ast.FilterExpr) (*qdrant.Condition, error) {
+	expr, err := normalizeFilterExpr(expr)
+	if err != nil {
+		return nil, err
+	}
+
 	switch e := expr.(type) {
 	case ast.CompareExpr:
 		return fc.buildCompareExpr(e)
-	case *ast.CompareExpr:
-		return fc.buildCompareExpr(*e)
 	case ast.BetweenExpr:
 		return fc.buildBetweenExpr(e)
-	case *ast.BetweenExpr:
-		return fc.buildBetweenExpr(*e)
 	case ast.InExpr:
 		return fc.buildInExpr(e)
-	case *ast.InExpr:
-		return fc.buildInExpr(*e)
 	case ast.NotInExpr:
 		return fc.buildNotInExpr(e)
-	case *ast.NotInExpr:
-		return fc.buildNotInExpr(*e)
 	case ast.IsNullExpr:
 		return fc.buildIsNullExpr(e)
-	case *ast.IsNullExpr:
-		return fc.buildIsNullExpr(*e)
 	case ast.IsNotNullExpr:
 		return fc.buildIsNotNullExpr(e)
-	case *ast.IsNotNullExpr:
-		return fc.buildIsNotNullExpr(*e)
 	case ast.IsEmptyExpr:
 		return fc.buildIsEmptyExpr(e)
-	case *ast.IsEmptyExpr:
-		return fc.buildIsEmptyExpr(*e)
 	case ast.IsNotEmptyExpr:
 		return fc.buildIsNotEmptyExpr(e)
-	case *ast.IsNotEmptyExpr:
-		return fc.buildIsNotEmptyExpr(*e)
 	case ast.MatchTextExpr:
 		return fc.buildMatchTextExpr(e)
-	case *ast.MatchTextExpr:
-		return fc.buildMatchTextExpr(*e)
 	case ast.MatchAnyExpr:
 		return fc.buildMatchAnyExpr(e)
-	case *ast.MatchAnyExpr:
-		return fc.buildMatchAnyExpr(*e)
 	case ast.MatchPhraseExpr:
 		return fc.buildMatchPhraseExpr(e)
-	case *ast.MatchPhraseExpr:
-		return fc.buildMatchPhraseExpr(*e)
 	case ast.AndExpr:
 		return fc.buildAndExpr(e)
-	case *ast.AndExpr:
-		return fc.buildAndExpr(*e)
 	case ast.OrExpr:
 		return fc.buildOrExpr(e)
-	case *ast.OrExpr:
-		return fc.buildOrExpr(*e)
 	case ast.NotExpr:
 		return fc.buildNotExpr(e)
-	case *ast.NotExpr:
-		return fc.buildNotExpr(*e)
 	default:
 		return nil, errors.NewQQLRuntimeError("unknown filter expression type")
 	}
@@ -113,6 +92,26 @@ func (fc *FilterConverter) buildCompareExpr(expr ast.CompareExpr) (*qdrant.Condi
 	default:
 		return nil, errors.NewQQLRuntimeError("unknown comparison operator: " + expr.Op)
 	}
+}
+
+func normalizeFilterExpr(expr ast.FilterExpr) (ast.FilterExpr, error) {
+	if expr == nil {
+		return nil, errors.NewQQLRuntimeError("unknown filter expression type")
+	}
+
+	value := reflect.ValueOf(expr)
+	if value.Kind() != reflect.Ptr {
+		return expr, nil
+	}
+	if value.IsNil() {
+		return nil, errors.NewQQLRuntimeError("unknown filter expression type")
+	}
+
+	normalized, ok := value.Elem().Interface().(ast.FilterExpr)
+	if !ok {
+		return nil, errors.NewQQLRuntimeError("unknown filter expression type")
+	}
+	return normalized, nil
 }
 
 func (fc *FilterConverter) buildBetweenExpr(expr ast.BetweenExpr) (*qdrant.Condition, error) {

@@ -3,40 +3,47 @@ package output
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 )
 
 type Outputter struct {
-	writer *os.File
+	stdout io.Writer
+	stderr io.Writer
 }
 
 func NewOutputter() *Outputter {
+	return NewOutputterWithWriters(os.Stdout, os.Stderr)
+}
+
+func NewOutputterWithWriters(stdout, stderr io.Writer) *Outputter {
 	return &Outputter{
-		writer: os.Stdout,
+		stdout: stdout,
+		stderr: stderr,
 	}
 }
 
 func (o *Outputter) Print(msg string) {
-	fmt.Fprintln(o.writer, msg)
+	fmt.Fprintln(o.stdout, msg)
 }
 
 func (o *Outputter) PrintSuccess(msg string) {
-	fmt.Fprintf(o.writer, "\033[32m✓\033[0m %s\n", msg)
+	fmt.Fprintf(o.stdout, "\033[32m✓\033[0m %s\n", msg)
 }
 
 func (o *Outputter) PrintError(msg string) {
-	fmt.Fprintf(os.Stderr, "\033[31m✗\033[0m %s\n", msg)
+	fmt.Fprintf(o.stderr, "\033[31m✗\033[0m %s\n", msg)
 }
 
 func (o *Outputter) PrintBanner() {
 	banner := "\n\033[36m╔══════════════════════════════════════════╗\033[0m\n" +
 		"\033[36m║\033[0m  \033[1;36mQQL — Qdrant Query Language\033[0m           \033[36m║\033[0m\n" +
 		"\033[36m╚══════════════════════════════════════════╝\033[0m\n"
-	fmt.Fprint(o.writer, banner)
+	fmt.Fprint(o.stdout, banner)
 }
 
 func (o *Outputter) PrintSection(title, content string) {
-	fmt.Fprintf(o.writer, "\033[1m%s\033[0m\n%s\n", title, content)
+	fmt.Fprintf(o.stdout, "\033[1m%s\033[0m\n%s\n", title, content)
 }
 
 func (o *Outputter) PrintExplain(plan string) {
@@ -44,7 +51,7 @@ func (o *Outputter) PrintExplain(plan string) {
 }
 
 func (o *Outputter) PrintJSON(value any, pretty bool) error {
-	enc := json.NewEncoder(o.writer)
+	enc := json.NewEncoder(o.stdout)
 	if pretty {
 		enc.SetIndent("", "  ")
 	}

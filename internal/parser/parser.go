@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"strconv"
+
 	"github.com/qdrant/qql-go/internal/ast"
 	"github.com/qdrant/qql-go/internal/errors"
 	"github.com/qdrant/qql-go/internal/lexer"
@@ -92,44 +94,9 @@ func (p *Parser) parseInsert() (*ast.InsertStmt, error) {
 	if err != nil {
 		return nil, err
 	}
-	var model *string
-	hybrid := false
-	var sparseModel *string
-
-	tok := p.peek()
-	if tok.Kind == lexer.TokenKindUsing {
-		p.advance()
-		if p.peek().Kind == lexer.TokenKindHybrid {
-			p.advance()
-			hybrid = true
-			for p.peek().Kind == lexer.TokenKindDense || p.peek().Kind == lexer.TokenKindSparse {
-				sub := p.advance()
-				if _, err := p.expect(lexer.TokenKindModel); err != nil {
-					return nil, err
-				}
-				mTok, err := p.expect(lexer.TokenKindString)
-				if err != nil {
-					return nil, err
-				}
-				if sub.Kind == lexer.TokenKindDense {
-					modelVal := mTok.Value
-					model = &modelVal
-				} else {
-					sparseVal := mTok.Value
-					sparseModel = &sparseVal
-				}
-			}
-		} else {
-			if _, err := p.expect(lexer.TokenKindModel); err != nil {
-				return nil, err
-			}
-			mTok, err := p.expect(lexer.TokenKindString)
-			if err != nil {
-				return nil, err
-			}
-			modelVal := mTok.Value
-			model = &modelVal
-		}
+	model, hybrid, sparseModel, err := p.parseEmbeddingOptions()
+	if err != nil {
+		return nil, err
 	}
 	return &ast.InsertStmt{
 		Collection:  collection,
@@ -245,127 +212,76 @@ func (p *Parser) parseSearch() (*ast.SearchStmt, error) {
 	if err != nil {
 		return nil, err
 	}
-	var limit int
-	parseInt(limitTok.Value, &limit)
-
-	var withClause *ast.SearchWith
-	tok := p.peek()
-	if tok.Kind == lexer.TokenKindExact {
-		p.advance()
-		withClause = &ast.SearchWith{Exact: true}
+	limit, err := parseIntToken(limitTok)
+	if err != nil {
+		return nil, err
 	}
 
-	var model *string
-	hybrid := false
-	var sparseModel *string
-
-	tok = p.peek()
-	if tok.Kind == lexer.TokenKindUsing {
-		p.advance()
-		if p.peek().Kind == lexer.TokenKindHybrid {
-			p.advance()
-			hybrid = true
-			for p.peek().Kind == lexer.TokenKindDense || p.peek().Kind == lexer.TokenKindSparse {
-				sub := p.advance()
-				if _, err := p.expect(lexer.TokenKindModel); err != nil {
-					return nil, err
-				}
-				mTok, err := p.expect(lexer.TokenKindString)
-				if err != nil {
-					return nil, err
-				}
-				if sub.Kind == lexer.TokenKindDense {
-					modelVal := mTok.Value
-					model = &modelVal
-				} else {
-					sparseVal := mTok.Value
-					sparseModel = &sparseVal
-				}
-			}
-		} else {
-			if _, err := p.expect(lexer.TokenKindModel); err != nil {
-				return nil, err
-			}
-			mTok, err := p.expect(lexer.TokenKindString)
-			if err != nil {
-				return nil, err
-			}
-			modelVal := mTok.Value
-			model = &modelVal
-		}
+	model, hybrid, sparseModel, err := p.parseEmbeddingOptions()
+	if err != nil {
+		return nil, err
 	}
 
 	var queryFilter ast.FilterExpr
-	tok = p.peek()
-	if tok.Kind == lexer.TokenKindWhere {
-		p.advance()
-		queryFilter, err = p.parseFilterExpr()
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	rerank := false
 	var rerankModel *string
-	tok = p.peek()
-	if tok.Kind == lexer.TokenKindRerank {
-		p.advance()
-		rerank = true
-		if p.peek().Kind == lexer.TokenKindModel {
+	var withClause *ast.SearchWith
+	seenWhere := false
+	seenRerank := false
+	seenWith := false
+
+	for {
+		switch p.peek().Kind {
+		case lexer.TokenKindWhere:
+			if seenWhere {
+				return nil, errors.NewQQLSyntaxError("Duplicate WHERE clause", p.peek().Pos)
+			}
+			seenWhere = true
 			p.advance()
-			rmTok, err := p.expect(lexer.TokenKindString)
+			queryFilter, err = p.parseFilterExpr()
 			if err != nil {
 				return nil, err
 			}
-			rmVal := rmTok.Value
-			rerankModel = &rmVal
+		case lexer.TokenKindRerank:
+			if seenRerank {
+				return nil, errors.NewQQLSyntaxError("Duplicate RERANK clause", p.peek().Pos)
+			}
+			seenRerank = true
+			p.advance()
+			rerank = true
+			rerankModel, err = p.parseOptionalModelString()
+			if err != nil {
+				return nil, err
+			}
+		case lexer.TokenKindExact:
+			p.advance()
+			ensureSearchWith(&withClause).Exact = true
+		case lexer.TokenKindWith:
+			if seenWith {
+				return nil, errors.NewQQLSyntaxError("Duplicate WITH clause", p.peek().Pos)
+			}
+			seenWith = true
+			p.advance()
+			parsedWith, err := p.parseWithClause()
+			if err != nil {
+				return nil, err
+			}
+			mergeSearchWith(&withClause, parsedWith)
+		default:
+			return &ast.SearchStmt{
+				Collection:  collection,
+				QueryText:   queryText,
+				Limit:       limit,
+				Model:       model,
+				Hybrid:      hybrid,
+				SparseModel: sparseModel,
+				QueryFilter: queryFilter,
+				Rerank:      rerank,
+				RerankModel: rerankModel,
+				WithClause:  withClause,
+			}, nil
 		}
 	}
-
-	tok = p.peek()
-	if tok.Kind == lexer.TokenKindExact {
-		p.advance()
-		if withClause == nil {
-			withClause = &ast.SearchWith{Exact: true}
-		} else {
-			withClause.Exact = true
-		}
-	}
-
-	tok = p.peek()
-	if tok.Kind == lexer.TokenKindWith {
-		p.advance()
-		parsedWith, err := p.parseWithClause()
-		if err != nil {
-			return nil, err
-		}
-		if withClause == nil {
-			withClause = parsedWith
-		} else {
-			if parsedWith.HnswEf != 0 {
-				withClause.HnswEf = parsedWith.HnswEf
-			}
-			if parsedWith.Exact {
-				withClause.Exact = true
-			}
-			if parsedWith.Acorn {
-				withClause.Acorn = true
-			}
-		}
-	}
-
-	return &ast.SearchStmt{
-		Collection:  collection,
-		QueryText:   queryText,
-		Limit:       limit,
-		Model:       model,
-		Hybrid:      hybrid,
-		SparseModel: sparseModel,
-		QueryFilter: queryFilter,
-		Rerank:      rerank,
-		RerankModel: rerankModel,
-		WithClause:  withClause,
-	}, nil
 }
 
 func (p *Parser) parseDelete() (*ast.DeleteStmt, error) {
@@ -393,8 +309,10 @@ func (p *Parser) parseDelete() (*ast.DeleteStmt, error) {
 			pointID = tok.Value
 		} else if tok.Kind == lexer.TokenKindInteger {
 			p.advance()
-			var v int
-			parseInt(tok.Value, &v)
+			v, err := parseIntToken(tok)
+			if err != nil {
+				return nil, err
+			}
 			pointID = v
 		} else {
 			return nil, errors.NewQQLSyntaxError("Expected string or integer for point id, got '"+tok.Value+"'", tok.Pos)
@@ -606,14 +524,10 @@ func (p *Parser) parseLiteral() (interface{}, error) {
 		return tok.Value, nil
 	case lexer.TokenKindInteger:
 		p.advance()
-		var v int
-		parseInt(tok.Value, &v)
-		return v, nil
+		return parseIntToken(tok)
 	case lexer.TokenKindFloat:
 		p.advance()
-		var v float64
-		parseFloat(tok.Value, &v)
-		return v, nil
+		return parseFloatToken(tok)
 	}
 	return nil, errors.NewQQLSyntaxError("Expected a literal value (string, integer, or float), got '"+tok.Value+"'", tok.Pos)
 }
@@ -623,14 +537,10 @@ func (p *Parser) parseNumber() (interface{}, error) {
 	switch tok.Kind {
 	case lexer.TokenKindInteger:
 		p.advance()
-		var v int
-		parseInt(tok.Value, &v)
-		return v, nil
+		return parseIntToken(tok)
 	case lexer.TokenKindFloat:
 		p.advance()
-		var v float64
-		parseFloat(tok.Value, &v)
-		return v, nil
+		return parseFloatToken(tok)
 	}
 	return nil, errors.NewQQLSyntaxError("Expected a number, got '"+tok.Value+"'", tok.Pos)
 }
@@ -751,14 +661,10 @@ func (p *Parser) parseValue() (interface{}, error) {
 		return tok.Value, nil
 	case lexer.TokenKindFloat:
 		p.advance()
-		var v float64
-		parseFloat(tok.Value, &v)
-		return v, nil
+		return parseFloatToken(tok)
 	case lexer.TokenKindInteger:
 		p.advance()
-		var v int
-		parseInt(tok.Value, &v)
-		return v, nil
+		return parseIntToken(tok)
 	case lexer.TokenKindNull:
 		p.advance()
 		return nil, nil
@@ -807,7 +713,10 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 			if err != nil {
 				return nil, err
 			}
-			parseInt(intTok.Value, &hnswEf)
+			hnswEf, err = parseIntToken(intTok)
+			if err != nil {
+				return nil, err
+			}
 		case "exact":
 			exact, err = p.parseBool()
 			if err != nil {
@@ -893,54 +802,95 @@ func toLower(s string) string {
 	return string(result)
 }
 
-func parseInt(s string, result *int) {
-	*result = 0
-	sign := 1
-	i := 0
-	if len(s) > 0 && s[0] == '-' {
-		sign = -1
-		i = 1
+func (p *Parser) parseEmbeddingOptions() (*string, bool, *string, error) {
+	if p.peek().Kind != lexer.TokenKindUsing {
+		return nil, false, nil, nil
 	}
-	for ; i < len(s); i++ {
-		*result = *result*10 + int(s[i]-'0')
+
+	p.advance()
+	if p.peek().Kind != lexer.TokenKindHybrid {
+		model, err := p.parseRequiredModelString()
+		return model, false, nil, err
 	}
-	*result *= sign
+
+	p.advance()
+	var model *string
+	var sparseModel *string
+	for p.peek().Kind == lexer.TokenKindDense || p.peek().Kind == lexer.TokenKindSparse {
+		mode := p.advance().Kind
+		currentModel, err := p.parseRequiredModelString()
+		if err != nil {
+			return nil, false, nil, err
+		}
+		if mode == lexer.TokenKindDense {
+			model = currentModel
+		} else {
+			sparseModel = currentModel
+		}
+	}
+
+	return model, true, sparseModel, nil
 }
 
-func parseFloat(s string, result *float64) {
-	*result = 0
-	negative := false
-	i := 0
-	if len(s) > 0 && s[0] == '-' {
-		negative = true
-		i = 1
+func (p *Parser) parseRequiredModelString() (*string, error) {
+	if _, err := p.expect(lexer.TokenKindModel); err != nil {
+		return nil, err
 	}
+	return p.parseStringPtr()
+}
 
-	dotIdx := -1
-	for j := i; j < len(s); j++ {
-		if s[j] == '.' {
-			dotIdx = j
-			break
-		}
+func (p *Parser) parseOptionalModelString() (*string, error) {
+	if p.peek().Kind != lexer.TokenKindModel {
+		return nil, nil
 	}
+	p.advance()
+	return p.parseStringPtr()
+}
 
-	intPart := 0.0
-	for j := i; j < len(s) && s[j] != '.'; j++ {
-		intPart = intPart*10 + float64(s[j]-'0')
+func (p *Parser) parseStringPtr() (*string, error) {
+	tok, err := p.expect(lexer.TokenKindString)
+	if err != nil {
+		return nil, err
 	}
-	*result = intPart
+	value := tok.Value
+	return &value, nil
+}
 
-	if dotIdx != -1 && dotIdx+1 < len(s) {
-		fracPart := 0.0
-		divisor := 1.0
-		for j := dotIdx + 1; j < len(s); j++ {
-			fracPart = fracPart*10 + float64(s[j]-'0')
-			divisor *= 10
-		}
-		*result += fracPart / divisor
+func ensureSearchWith(with **ast.SearchWith) *ast.SearchWith {
+	if *with == nil {
+		*with = &ast.SearchWith{}
 	}
+	return *with
+}
 
-	if negative {
-		*result = -*result
+func mergeSearchWith(dst **ast.SearchWith, src *ast.SearchWith) {
+	if src == nil {
+		return
 	}
+	current := ensureSearchWith(dst)
+	if src.HnswEf != 0 {
+		current.HnswEf = src.HnswEf
+	}
+	if src.Exact {
+		current.Exact = true
+	}
+	if src.Acorn {
+		current.Acorn = true
+	}
+}
+
+func parseIntToken(tok lexer.Token) (int, error) {
+	value, err := strconv.Atoi(tok.Value)
+	if err != nil {
+		return 0, errors.NewQQLSyntaxError("Invalid integer literal '"+tok.Value+"'", tok.Pos)
+	}
+	return value, nil
+}
+
+func parseFloatToken(tok lexer.Token) (float64, error) {
+	value, err := strconv.ParseFloat(tok.Value, 64)
+	if err != nil {
+		return 0, errors.NewQQLSyntaxError("Invalid float literal '"+tok.Value+"'", tok.Pos)
+	}
+	return value, nil
 }

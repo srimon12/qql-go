@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/qdrant/qql-go/internal/config"
 	"github.com/qdrant/qql-go/internal/output"
@@ -124,7 +125,7 @@ func (r *REPL) readLine() (string, error) {
 			if !inSingleQuote && !inDoubleQuote {
 				if ch == '(' || ch == '[' || ch == '{' {
 					depth++
-				} else if ch == ')' || ch == ']' || ch == '}' {
+				} else if (ch == ')' || ch == ']' || ch == '}') && depth > 0 {
 					depth--
 				}
 			}
@@ -156,9 +157,7 @@ func (r *REPL) handleCommand(cmd string) error {
 		return nil
 	}
 
-	if strings.HasPrefix(lower, "explain ") {
-		query := strings.TrimPrefix(cmd, "explain ")
-		query = strings.TrimPrefix(query, "EXPLAIN ")
+	if query, ok := cutCommandPrefix(cmd, "explain"); ok {
 		plan, err := r.executor.Explain(query)
 		if err != nil {
 			return fmt.Errorf("explain error: %w", err)
@@ -241,4 +240,17 @@ func (r *REPL) addToHistory(cmd string) {
 
 func isWordChar(ch rune) bool {
 	return unicode.IsLetter(ch) || unicode.IsDigit(ch) || ch == '_' || ch == '-'
+}
+
+func cutCommandPrefix(input, prefix string) (string, bool) {
+	if len(input) <= len(prefix) || !strings.EqualFold(input[:len(prefix)], prefix) {
+		return "", false
+	}
+
+	next, _ := utf8.DecodeRuneInString(input[len(prefix):])
+	if !unicode.IsSpace(next) {
+		return "", false
+	}
+
+	return strings.TrimSpace(input[len(prefix):]), true
 }

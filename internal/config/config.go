@@ -1,33 +1,27 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/spf13/viper"
 )
 
 type Config struct {
-	URL            string `mapstructure:"url"`
-	Secret         string `mapstructure:"secret"`
-	ActiveProfile  string `mapstructure:"active_profile"`
-	InferenceModel string `mapstructure:"inference_model"`
+	URL            string `json:"url"`
+	Secret         string `json:"secret"`
+	ActiveProfile  string `json:"active_profile"`
+	InferenceModel string `json:"inference_model"`
 }
 
 type Profile struct {
-	Name   string `mapstructure:"name"`
-	URL    string `mapstructure:"url"`
-	Secret string `mapstructure:"secret"`
+	Name   string `json:"name"`
+	URL    string `json:"url"`
+	Secret string `json:"secret"`
 }
 
 var cfg *Config
 var profiles map[string]*Profile
-
-func init() {
-	cfg = &Config{}
-	profiles = make(map[string]*Profile)
-}
 
 func configDir() (string, error) {
 	home, err := os.UserHomeDir()
@@ -35,13 +29,13 @@ func configDir() (string, error) {
 		return "", fmt.Errorf("could not find home directory: %w", err)
 	}
 	dir := filepath.Join(home, ".qql")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("could not create config directory: %w", err)
 	}
 	return dir, nil
 }
 
-func configPath() (string, error) {
+func ConfigPath() (string, error) {
 	dir, err := configDir()
 	if err != nil {
 		return "", err
@@ -58,73 +52,54 @@ func profilesPath() (string, error) {
 }
 
 func LoadConfig() (*Config, error) {
-	path, err := configPath()
+	path, err := ConfigPath()
 	if err != nil {
 		return nil, err
 	}
 
-	viper.SetConfigFile(path)
-	viper.SetConfigType("json")
-
-	if err := viper.ReadInConfig(); err != nil {
+	var loaded Config
+	if err := readJSONFile(path, &loaded); err != nil {
 		if os.IsNotExist(err) {
+			cfg = nil
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
 
-	var loaded Config
-	if err := viper.Unmarshal(&loaded); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
-	}
-
-	cfg = &loaded
-
+	cfg = cloneConfig(&loaded)
 	return cfg, nil
 }
 
 func SaveConfig(c *Config) error {
-	path, err := configPath()
+	path, err := ConfigPath()
 	if err != nil {
 		return err
 	}
 
-	if c == nil {
-		c = &Config{}
+	stored := cloneConfig(c)
+	if stored == nil {
+		stored = &Config{}
 	}
 
-	viper.SetConfigFile(path)
-	viper.SetConfigType("json")
-
-	viper.Set("url", c.URL)
-	viper.Set("secret", c.Secret)
-	viper.Set("active_profile", c.ActiveProfile)
-	viper.Set("inference_model", c.InferenceModel)
-
-	if err := viper.SafeWriteConfig(); err != nil {
-		if err := viper.WriteConfig(); err != nil {
-			return fmt.Errorf("failed to write config: %w", err)
-		}
+	if err := writeJSONFile(path, stored); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
 	}
 
-	cfg = c
+	cfg = stored
 	return nil
 }
 
 func DeleteConfig() error {
-	path, err := configPath()
+	path, err := ConfigPath()
 	if err != nil {
 		return err
 	}
 
-	if err := os.Remove(path); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to delete config: %w", err)
 	}
 
-	cfg = &Config{}
+	cfg = nil
 	return nil
 }
 
@@ -138,20 +113,16 @@ func LoadProfiles() (map[string]*Profile, error) {
 		return nil, err
 	}
 
-	viper.SetConfigFile(path)
-	viper.SetConfigType("json")
-
-	if err := viper.ReadInConfig(); err != nil {
+	loaded := map[string]*Profile{}
+	if err := readJSONFile(path, &loaded); err != nil {
 		if os.IsNotExist(err) {
+			profiles = map[string]*Profile{}
 			return profiles, nil
 		}
 		return nil, fmt.Errorf("failed to read profiles: %w", err)
 	}
 
-	if err := viper.Unmarshal(&profiles); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal profiles: %w", err)
-	}
-
+	profiles = normalizeProfiles(loaded)
 	return profiles, nil
 }
 
@@ -161,59 +132,102 @@ func SaveProfiles(p map[string]*Profile) error {
 		return err
 	}
 
-	viper.SetConfigFile(path)
-	viper.SetConfigType("json")
-
-	for name, profile := range p {
-		profile.Name = name
-		viper.Set(name, profile)
+	stored := normalizeProfiles(p)
+	if err := writeJSONFile(path, stored); err != nil {
+		return fmt.Errorf("failed to write profiles: %w", err)
 	}
 
-	if err := viper.SafeWriteConfig(); err != nil {
-		if err := viper.WriteConfig(); err != nil {
-			return fmt.Errorf("failed to write profiles: %w", err)
-		}
-	}
-
-	profiles = p
+	profiles = stored
 	return nil
 }
 
 func GetProfile(name string) (*Profile, error) {
-	if profiles == nil {
-		var err error
-		profiles, err = LoadProfiles()
-		if err != nil {
-			return nil, err
-		}
+	loaded, err := ensureProfiles()
+	if err != nil {
+		return nil, err
 	}
-	return profiles[name], nil
+	return loaded[name], nil
 }
 
 func SaveProfile(profile *Profile) error {
-	if profiles == nil {
-		var err error
-		profiles, err = LoadProfiles()
-		if err != nil {
-			return err
-		}
+	if profile == nil {
+		return fmt.Errorf("profile is nil")
 	}
-	profiles[profile.Name] = profile
-	return SaveProfiles(profiles)
+	if profile.Name == "" {
+		return fmt.Errorf("profile name is required")
+	}
+
+	loaded, err := ensureProfiles()
+	if err != nil {
+		return err
+	}
+
+	clone := *profile
+	loaded[clone.Name] = &clone
+	return SaveProfiles(loaded)
 }
 
 func DeleteProfile(name string) error {
-	if profiles == nil {
-		var err error
-		profiles, err = LoadProfiles()
-		if err != nil {
-			return err
-		}
+	loaded, err := ensureProfiles()
+	if err != nil {
+		return err
 	}
-	delete(profiles, name)
-	return SaveProfiles(profiles)
+	delete(loaded, name)
+	return SaveProfiles(loaded)
 }
 
 func HasConfig() bool {
 	return cfg != nil && cfg.URL != ""
+}
+
+func ensureProfiles() (map[string]*Profile, error) {
+	if profiles == nil {
+		return LoadProfiles()
+	}
+	return profiles, nil
+}
+
+func cloneConfig(c *Config) *Config {
+	if c == nil {
+		return nil
+	}
+	clone := *c
+	return &clone
+}
+
+func normalizeProfiles(input map[string]*Profile) map[string]*Profile {
+	if len(input) == 0 {
+		return map[string]*Profile{}
+	}
+
+	normalized := make(map[string]*Profile, len(input))
+	for name, profile := range input {
+		if profile == nil {
+			profile = &Profile{}
+		}
+		clone := *profile
+		clone.Name = name
+		normalized[name] = &clone
+	}
+	return normalized
+}
+
+func readJSONFile(path string, target any) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(data, target); err != nil {
+		return fmt.Errorf("failed to decode %s: %w", path, err)
+	}
+	return nil
+}
+
+func writeJSONFile(path string, value any) error {
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	return os.WriteFile(path, data, 0o644)
 }

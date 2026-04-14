@@ -1,10 +1,11 @@
 package commands
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
-	"io"
-	"os"
 	"testing"
+	"time"
 
 	"github.com/qdrant/go-client/qdrant"
 	"github.com/qdrant/qql-go/internal/ast"
@@ -82,6 +83,27 @@ func TestBuildRerankSearchRequestTargetsColbertVector(t *testing.T) {
 	require.NotNil(t, req.GetQuery().GetNearest())
 	require.NotNil(t, req.GetQuery().GetNearest().GetDocument())
 	require.Equal(t, "answerai-colbert-test", req.GetQuery().GetNearest().GetDocument().GetModel())
+}
+
+func TestEffectiveSearchLimit(t *testing.T) {
+	tests := []struct {
+		name   string
+		limit  uint64
+		rerank bool
+		want   uint64
+	}{
+		{name: "plain search", limit: 12, want: 12},
+		{name: "rerank small", limit: 10, rerank: true, want: 40},
+		{name: "rerank capped", limit: 60, rerank: true, want: rerankPrefetchCap},
+		{name: "rerank large keeps limit", limit: 500, rerank: true, want: 500},
+		{name: "rerank overflow falls back to limit", limit: ^uint64(0), rerank: true, want: ^uint64(0)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, effectiveSearchLimit(tt.limit, tt.rerank))
+		})
+	}
 }
 
 func TestBuildSearchRequestAppliesWithClauseAndSparseOverride(t *testing.T) {
@@ -294,8 +316,8 @@ func TestExplainCommandDoesNotNeedSavedConfig(t *testing.T) {
 	t.Setenv("HOMEDRIVE", "")
 	t.Setenv("HOMEPATH", "")
 
-	stdout, stderr := captureCommandStreams(t, func() {
-		cmd := NewExplainCmd(output.NewOutputter())
+	stdout, stderr := captureCommandStreams(t, func(out *output.Outputter) {
+		cmd := NewExplainCmd(out)
 		err := cmd.RunE(cmd, []string{"SHOW COLLECTIONS"})
 		require.NoError(t, err)
 	})
@@ -306,8 +328,8 @@ func TestExplainCommandDoesNotNeedSavedConfig(t *testing.T) {
 }
 
 func TestExplainCommandJSON(t *testing.T) {
-	stdout, stderr := captureCommandStreams(t, func() {
-		cmd := NewExplainCmd(output.NewOutputter())
+	stdout, stderr := captureCommandStreams(t, func(out *output.Outputter) {
+		cmd := NewExplainCmd(out)
 		require.NoError(t, cmd.Flags().Set("json", "true"))
 		err := cmd.RunE(cmd, []string{"SHOW COLLECTIONS"})
 		require.NoError(t, err)
@@ -322,8 +344,8 @@ func TestExplainCommandJSON(t *testing.T) {
 }
 
 func TestExplainCommandQuietJSONIsCompact(t *testing.T) {
-	stdout, stderr := captureCommandStreams(t, func() {
-		cmd := NewExplainCmd(output.NewOutputter())
+	stdout, stderr := captureCommandStreams(t, func(out *output.Outputter) {
+		cmd := NewExplainCmd(out)
 		require.NoError(t, cmd.Flags().Set("json", "true"))
 		require.NoError(t, cmd.Flags().Set("quiet", "true"))
 		err := cmd.RunE(cmd, []string{"SHOW COLLECTIONS"})
@@ -338,8 +360,8 @@ func TestExplainCommandQuietJSONIsCompact(t *testing.T) {
 }
 
 func TestExplainCommandQuietTextOmitsSectionHeader(t *testing.T) {
-	stdout, stderr := captureCommandStreams(t, func() {
-		cmd := NewExplainCmd(output.NewOutputter())
+	stdout, stderr := captureCommandStreams(t, func(out *output.Outputter) {
+		cmd := NewExplainCmd(out)
 		require.NoError(t, cmd.Flags().Set("quiet", "true"))
 		err := cmd.RunE(cmd, []string{"SHOW COLLECTIONS"})
 		require.NoError(t, err)
@@ -356,8 +378,8 @@ func TestDisconnectCommandJSON(t *testing.T) {
 	t.Setenv("HOMEDRIVE", "")
 	t.Setenv("HOMEPATH", "")
 
-	stdout, stderr := captureCommandStreams(t, func() {
-		cmd := NewDisconnectCmd(output.NewOutputter())
+	stdout, stderr := captureCommandStreams(t, func(out *output.Outputter) {
+		cmd := NewDisconnectCmd(out)
 		require.NoError(t, cmd.Flags().Set("json", "true"))
 		err := cmd.RunE(cmd, nil)
 		require.NoError(t, err)
@@ -373,20 +395,20 @@ func TestDisconnectCommandJSON(t *testing.T) {
 
 func TestVersionCommandSupportsQuietAndJSON(t *testing.T) {
 	t.Run("quiet text", func(t *testing.T) {
-		stdout, stderr := captureCommandStreams(t, func() {
-			cmd := NewVersionCmd(output.NewOutputter())
+		stdout, stderr := captureCommandStreams(t, func(out *output.Outputter) {
+			cmd := NewVersionCmd(out)
 			require.NoError(t, cmd.Flags().Set("quiet", "true"))
 			err := cmd.RunE(cmd, nil)
 			require.NoError(t, err)
 		})
 
 		require.Empty(t, stderr)
-		require.Equal(t, versionString+"\n", stdout)
+		require.Equal(t, displayVersion()+"\n", stdout)
 	})
 
 	t.Run("json", func(t *testing.T) {
-		stdout, stderr := captureCommandStreams(t, func() {
-			cmd := NewVersionCmd(output.NewOutputter())
+		stdout, stderr := captureCommandStreams(t, func(out *output.Outputter) {
+			cmd := NewVersionCmd(out)
 			require.NoError(t, cmd.Flags().Set("json", "true"))
 			require.NoError(t, cmd.Flags().Set("quiet", "true"))
 			err := cmd.RunE(cmd, nil)
@@ -398,8 +420,159 @@ func TestVersionCommandSupportsQuietAndJSON(t *testing.T) {
 		require.NoError(t, json.Unmarshal([]byte(stdout), &payload))
 		require.True(t, payload.OK)
 		require.Equal(t, "version", payload.Command)
-		require.Equal(t, versionString, payload.Version)
+		require.Equal(t, displayVersion(), payload.Version)
 	})
+}
+
+func TestVersionCommandDefaultsToDevWhenVersionBlank(t *testing.T) {
+	original := Version
+	Version = "   "
+	t.Cleanup(func() {
+		Version = original
+	})
+
+	stdout, stderr := captureCommandStreams(t, func(out *output.Outputter) {
+		cmd := NewVersionCmd(out)
+		require.NoError(t, cmd.Flags().Set("quiet", "true"))
+		require.NoError(t, cmd.RunE(cmd, nil))
+	})
+
+	require.Empty(t, stderr)
+	require.Equal(t, "dev\n", stdout)
+}
+
+func TestConnectCommandMissingURLReturnsPrintedError(t *testing.T) {
+	stdout, stderr, err := captureCommandResult(t, func(out *output.Outputter) error {
+		cmd := NewConnectCmd(out)
+		return cmd.RunE(cmd, nil)
+	})
+
+	require.Empty(t, stdout)
+	require.Error(t, err)
+	require.True(t, ErrorPrinted(err))
+	require.Equal(t, 1, ExitCode(err))
+	require.Contains(t, stderr, "--url is required")
+}
+
+func TestExplainCommandInvalidJSONReturnsPrintedExitError(t *testing.T) {
+	stdout, stderr, err := captureCommandResult(t, func(out *output.Outputter) error {
+		cmd := NewExplainCmd(out)
+		require.NoError(t, cmd.Flags().Set("json", "true"))
+		return cmd.RunE(cmd, []string{"EXPLAIN SHOW COLLECTIONS"})
+	})
+
+	require.Empty(t, stderr)
+	require.Error(t, err)
+	require.True(t, ErrorPrinted(err))
+	require.Equal(t, 1, ExitCode(err))
+
+	var payload ErrorResponse
+	require.NoError(t, json.Unmarshal([]byte(stdout), &payload))
+	require.False(t, payload.OK)
+	require.Equal(t, "explain", payload.Command)
+	require.Contains(t, payload.Error, "parse error")
+}
+
+func TestExecCommandWithoutConfigReturnsPrintedError(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+
+	stdout, stderr, err := captureCommandResult(t, func(out *output.Outputter) error {
+		cmd := NewExecCmd(out)
+		return cmd.RunE(cmd, []string{"SHOW COLLECTIONS"})
+	})
+
+	require.Empty(t, stdout)
+	require.Error(t, err)
+	require.True(t, ErrorPrinted(err))
+	require.Equal(t, 1, ExitCode(err))
+	require.Contains(t, stderr, "not connected. Run: qql connect --url <url>")
+}
+
+func TestDoctorCommandWithoutConfigReturnsPrintedError(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+
+	stdout, stderr, err := captureCommandResult(t, func(out *output.Outputter) error {
+		cmd := NewDoctorCmd(out)
+		return cmd.RunE(cmd, nil)
+	})
+
+	require.Empty(t, stdout)
+	require.Error(t, err)
+	require.True(t, ErrorPrinted(err))
+	require.Equal(t, 1, ExitCode(err))
+	require.Contains(t, stderr, "not connected. Run: qql connect --url <url>")
+}
+
+func TestREPLCommandWithoutConfigReturnsError(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+
+	cmd := NewREPLCmd(output.NewOutputterWithWriters(&bytes.Buffer{}, &bytes.Buffer{}))
+	err := cmd.RunE(cmd, nil)
+	require.EqualError(t, err, "not connected. Run: qql connect --url <url>")
+	require.False(t, ErrorPrinted(err))
+}
+
+func TestLoadSavedConfigAndClientWrapsInvalidURL(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+
+	require.NoError(t, config.SaveConfig(&config.Config{URL: "http://localhost:bad-port"}))
+
+	loaded, client, err := loadSavedConfigAndClient()
+	require.Nil(t, loaded)
+	require.Nil(t, client)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "connection failed")
+}
+
+func TestSavedConfigMessageUsesResolvedPath(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+
+	path, err := config.ConfigPath()
+	require.NoError(t, err)
+	require.Equal(t, "Connected. Config saved to "+path, savedConfigMessage())
+}
+
+func TestWriteJSONWrapsEncoderFailures(t *testing.T) {
+	err := writeJSON(output.NewOutputterWithWriters(failingWriter{}, &bytes.Buffer{}), map[string]any{"ok": true}, false)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to write JSON")
+}
+
+func TestWaitForCollectionReadyMessages(t *testing.T) {
+	err := waitForCollectionReady(context.Background(), "docs", 5*time.Millisecond, time.Millisecond, func(context.Context, string) (bool, bool, error) {
+		return false, false, nil
+	})
+	require.EqualError(t, err, "collection 'docs' did not become visible within 5ms")
+
+	err = waitForCollectionReady(context.Background(), "docs", 5*time.Millisecond, time.Millisecond, func(context.Context, string) (bool, bool, error) {
+		return true, false, nil
+	})
+	require.EqualError(t, err, "collection 'docs' exists but is not ready yet after 5ms")
+}
+
+func TestWaitForCollectionReadyWrapsProbeErrors(t *testing.T) {
+	err := waitForCollectionReady(context.Background(), "docs", 5*time.Millisecond, time.Millisecond, func(context.Context, string) (bool, bool, error) {
+		return true, false, context.DeadlineExceeded
+	})
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "collection 'docs' did not become ready within 5ms")
 }
 
 func TestExplainResultReturnsErrorForInvalidQuery(t *testing.T) {
@@ -429,35 +602,26 @@ func TestExecuteResultForShowCollectionsRequiresNoOutputParsing(t *testing.T) {
 	require.Equal(t, "Found 2 collection(s): a, b", decoded.Message)
 }
 
-func captureCommandStreams(t *testing.T, fn func()) (string, string) {
+func captureCommandStreams(t *testing.T, fn func(*output.Outputter)) (string, string) {
 	t.Helper()
 
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	fn(output.NewOutputterWithWriters(stdout, stderr))
+	return stdout.String(), stderr.String()
+}
 
-	stdoutR, stdoutW, err := os.Pipe()
-	require.NoError(t, err)
-	stderrR, stderrW, err := os.Pipe()
-	require.NoError(t, err)
+func captureCommandResult(t *testing.T, fn func(*output.Outputter) error) (string, string, error) {
+	t.Helper()
 
-	os.Stdout = stdoutW
-	os.Stderr = stderrW
-	defer func() {
-		os.Stdout = oldStdout
-		os.Stderr = oldStderr
-	}()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	err := fn(output.NewOutputterWithWriters(stdout, stderr))
+	return stdout.String(), stderr.String(), err
+}
 
-	fn()
+type failingWriter struct{}
 
-	require.NoError(t, stdoutW.Close())
-	require.NoError(t, stderrW.Close())
-
-	stdoutData, err := io.ReadAll(stdoutR)
-	require.NoError(t, err)
-	stderrData, err := io.ReadAll(stderrR)
-	require.NoError(t, err)
-	require.NoError(t, stdoutR.Close())
-	require.NoError(t, stderrR.Close())
-
-	return string(stdoutData), string(stderrData)
+func (failingWriter) Write([]byte) (int, error) {
+	return 0, context.DeadlineExceeded
 }

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse
 
-from _qql_cli import execute_json, print_result
+from _qql_cli import drop_collection_if_exists, execute_json, print_result
 
 COLLECTION = "medical_records_demo"
 
@@ -161,10 +161,7 @@ def main() -> None:
 
     try:
         if args.execute:
-            try:
-                execute_json(f"DROP COLLECTION {COLLECTION}")
-            except Exception:
-                pass
+            drop_collection_if_exists(COLLECTION)
 
         for label, statement in statements:
             print(f"[{label}]")

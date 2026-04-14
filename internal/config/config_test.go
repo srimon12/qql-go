@@ -4,7 +4,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,15 +16,29 @@ func resetTestConfigState(t *testing.T) {
 	t.Setenv("HOMEDRIVE", "")
 	t.Setenv("HOMEPATH", "")
 
-	viper.Reset()
-	cfg = &Config{}
-	profiles = make(map[string]*Profile)
+	cfg = nil
+	profiles = nil
 
 	t.Cleanup(func() {
-		viper.Reset()
-		cfg = &Config{}
-		profiles = make(map[string]*Profile)
+		cfg = nil
+		profiles = nil
 	})
+}
+
+func TestConfigPathUsesHomeDirectory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+	cfg = nil
+	profiles = nil
+
+	path, err := ConfigPath()
+	require.NoError(t, err)
+	require.Contains(t, path, home)
+	require.Contains(t, path, ".qql")
+	require.Contains(t, path, "config.json")
 }
 
 func TestLoadConfigMissingReturnsNil(t *testing.T) {
@@ -34,6 +47,7 @@ func TestLoadConfigMissingReturnsNil(t *testing.T) {
 	loaded, err := LoadConfig()
 	require.NoError(t, err)
 	require.Nil(t, loaded)
+	require.Nil(t, GetConfig())
 }
 
 func TestSaveLoadAndDeleteConfigRoundTrip(t *testing.T) {
@@ -48,12 +62,11 @@ func TestSaveLoadAndDeleteConfigRoundTrip(t *testing.T) {
 
 	require.NoError(t, SaveConfig(original))
 
-	path, err := configPath()
+	path, err := ConfigPath()
 	require.NoError(t, err)
 	_, err = os.Stat(path)
 	require.NoError(t, err)
 
-	viper.Reset()
 	cfg = nil
 
 	loaded, err := LoadConfig()
@@ -68,5 +81,55 @@ func TestSaveLoadAndDeleteConfigRoundTrip(t *testing.T) {
 	_, err = os.Stat(path)
 	require.Error(t, err)
 	require.True(t, os.IsNotExist(err))
-	require.Equal(t, "", GetConfig().URL)
+	require.Nil(t, GetConfig())
+}
+
+func TestLoadConfigRejectsMalformedJSON(t *testing.T) {
+	resetTestConfigState(t)
+
+	path, err := ConfigPath()
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, []byte("{broken"), 0o644))
+
+	loaded, err := LoadConfig()
+	require.Nil(t, loaded)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to read config")
+}
+
+func TestProfileRoundTrip(t *testing.T) {
+	resetTestConfigState(t)
+
+	require.NoError(t, SaveProfile(&Profile{
+		Name:   "prod",
+		URL:    "https://qdrant.example.com",
+		Secret: "top-secret",
+	}))
+
+	profile, err := GetProfile("prod")
+	require.NoError(t, err)
+	require.NotNil(t, profile)
+	require.Equal(t, "prod", profile.Name)
+	require.Equal(t, "https://qdrant.example.com", profile.URL)
+
+	require.NoError(t, DeleteProfile("prod"))
+
+	profile, err = GetProfile("prod")
+	require.NoError(t, err)
+	require.Nil(t, profile)
+}
+
+func TestLoadProfilesMissingReturnsEmptyMap(t *testing.T) {
+	resetTestConfigState(t)
+
+	loaded, err := LoadProfiles()
+	require.NoError(t, err)
+	require.Empty(t, loaded)
+}
+
+func TestSaveProfileValidatesInput(t *testing.T) {
+	resetTestConfigState(t)
+
+	require.EqualError(t, SaveProfile(nil), "profile is nil")
+	require.EqualError(t, SaveProfile(&Profile{}), "profile name is required")
 }

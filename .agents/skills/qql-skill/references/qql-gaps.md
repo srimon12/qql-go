@@ -20,15 +20,6 @@ Use this file when a request sounds reasonable in Qdrant terms but is still outs
 - collection-level HNSW or quantization config
 - on-disk vector or payload toggles
 
-## Supported Recently
-
-Do not call these gaps anymore:
-
-- `CREATE INDEX ON COLLECTION ... FOR ... TYPE ...`
-- `DELETE FROM ... WHERE <field> = '<value>'`
-- `EXPLAIN <statement>`
-- `RERANK` on the current Qdrant Cloud path
-
 ## What To Say
 
 Prefer plain language:

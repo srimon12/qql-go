@@ -1,2 +1,4 @@
 qql.exe
 docs
+*.pyc
+.agents/skills/qql-skill/scripts/__pycache__/

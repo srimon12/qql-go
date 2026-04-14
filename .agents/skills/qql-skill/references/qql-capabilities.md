@@ -1,6 +1,7 @@
 # QQL Capabilities
 
-This reference describes the current Go CLI surface. Use it as the source of truth when writing queries.
+This is a compact mirror of the current Go CLI surface for agent use.
+If it disagrees with [README.md](../../../README.md), follow the README.
 
 ## Statements
 
@@ -22,18 +23,24 @@ This reference describes the current Go CLI surface. Use it as the source of tru
 ### Insert
 
 - `INSERT INTO COLLECTION <name> VALUES {...}`
+- `INSERT INTO COLLECTION <name> VALUES {...} USING MODEL '<model>'`
 - `INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID`
+- `INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'`
+- `INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID SPARSE MODEL '<model>'`
 
 ### Search
 
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n>`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WHERE <filter>`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef: <n> }`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { exact: true|false }`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { acorn: true|false }`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK`
 
 ### Delete
@@ -84,6 +91,8 @@ Use `USING HYBRID` when both semantic similarity and exact term matching matter.
 Default sparse model:
 - `qdrant/bm25`
 
+`USING HYBRID` also supports explicit dense and sparse model overrides.
+
 ### Rerank
 
 Use `RERANK` only when top ordering matters enough to pay for it.
@@ -93,6 +102,8 @@ Current rerank model:
 
 Current rerank caveat:
 - depends on Qdrant Cloud query-time inference
+
+`RERANK MODEL '<model>'` lets you pin the reranker when the cloud path is available.
 
 ## Inference Modes
 

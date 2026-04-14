@@ -242,3 +242,90 @@ func TestBuildFilterRejectsMixedInTypes(t *testing.T) {
 
 	require.Error(t, err)
 }
+
+func TestBuildFilterSupportsPointerExpressions(t *testing.T) {
+	converter := NewFilterConverter()
+
+	filter, err := converter.BuildFilter(&ast.CompareExpr{Field: "status", Op: "=", Value: "active"})
+
+	require.NoError(t, err)
+	require.NotNil(t, filter)
+	require.Len(t, filter.Must, 1)
+	assert.Equal(t, "active", filter.Must[0].GetField().GetMatch().GetKeyword())
+}
+
+func TestBuildFilterLogicalExpressions(t *testing.T) {
+	converter := NewFilterConverter()
+
+	filter, err := converter.BuildFilter(&ast.OrExpr{
+		Operands: []ast.FilterExpr{
+			&ast.AndExpr{
+				Operands: []ast.FilterExpr{
+					&ast.CompareExpr{Field: "status", Op: "=", Value: "active"},
+					&ast.BetweenExpr{Field: "score", Low: 1, High: 5},
+				},
+			},
+			&ast.NotExpr{
+				Operand: &ast.IsNullExpr{Field: "category"},
+			},
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, filter)
+	require.Len(t, filter.Should, 2)
+	require.Len(t, filter.MustNot, 0)
+
+	left := filter.Should[0].GetFilter()
+	require.NotNil(t, left)
+	require.Len(t, left.Must, 2)
+	assert.Equal(t, "active", left.Must[0].GetField().GetMatch().GetKeyword())
+	rangeCond := left.Must[1].GetField().GetRange()
+	require.NotNil(t, rangeCond)
+	assert.Equal(t, 1.0, rangeCond.GetGte())
+	assert.Equal(t, 5.0, rangeCond.GetLte())
+
+	right := filter.Should[1].GetFilter()
+	require.NotNil(t, right)
+	require.Len(t, right.MustNot, 1)
+	assert.Equal(t, "category", right.MustNot[0].GetIsNull().GetKey())
+}
+
+func TestBuildFilterMatchExpressions(t *testing.T) {
+	tests := []struct {
+		name string
+		expr ast.FilterExpr
+		text string
+		read func(match *qdrant.Match) string
+	}{
+		{
+			name: "match text",
+			expr: &ast.MatchTextExpr{Field: "content", Text: "hello world"},
+			text: "hello world",
+			read: func(match *qdrant.Match) string { return match.GetText() },
+		},
+		{
+			name: "match any",
+			expr: &ast.MatchAnyExpr{Field: "content", Text: "hello world"},
+			text: "hello world",
+			read: func(match *qdrant.Match) string { return match.GetTextAny() },
+		},
+		{
+			name: "match phrase",
+			expr: &ast.MatchPhraseExpr{Field: "content", Text: "hello world"},
+			text: "hello world",
+			read: func(match *qdrant.Match) string { return match.GetPhrase() },
+		},
+	}
+
+	converter := NewFilterConverter()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filter, err := converter.BuildFilter(tt.expr)
+			require.NoError(t, err)
+			require.NotNil(t, filter)
+			require.Len(t, filter.Must, 1)
+			assert.Equal(t, tt.text, tt.read(filter.Must[0].GetField().GetMatch()))
+		})
+	}
+}

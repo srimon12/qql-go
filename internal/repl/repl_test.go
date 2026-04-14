@@ -2,6 +2,7 @@ package repl
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -97,6 +98,18 @@ func TestHandleCommandExplainDispatchesToExecutor(t *testing.T) {
 	require.Contains(t, stdout, "plan body")
 }
 
+func TestHandleCommandExplainDispatchesCaseInsensitively(t *testing.T) {
+	exec := &stubExecutor{explainResult: "plan body"}
+
+	_, stderr := captureREPL(t, exec, func(r *REPL) {
+		err := r.handleCommand("ExPlAiN SEARCH docs SIMILAR TO 'vector database' LIMIT 5")
+		require.NoError(t, err)
+	})
+
+	require.Empty(t, stderr)
+	require.Equal(t, "SEARCH docs SIMILAR TO 'vector database' LIMIT 5", exec.explainQuery)
+}
+
 func TestHandleCommandExecutesQuery(t *testing.T) {
 	exec := &stubExecutor{executeResult: "executed"}
 
@@ -124,4 +137,59 @@ func TestReadLineSupportsMultilineStatements(t *testing.T) {
 	require.Empty(t, stderr)
 	require.Contains(t, stdout, "  -> ")
 	require.Equal(t, input, line)
+}
+
+func TestReadLineIgnoresStrayClosingDelimiters(t *testing.T) {
+	input := ")\n"
+
+	var line string
+	stdout, stderr := captureREPL(t, &stubExecutor{}, func(r *REPL) {
+		r.reader = bufio.NewReader(strings.NewReader(input))
+		var err error
+		line, err = r.readLine()
+		require.NoError(t, err)
+	})
+
+	require.Empty(t, stderr)
+	require.Empty(t, stdout)
+	require.Equal(t, input, line)
+}
+
+func TestReadLineIgnoresDelimitersInsideQuotedStrings(t *testing.T) {
+	input := "INSERT INTO COLLECTION docs VALUES {\n  \"text\": \"value with } and ] and )\"\n}\n"
+
+	var line string
+	stdout, stderr := captureREPL(t, &stubExecutor{}, func(r *REPL) {
+		r.reader = bufio.NewReader(strings.NewReader(input))
+		var err error
+		line, err = r.readLine()
+		require.NoError(t, err)
+	})
+
+	require.Empty(t, stderr)
+	require.Contains(t, stdout, "  -> ")
+	require.Equal(t, input, line)
+}
+
+func TestAddToHistoryDeduplicatesAndCapsSize(t *testing.T) {
+	repl := NewREPL(&config.Config{URL: "http://localhost:6333"}, &stubExecutor{})
+
+	for i := 0; i < 101; i++ {
+		repl.addToHistory(fmt.Sprintf("cmd-%d", i))
+	}
+	repl.addToHistory("cmd-50")
+
+	require.Len(t, repl.history, 100)
+	require.Equal(t, "cmd-50", repl.history[len(repl.history)-1])
+	require.NotContains(t, repl.history[:len(repl.history)-1], "cmd-50")
+	require.NotContains(t, repl.history, "cmd-0")
+}
+
+func TestCutCommandPrefix(t *testing.T) {
+	query, ok := cutCommandPrefix("ExPlAiN   SHOW COLLECTIONS", "explain")
+	require.True(t, ok)
+	require.Equal(t, "SHOW COLLECTIONS", query)
+
+	_, ok = cutCommandPrefix("explanation", "explain")
+	require.False(t, ok)
 }

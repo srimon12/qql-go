@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/qdrant/qql-go/internal/ast"
@@ -379,6 +380,19 @@ func TestParseSearch(t *testing.T) {
 				Limit:      10,
 				Hybrid:     true,
 				Rerank:     true,
+			},
+		},
+		{
+			name:  "search with reordered modifiers",
+			input: "SEARCH mycollection SIMILAR TO 'query text' LIMIT 10 EXACT WITH {hnsw_ef: 64, acorn: true} WHERE tags = 'important' RERANK MODEL 'cross-encoder'",
+			want: &ast.SearchStmt{
+				Collection:  "mycollection",
+				QueryText:   "query text",
+				Limit:       10,
+				QueryFilter: &ast.CompareExpr{Field: "tags", Op: "=", Value: "important"},
+				Rerank:      true,
+				RerankModel: strPtr("cross-encoder"),
+				WithClause:  &ast.SearchWith{HnswEf: 64, Exact: true, Acorn: true},
 			},
 		},
 	}
@@ -925,15 +939,24 @@ func TestParseFilterComplex(t *testing.T) {
 
 	orExpr, ok := stmt.QueryFilter.(*ast.OrExpr)
 	require.True(t, ok)
-	require.Len(t, orExpr.Operands, 2)
-
-	and1, ok := orExpr.Operands[0].(*ast.AndExpr)
-	require.True(t, ok)
-	require.Len(t, and1.Operands, 2)
-
-	and2, ok := orExpr.Operands[1].(*ast.AndExpr)
-	require.True(t, ok)
-	require.Len(t, and2.Operands, 2)
+	assertFilterExprEqual(t, &ast.OrExpr{
+		Operands: []ast.FilterExpr{
+			&ast.AndExpr{
+				Operands: []ast.FilterExpr{
+					&ast.CompareExpr{Field: "a", Op: "=", Value: 1},
+					&ast.CompareExpr{Field: "b", Op: "=", Value: 2},
+				},
+			},
+			&ast.AndExpr{
+				Operands: []ast.FilterExpr{
+					&ast.CompareExpr{Field: "c", Op: "=", Value: 3},
+					&ast.NotExpr{
+						Operand: &ast.CompareExpr{Field: "d", Op: "=", Value: 4},
+					},
+				},
+			},
+		},
+	}, orExpr)
 }
 
 func TestParseFilterPrecedence(t *testing.T) {
@@ -952,10 +975,17 @@ func TestParseFilterPrecedence(t *testing.T) {
 
 	orExpr, ok := stmt.QueryFilter.(*ast.OrExpr)
 	require.True(t, ok)
-
-	andExpr, ok := orExpr.Operands[0].(*ast.AndExpr)
-	require.True(t, ok)
-	require.Len(t, andExpr.Operands, 2)
+	assertFilterExprEqual(t, &ast.OrExpr{
+		Operands: []ast.FilterExpr{
+			&ast.AndExpr{
+				Operands: []ast.FilterExpr{
+					&ast.CompareExpr{Field: "a", Op: "=", Value: 1},
+					&ast.CompareExpr{Field: "b", Op: "=", Value: 2},
+				},
+			},
+			&ast.CompareExpr{Field: "c", Op: "=", Value: 3},
+		},
+	}, orExpr)
 }
 
 func TestParseError(t *testing.T) {
@@ -997,6 +1027,31 @@ func TestParseError(t *testing.T) {
 		{
 			name:    "reject explain in parser",
 			input:   "EXPLAIN SEARCH test SIMILAR TO 'text' LIMIT 10",
+			wantErr: true,
+		},
+		{
+			name:    "reject overflowing limit",
+			input:   "SEARCH test SIMILAR TO 'text' LIMIT 999999999999999999999999999",
+			wantErr: true,
+		},
+		{
+			name:    "reject overflowing integer literal",
+			input:   "DELETE FROM test WHERE id = 999999999999999999999999999",
+			wantErr: true,
+		},
+		{
+			name:    "reject overflowing float literal",
+			input:   "SEARCH test SIMILAR TO 'text' LIMIT 10 WHERE score = " + strings.Repeat("9", 400) + ".0",
+			wantErr: true,
+		},
+		{
+			name:    "reject duplicate where clause",
+			input:   "SEARCH test SIMILAR TO 'text' LIMIT 10 WHERE a = 1 WHERE b = 2",
+			wantErr: true,
+		},
+		{
+			name:    "reject duplicate with clause",
+			input:   "SEARCH test SIMILAR TO 'text' LIMIT 10 WITH {exact: true} WITH {acorn: true}",
 			wantErr: true,
 		},
 	}

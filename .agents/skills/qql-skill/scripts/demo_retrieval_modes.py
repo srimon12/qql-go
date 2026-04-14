@@ -92,11 +92,6 @@ def main() -> None:
         action="store_true",
         help="Emit the examples as JSON.",
     )
-    parser.add_argument(
-        "--execute",
-        action="store_true",
-        help="Reserved for parity with other demos; this script prints queries only.",
-    )
     args = parser.parse_args()
 
     if args.json:

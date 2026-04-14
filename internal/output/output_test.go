@@ -1,127 +1,103 @@
 package output
 
 import (
+	"bytes"
 	"encoding/json"
-	"io"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func captureStdout(t *testing.T, fn func(*Outputter)) string {
-	t.Helper()
-
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	require.NoError(t, err)
-
-	os.Stdout = w
-	defer func() {
-		os.Stdout = oldStdout
-	}()
-
-	out := NewOutputter()
-	fn(out)
-
-	require.NoError(t, w.Close())
-	data, err := io.ReadAll(r)
-	require.NoError(t, err)
-	require.NoError(t, r.Close())
-
-	return string(data)
-}
-
-func captureStderr(t *testing.T, fn func()) string {
-	t.Helper()
-
-	oldStderr := os.Stderr
-	r, w, err := os.Pipe()
-	require.NoError(t, err)
-
-	os.Stderr = w
-	defer func() {
-		os.Stderr = oldStderr
-	}()
-
-	fn()
-
-	require.NoError(t, w.Close())
-	data, err := io.ReadAll(r)
-	require.NoError(t, err)
-	require.NoError(t, r.Close())
-
-	return string(data)
+func newTestOutputter() (*Outputter, *bytes.Buffer, *bytes.Buffer) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	return NewOutputterWithWriters(stdout, stderr), stdout, stderr
 }
 
 func TestPrintSection(t *testing.T) {
-	got := captureStdout(t, func(out *Outputter) {
-		out.PrintSection("Title", "content")
-	})
+	out, stdout, _ := newTestOutputter()
 
-	require.Contains(t, got, "Title")
-	require.Contains(t, got, "content")
+	out.PrintSection("Title", "content")
+
+	require.Contains(t, stdout.String(), "Title")
+	require.Contains(t, stdout.String(), "content")
 }
 
 func TestPrintExplain(t *testing.T) {
-	got := captureStdout(t, func(out *Outputter) {
-		out.PrintExplain("plan body")
-	})
+	out, stdout, _ := newTestOutputter()
 
-	require.Contains(t, got, "Query Plan")
-	require.Contains(t, got, "plan body")
+	out.PrintExplain("plan body")
+
+	require.Contains(t, stdout.String(), "Query Plan")
+	require.Contains(t, stdout.String(), "plan body")
 }
 
 func TestPrintBanner(t *testing.T) {
-	got := captureStdout(t, func(out *Outputter) {
-		out.PrintBanner()
-	})
+	out, stdout, _ := newTestOutputter()
 
-	require.Contains(t, got, "QQL")
-	require.Contains(t, got, "Qdrant Query Language")
+	out.PrintBanner()
+
+	require.Contains(t, stdout.String(), "QQL")
+	require.Contains(t, stdout.String(), "Qdrant Query Language")
 }
 
 func TestPrintConnectionStatus(t *testing.T) {
-	healthy := captureStdout(t, func(out *Outputter) {
-		out.PrintConnectionStatus("http://localhost:6333", true)
-	})
-	require.Contains(t, healthy, "Connected to http://localhost:6333")
+	t.Run("healthy", func(t *testing.T) {
+		out, stdout, stderr := newTestOutputter()
 
-	unhealthy := captureStderr(t, func() {
-		out := NewOutputter()
-		out.PrintConnectionStatus("http://localhost:6333", false)
+		out.PrintConnectionStatus("http://localhost:6333", true)
+
+		require.Contains(t, stdout.String(), "Connected to http://localhost:6333")
+		require.Empty(t, stderr.String())
 	})
-	require.Contains(t, unhealthy, "Cannot connect to http://localhost:6333")
-	require.True(t, strings.Contains(unhealthy, "✗"))
+
+	t.Run("unhealthy", func(t *testing.T) {
+		out, stdout, stderr := newTestOutputter()
+
+		out.PrintConnectionStatus("http://localhost:6333", false)
+
+		require.Empty(t, stdout.String())
+		require.Contains(t, stderr.String(), "Cannot connect to http://localhost:6333")
+		require.True(t, strings.Contains(stderr.String(), "✗"))
+	})
 }
 
 func TestPrintJSON(t *testing.T) {
-	got := captureStdout(t, func(out *Outputter) {
-		err := out.PrintJSON(map[string]any{
-			"ok":      true,
-			"message": "hello",
-		}, true)
-		require.NoError(t, err)
-	})
+	out, stdout, _ := newTestOutputter()
+
+	err := out.PrintJSON(map[string]any{
+		"ok":      true,
+		"message": "hello",
+	}, true)
+	require.NoError(t, err)
 
 	var payload map[string]any
-	require.NoError(t, json.Unmarshal([]byte(got), &payload))
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
 	require.Equal(t, true, payload["ok"])
 	require.Equal(t, "hello", payload["message"])
 }
 
 func TestPrintJSONQuiet(t *testing.T) {
-	got := captureStdout(t, func(out *Outputter) {
-		err := out.PrintJSON(map[string]any{
-			"ok":      true,
-			"message": "hello",
-		}, false)
-		require.NoError(t, err)
-	})
+	out, stdout, _ := newTestOutputter()
 
-	require.NotContains(t, got, "\n  ")
+	err := out.PrintJSON(map[string]any{
+		"ok":      true,
+		"message": "hello",
+	}, false)
+	require.NoError(t, err)
+
+	require.NotContains(t, stdout.String(), "\n  ")
 	var payload map[string]any
-	require.NoError(t, json.Unmarshal([]byte(got), &payload))
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
 	require.Equal(t, "hello", payload["message"])
+}
+
+func TestPrintErrorWritesToConfiguredStderr(t *testing.T) {
+	out, stdout, stderr := newTestOutputter()
+
+	out.PrintError("bad things happened")
+
+	require.Empty(t, stdout.String())
+	require.Contains(t, stderr.String(), "bad things happened")
 }

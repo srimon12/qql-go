@@ -51,6 +51,16 @@ def execute_json(query: str) -> Result:
     )
 
 
+def drop_collection_if_exists(name: str) -> None:
+    try:
+        execute_json(f"DROP COLLECTION {name}")
+    except Exception as exc:
+        message = str(exc).lower()
+        if "does not exist" in message or "not found" in message:
+            return
+        raise
+
+
 def print_result(label: str, result: Result, limit: int = 5) -> None:
     print(f"[{label}] {result.message}")
     data = result.data

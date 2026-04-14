@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -30,11 +29,14 @@ const (
 	rerankModelDefault = "answerdotai/answerai-colbert-small-v1"
 	denseVectorSize    = 384
 	rerankVectorSize   = 96
-	versionString      = "1.0.0"
 
 	collectionReadyTimeout  = 10 * time.Second
 	collectionReadyInterval = 250 * time.Millisecond
+	rerankPrefetchFactor    = 4
+	rerankPrefetchCap       = 200
 )
+
+var Version = "1.0.0"
 
 type commandOutputMode struct {
 	json  bool
@@ -489,10 +491,7 @@ func (e *Executor) doSearch(n *ast.SearchStmt) (*ExecResponse, error) {
 		limit = 10
 	}
 
-	fetchLimit := limit
-	if n.Rerank {
-		fetchLimit = limit * 4
-	}
+	fetchLimit := effectiveSearchLimit(limit, n.Rerank)
 
 	searchReq, err := buildSearchRequest(n, model, sparseModel, hasRerankVector, fetchLimit)
 	if err != nil {
@@ -803,34 +802,151 @@ func buildRerankSearchRequest(collection, queryText, rerankModel string, limit u
 }
 
 func (e *Executor) waitForCollectionReady(ctx context.Context, collection string) error {
-	deadline := time.Now().Add(collectionReadyTimeout)
+	return waitForCollectionReady(ctx, collection, collectionReadyTimeout, collectionReadyInterval, e.collectionReady)
+}
+
+func waitForCollectionReady(
+	ctx context.Context,
+	collection string,
+	timeout time.Duration,
+	interval time.Duration,
+	ready func(context.Context, string) (bool, bool, error),
+) error {
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	for {
-		ready, err := e.collectionReady(ctx, collection)
-		if err == nil && ready {
+		exists, readyNow, err := ready(waitCtx, collection)
+		if err == nil && readyNow {
 			return nil
 		}
-		if time.Now().After(deadline) {
+
+		select {
+		case <-waitCtx.Done():
 			if err != nil {
-				return fmt.Errorf("collection '%s' is not ready: %w", collection, err)
+				return fmt.Errorf("collection '%s' did not become ready within %s: %w", collection, timeout, err)
 			}
-			return fmt.Errorf("collection '%s' does not exist", collection)
+			if exists {
+				return fmt.Errorf("collection '%s' exists but is not ready yet after %s", collection, timeout)
+			}
+			return fmt.Errorf("collection '%s' did not become visible within %s", collection, timeout)
+		case <-time.After(interval):
 		}
-		time.Sleep(collectionReadyInterval)
 	}
 }
 
-func (e *Executor) collectionReady(ctx context.Context, collection string) (bool, error) {
+func effectiveSearchLimit(limit uint64, rerank bool) uint64 {
+	if !rerank || limit == 0 {
+		return limit
+	}
+
+	if limit > ^uint64(0)/rerankPrefetchFactor {
+		return limit
+	}
+
+	boosted := limit * rerankPrefetchFactor
+	if boosted <= rerankPrefetchCap {
+		return boosted
+	}
+	if limit > rerankPrefetchCap {
+		return limit
+	}
+	return rerankPrefetchCap
+}
+
+func loadSavedConfig() (*config.Config, error) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+	if cfg == nil || cfg.URL == "" {
+		return nil, fmt.Errorf("not connected. Run: qql connect --url <url>")
+	}
+	return cfg, nil
+}
+
+func loadSavedConfigAndClient() (*config.Config, *qdrant.Client, error) {
+	cfg, err := loadSavedConfig()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	client, err := newClientFromURL(cfg.URL, cfg.Secret)
+	if err != nil {
+		return nil, nil, fmt.Errorf("connection failed: %w", err)
+	}
+	return cfg, client, nil
+}
+
+func savedConfigMessage() string {
+	path, err := config.ConfigPath()
+	if err != nil {
+		return "Connected. Config saved."
+	}
+	return fmt.Sprintf("Connected. Config saved to %s", path)
+}
+
+func runConfiguredREPL() error {
+	cfg, client, err := loadSavedConfigAndClient()
+	if err != nil {
+		return err
+	}
+	return repl.NewREPL(cfg, NewExecutor(client, cfg)).Run()
+}
+
+func writeJSON(out *output.Outputter, value any, quiet bool) error {
+	if err := out.PrintJSON(value, !quiet); err != nil {
+		return fmt.Errorf("failed to write JSON: %w", err)
+	}
+	return nil
+}
+
+func commandError(out *output.Outputter, mode commandOutputMode, command, query string, err error) error {
+	if mode.json {
+		if jsonErr := out.PrintJSON(&ErrorResponse{
+			OK:        false,
+			Command:   command,
+			Query:     query,
+			Error:     err.Error(),
+			ErrorType: "runtime_error",
+		}, false); jsonErr != nil {
+			return fmt.Errorf("failed to write JSON: %w", jsonErr)
+		}
+		return NewExitError(err, 1, true)
+	}
+
+	out.PrintError(err.Error())
+	return NewExitError(err, 1, true)
+}
+
+func currentVersion() string {
+	return strings.TrimSpace(Version)
+}
+
+func displayVersion() string {
+	version := currentVersion()
+	if version == "" {
+		return "dev"
+	}
+	return version
+}
+
+func versionMessage() string {
+	return fmt.Sprintf("QQL %s", displayVersion())
+}
+
+func (e *Executor) collectionReady(ctx context.Context, collection string) (bool, bool, error) {
 	exists, err := e.client.CollectionExists(ctx, collection)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	if !exists {
-		return false, nil
+		return false, false, nil
 	}
 	if _, err := e.client.GetCollectionInfo(ctx, collection); err != nil {
-		return false, err
+		return true, false, err
 	}
-	return true, nil
+	return true, true, nil
 }
 
 func (e *Executor) formatSearchResults(results []*qdrant.ScoredPoint) (string, []SearchHit) {
@@ -886,16 +1002,6 @@ func pointIDString(id *qdrant.PointId) string {
 	return fmt.Sprintf("%v", id)
 }
 
-func printJSONError(out *output.Outputter, command, query string, err error) {
-	_ = out.PrintJSON(&ErrorResponse{
-		OK:        false,
-		Command:   command,
-		Query:     query,
-		Error:     err.Error(),
-		ErrorType: "runtime_error",
-	}, false)
-}
-
 func readOutputMode(cmd *cobra.Command) commandOutputMode {
 	jsonOut, _ := cmd.Flags().GetBool("json")
 	quiet, _ := cmd.Flags().GetBool("quiet")
@@ -910,22 +1016,6 @@ func addOutputFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool("quiet", false, "Reduce decoration; with --json, emit compact JSON")
 }
 
-func exitWithCommandError(out *output.Outputter, mode commandOutputMode, command, query string, err error) {
-	if mode.json {
-		printJSONError(out, command, query, err)
-		os.Exit(1)
-	}
-	out.PrintError(err.Error())
-	os.Exit(1)
-}
-
-func writeJSONOrExit(out *output.Outputter, value any, quiet bool) {
-	if err := out.PrintJSON(value, !quiet); err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: failed to write JSON: %v\n", err)
-		os.Exit(1)
-	}
-}
-
 func NewConnectCmd(out *output.Outputter) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "connect",
@@ -937,7 +1027,7 @@ func NewConnectCmd(out *output.Outputter) *cobra.Command {
 			secret, _ := cmd.Flags().GetString("secret")
 
 			if url == "" {
-				exitWithCommandError(out, mode, "connect", "", fmt.Errorf("--url is required"))
+				return commandError(out, mode, "connect", "", fmt.Errorf("--url is required"))
 			}
 
 			if !mode.json && !mode.quiet {
@@ -946,12 +1036,12 @@ func NewConnectCmd(out *output.Outputter) *cobra.Command {
 
 			client, err := newClientFromURL(url, secret)
 			if err != nil {
-				exitWithCommandError(out, mode, "connect", "", fmt.Errorf("connection failed: %w", err))
+				return commandError(out, mode, "connect", "", fmt.Errorf("connection failed: %w", err))
 			}
 
 			collections, err := client.ListCollections(context.Background())
 			if err != nil {
-				exitWithCommandError(out, mode, "connect", "", fmt.Errorf("connection failed: %w", err))
+				return commandError(out, mode, "connect", "", fmt.Errorf("connection failed: %w", err))
 			}
 
 			cfg := &config.Config{
@@ -960,12 +1050,12 @@ func NewConnectCmd(out *output.Outputter) *cobra.Command {
 			}
 
 			if err := config.SaveConfig(cfg); err != nil {
-				exitWithCommandError(out, mode, "connect", "", fmt.Errorf("failed to save config: %w", err))
+				return commandError(out, mode, "connect", "", fmt.Errorf("failed to save config: %w", err))
 			}
 
-			message := "Connected. Config saved to ~/.qql/config.json"
+			message := savedConfigMessage()
 			if mode.json {
-				writeJSONOrExit(out, &ConnectResponse{
+				return writeJSON(out, &ConnectResponse{
 					OK:          true,
 					Command:     "connect",
 					URL:         url,
@@ -973,7 +1063,6 @@ func NewConnectCmd(out *output.Outputter) *cobra.Command {
 					Collections: len(collections),
 					Message:     message,
 				}, mode.quiet)
-				return nil
 			}
 
 			if mode.quiet {
@@ -991,7 +1080,7 @@ func NewConnectCmd(out *output.Outputter) *cobra.Command {
 	cmd.Flags().String("url", "", "Qdrant instance URL (for text INSERT/SEARCH use your Qdrant Cloud URL)")
 	cmd.Flags().String("secret", "", "API key / secret (optional)")
 	addOutputFlags(cmd)
-	cmd.MarkFlagRequired("url")
+	_ = cmd.MarkFlagRequired("url")
 
 	return cmd
 }
@@ -1003,16 +1092,15 @@ func NewDisconnectCmd(out *output.Outputter) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mode := readOutputMode(cmd)
 			if err := config.DeleteConfig(); err != nil {
-				exitWithCommandError(out, mode, "disconnect", "", fmt.Errorf("failed to delete config: %w", err))
+				return commandError(out, mode, "disconnect", "", fmt.Errorf("failed to delete config: %w", err))
 			}
 			message := "Disconnected. Config removed."
 			if mode.json {
-				writeJSONOrExit(out, &CommandResponse{
+				return writeJSON(out, &CommandResponse{
 					OK:      true,
 					Command: "disconnect",
 					Message: message,
 				}, mode.quiet)
-				return nil
 			}
 			if mode.quiet {
 				out.Print(message)
@@ -1031,25 +1119,7 @@ func NewREPLCmd(out *output.Outputter) *cobra.Command {
 		Use:   "repl",
 		Short: "Launch interactive shell",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig()
-			if err != nil {
-				out.PrintError(fmt.Sprintf("Failed to load config: %v", err))
-				os.Exit(1)
-			}
-
-			if cfg == nil || cfg.URL == "" {
-				out.PrintError("Not connected. Run: qql connect --url <url>")
-				os.Exit(1)
-			}
-
-			client, err := newClientFromURL(cfg.URL, cfg.Secret)
-			if err != nil {
-				out.PrintError(fmt.Sprintf("Connection failed: %v", err))
-				os.Exit(1)
-			}
-
-			repl := repl.NewREPL(cfg, NewExecutor(client, cfg))
-			return repl.Run()
+			return runConfiguredREPL()
 		},
 	}
 }
@@ -1061,33 +1131,23 @@ func NewExecCmd(out *output.Outputter) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mode := readOutputMode(cmd)
-			cfg, err := config.LoadConfig()
+			cfg, client, err := loadSavedConfigAndClient()
 			if err != nil {
-				exitWithCommandError(out, mode, "exec", args[0], fmt.Errorf("failed to load config: %w", err))
-			}
-
-			if cfg == nil || cfg.URL == "" {
-				exitWithCommandError(out, mode, "exec", args[0], fmt.Errorf("not connected. Run: qql connect --url <url>"))
-			}
-
-			client, err := newClientFromURL(cfg.URL, cfg.Secret)
-			if err != nil {
-				exitWithCommandError(out, mode, "exec", args[0], fmt.Errorf("connection failed: %w", err))
+				return commandError(out, mode, "exec", args[0], err)
 			}
 
 			executor := NewExecutor(client, cfg)
 			if mode.json {
 				result, err := executor.ExecuteResult(args[0])
 				if err != nil {
-					exitWithCommandError(out, mode, "exec", args[0], err)
+					return commandError(out, mode, "exec", args[0], err)
 				}
-				writeJSONOrExit(out, result, mode.quiet)
-				return nil
+				return writeJSON(out, result, mode.quiet)
 			}
 
 			result, err := executor.Execute(args[0])
 			if err != nil {
-				exitWithCommandError(out, mode, "exec", args[0], err)
+				return commandError(out, mode, "exec", args[0], err)
 			}
 
 			out.Print(result)
@@ -1110,15 +1170,14 @@ func NewExplainCmd(out *output.Outputter) *cobra.Command {
 			if mode.json {
 				result, err := executor.ExplainResult(args[0])
 				if err != nil {
-					exitWithCommandError(out, mode, "explain", args[0], err)
+					return commandError(out, mode, "explain", args[0], err)
 				}
-				writeJSONOrExit(out, result, mode.quiet)
-				return nil
+				return writeJSON(out, result, mode.quiet)
 			}
 
 			plan, err := executor.Explain(args[0])
 			if err != nil {
-				exitWithCommandError(out, mode, "explain", args[0], err)
+				return commandError(out, mode, "explain", args[0], err)
 			}
 
 			if mode.quiet {
@@ -1140,32 +1199,23 @@ func NewDoctorCmd(out *output.Outputter) *cobra.Command {
 		Short: "Check connection health",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mode := readOutputMode(cmd)
-			cfg, err := config.LoadConfig()
+			cfg, client, err := loadSavedConfigAndClient()
 			if err != nil {
-				exitWithCommandError(out, mode, "doctor", "", fmt.Errorf("failed to load config: %w", err))
-			}
-
-			if cfg == nil || cfg.URL == "" {
-				exitWithCommandError(out, mode, "doctor", "", fmt.Errorf("not connected. Run: qql connect --url <url>"))
+				return commandError(out, mode, "doctor", "", err)
 			}
 
 			if !mode.json && !mode.quiet {
 				out.Print(fmt.Sprintf("Checking connection to %s...", cfg.URL))
 			}
 
-			client, err := newClientFromURL(cfg.URL, cfg.Secret)
-			if err != nil {
-				exitWithCommandError(out, mode, "doctor", "", fmt.Errorf("failed to create client: %w", err))
-			}
-
 			collections, err := client.ListCollections(context.Background())
 			if err != nil {
-				exitWithCommandError(out, mode, "doctor", "", fmt.Errorf("failed to connect: %w", err))
+				return commandError(out, mode, "doctor", "", fmt.Errorf("failed to connect: %w", err))
 			}
 
 			message := "Connection is healthy."
 			if mode.json {
-				writeJSONOrExit(out, &DoctorResponse{
+				return writeJSON(out, &DoctorResponse{
 					OK:          true,
 					Command:     "doctor",
 					URL:         cfg.URL,
@@ -1173,7 +1223,6 @@ func NewDoctorCmd(out *output.Outputter) *cobra.Command {
 					Collections: len(collections),
 					Message:     message,
 				}, mode.quiet)
-				return nil
 			}
 
 			if mode.quiet {
@@ -1200,21 +1249,21 @@ func NewVersionCmd(out *output.Outputter) *cobra.Command {
 		Short: "Show version",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mode := readOutputMode(cmd)
-			message := fmt.Sprintf("QQL %s", versionString)
+			version := displayVersion()
+			message := versionMessage()
 			if mode.json {
-				writeJSONOrExit(out, &VersionResponse{
+				return writeJSON(out, &VersionResponse{
 					OK:      true,
 					Command: "version",
-					Version: versionString,
+					Version: version,
 					Message: message,
 				}, mode.quiet)
-				return nil
 			}
 			if mode.quiet {
-				out.Print(versionString)
+				out.Print(version)
 				return nil
 			}
-			out.PrintSection("QQL Version", versionString)
+			out.PrintSection("QQL Version", version)
 			return nil
 		},
 	}

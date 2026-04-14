@@ -157,7 +157,9 @@ Notes:
 
 Current Go behavior:
 
-- Text `INSERT` and text `SEARCH ... SIMILAR TO ...` use Qdrant Cloud server-side inference.
+- Text `INSERT` and text `SEARCH ... SIMILAR TO ...` support `USING MODEL '<model>'`.
+- `USING HYBRID` supports optional `DENSE MODEL '<model>'` and `SPARSE MODEL '<model>'` overrides.
+- `RERANK` supports an optional `MODEL '<model>'` override.
 - `USING HYBRID` and `RERANK` are Qdrant Cloud inference paths in this build.
 - QQL-Go currently depends on Qdrant Cloud inference for dense embeddings, BM25 sparse inference, and reranking.
 - Self-hosted/local Qdrant is currently best for non-inference operations (`SHOW`, `CREATE`, `DROP`, `CREATE INDEX`, `DELETE`).
@@ -194,6 +196,7 @@ INSERT INTO COLLECTION <name> VALUES {...}
 INSERT INTO COLLECTION <name> VALUES {...} USING MODEL '<model>'
 INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID
 INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'
+INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID SPARSE MODEL '<model>'
 ```
 
 Important:
@@ -206,11 +209,14 @@ Important:
 
 ```sql
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n>
+SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING MODEL '<model>'
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID
+SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WHERE <filter>
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef: <n>, exact: true|false, acorn: true|false }
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK
+SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK
 ```
 
@@ -236,6 +242,8 @@ EXPLAIN <statement>
 
 Use plain `SEARCH` for semantic retrieval.
 
+Use `USING MODEL '<model>'` when you want to pin the dense model explicitly.
+
 Default dense model:
 
 - `sentence-transformers/all-minilm-l6-v2`
@@ -248,6 +256,8 @@ Default sparse model:
 
 - `qdrant/bm25`
 
+`USING HYBRID` also supports explicit dense and sparse model overrides when you need to pin the retrieval stack.
+
 ### Rerank
 
 Use `RERANK` when candidate ordering needs improvement.
@@ -255,6 +265,8 @@ Use `RERANK` when candidate ordering needs improvement.
 Default rerank model:
 
 - `answerdotai/answerai-colbert-small-v1`
+
+`RERANK MODEL '<model>'` lets you override the reranker when the cloud path is available.
 
 Rerank notes:
 
