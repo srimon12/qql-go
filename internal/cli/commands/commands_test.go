@@ -350,6 +350,58 @@ func TestExplainCommandQuietTextOmitsSectionHeader(t *testing.T) {
 	require.NotContains(t, stdout, "\033[1mQuery Plan\033[0m")
 }
 
+func TestDisconnectCommandJSON(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+
+	stdout, stderr := captureCommandStreams(t, func() {
+		cmd := NewDisconnectCmd(output.NewOutputter())
+		require.NoError(t, cmd.Flags().Set("json", "true"))
+		err := cmd.RunE(cmd, nil)
+		require.NoError(t, err)
+	})
+
+	require.Empty(t, stderr)
+	var payload CommandResponse
+	require.NoError(t, json.Unmarshal([]byte(stdout), &payload))
+	require.True(t, payload.OK)
+	require.Equal(t, "disconnect", payload.Command)
+	require.Equal(t, "Disconnected. Config removed.", payload.Message)
+}
+
+func TestVersionCommandSupportsQuietAndJSON(t *testing.T) {
+	t.Run("quiet text", func(t *testing.T) {
+		stdout, stderr := captureCommandStreams(t, func() {
+			cmd := NewVersionCmd(output.NewOutputter())
+			require.NoError(t, cmd.Flags().Set("quiet", "true"))
+			err := cmd.RunE(cmd, nil)
+			require.NoError(t, err)
+		})
+
+		require.Empty(t, stderr)
+		require.Equal(t, versionString+"\n", stdout)
+	})
+
+	t.Run("json", func(t *testing.T) {
+		stdout, stderr := captureCommandStreams(t, func() {
+			cmd := NewVersionCmd(output.NewOutputter())
+			require.NoError(t, cmd.Flags().Set("json", "true"))
+			require.NoError(t, cmd.Flags().Set("quiet", "true"))
+			err := cmd.RunE(cmd, nil)
+			require.NoError(t, err)
+		})
+
+		require.Empty(t, stderr)
+		var payload VersionResponse
+		require.NoError(t, json.Unmarshal([]byte(stdout), &payload))
+		require.True(t, payload.OK)
+		require.Equal(t, "version", payload.Command)
+		require.Equal(t, versionString, payload.Version)
+	})
+}
+
 func TestExplainResultReturnsErrorForInvalidQuery(t *testing.T) {
 	_, err := NewExecutor(nil, nil).ExplainResult("EXPLAIN SEARCH docs SIMILAR TO 'x' LIMIT 1")
 	require.Error(t, err)

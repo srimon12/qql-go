@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_QQL_BIN = REPO_ROOT / "qql-go" / ("qql.exe" if os.name == "nt" else "qql")
+REPO_ROOT = Path(__file__).resolve().parents[4]
+DEFAULT_QQL_BIN = REPO_ROOT / ("qql.exe" if os.name == "nt" else "qql")
 QQL_BIN = os.environ.get("QQL_BIN", str(DEFAULT_QQL_BIN))
 
 

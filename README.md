@@ -110,7 +110,7 @@ qql doctor
 
 ## Output Modes (Human vs Machine)
 
-QQL-Go supports a consistent output contract across `exec`, `explain`, `doctor`, and `connect`.
+QQL-Go supports a consistent output contract across `connect`, `disconnect`, `exec`, `explain`, `doctor`, and `version`.
 
 ### Human-readable defaults
 
@@ -119,6 +119,8 @@ qql exec "<query>"
 qql explain "<query>"
 qql doctor
 qql connect --url <url> [--secret <secret>]
+qql disconnect
+qql version
 ```
 
 ### Structured JSON
@@ -128,6 +130,8 @@ qql exec --json "<query>"
 qql explain --json "<query>"
 qql doctor --json
 qql connect --json --url <url> [--secret <secret>]
+qql disconnect --json
+qql version --json
 ```
 
 ### Compact JSON (agent path)
@@ -137,20 +141,25 @@ qql exec --quiet --json "<query>"
 qql explain --quiet --json "<query>"
 qql doctor --quiet --json
 qql connect --quiet --json --url <url> [--secret <secret>]
+qql disconnect --quiet --json
+qql version --quiet --json
 ```
 
 Notes:
 
 - `--quiet --json` emits compact JSON (no pretty indentation).
+- `--json` controls machine-readable output. `--quiet` stays separate and reduces decoration in text mode; when paired with `--json`, it switches to compact JSON.
 - `qql explain --quiet "<query>"` prints the raw plan without the titled section wrapper.
 - `qql connect --json` and `qql connect --quiet` do not drop into REPL.
+- `qql version --quiet` prints only the version string.
 
 ## Inference Compatibility (Important)
 
 Current Go behavior:
 
-- Text `INSERT` and text `SEARCH ... SIMILAR TO ...` use Qdrant server-side document inference.
+- Text `INSERT` and text `SEARCH ... SIMILAR TO ...` use Qdrant Cloud server-side inference.
 - `USING HYBRID` and `RERANK` are Qdrant Cloud inference paths in this build.
+- QQL-Go currently depends on Qdrant Cloud inference for dense embeddings, BM25 sparse inference, and reranking.
 - Self-hosted/local Qdrant is currently best for non-inference operations (`SHOW`, `CREATE`, `DROP`, `CREATE INDEX`, `DELETE`).
 
 Planned later:
@@ -191,7 +200,7 @@ Important:
 
 - `text` field is required in `VALUES`.
 - Collection must already exist; QQL-Go does not auto-create on insert.
-- In the current Go build, text insert embedding is a cloud inference path.
+- In the current Go build, text insert embedding is a Qdrant Cloud inference path.
 
 ### Search
 
@@ -339,17 +348,19 @@ qql connect --quiet --json --url https://<cluster>.qdrant.io --secret <api-key>
 
 For text `INSERT`/`SEARCH`, use a cloud connection URL in the current build.
 
+QQL-Go now waits for collection readiness after creation and before follow-up collection operations, so sequential `CREATE COLLECTION` -> `CREATE INDEX` / `INSERT` / `SEARCH` flows behave consistently from the CLI.
+
 ## Demo Scripts
 
-The repo includes demos under `skills/qql-skill/scripts` that shell out to the Go binary.
+The repo includes demos under `.agents/skills/qql-skill/scripts` that shell out to the Go binary.
 
 ```bash
-python skills/qql-skill/scripts/demo_medical_records.py --execute
-python skills/qql-skill/scripts/demo_kitchen_sink.py --execute
-python skills/qql-skill/scripts/demo_retrieval_modes.py --json
+uv run python .agents/skills/qql-skill/scripts/demo_medical_records.py --execute
+uv run python .agents/skills/qql-skill/scripts/demo_kitchen_sink.py --execute
+uv run python .agents/skills/qql-skill/scripts/demo_retrieval_modes.py --json
 ```
 
-The helper `skills/qql-skill/scripts/_qql_cli.py` uses:
+The helper `.agents/skills/qql-skill/scripts/_qql_cli.py` uses:
 
 ```text
 qql exec --quiet --json ...

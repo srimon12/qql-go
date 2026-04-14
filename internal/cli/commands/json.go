@@ -39,6 +39,19 @@ type DoctorResponse struct {
 	Message     string `json:"message"`
 }
 
+type CommandResponse struct {
+	OK      bool   `json:"ok"`
+	Command string `json:"command"`
+	Message string `json:"message"`
+}
+
+type VersionResponse struct {
+	OK      bool   `json:"ok"`
+	Command string `json:"command"`
+	Version string `json:"version"`
+	Message string `json:"message"`
+}
+
 type SearchHit struct {
 	ID    string  `json:"id"`
 	Score float32 `json:"score"`
