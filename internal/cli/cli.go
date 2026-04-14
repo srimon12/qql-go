@@ -1,8 +1,8 @@
 package cli
 
 import (
-	"github.com/qdrant/qql-go/internal/cli/commands"
-	"github.com/qdrant/qql-go/internal/output"
+	"github.com/srimon12/qql-go/internal/cli/commands"
+	"github.com/srimon12/qql-go/internal/output"
 	"github.com/spf13/cobra"
 )
 

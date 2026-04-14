@@ -1,7 +1,7 @@
 package lexer
 
 import (
-	"github.com/qdrant/qql-go/internal/errors"
+	"github.com/srimon12/qql-go/internal/errors"
 )
 
 var keywords = map[string]TokenKind{

@@ -4,8 +4,8 @@ import (
 	"reflect"
 
 	"github.com/qdrant/go-client/qdrant"
-	"github.com/qdrant/qql-go/internal/ast"
-	"github.com/qdrant/qql-go/internal/errors"
+	"github.com/srimon12/qql-go/internal/ast"
+	"github.com/srimon12/qql-go/internal/errors"
 )
 
 type FilterConverter struct{}

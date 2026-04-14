@@ -1,5 +1,7 @@
 # QQL-Go
 
+This project is an independent Go port of the original QQL work by [pavanjava/qql](https://github.com/pavanjava/qql), extended with additional CLI and agent-focused improvements.
+
 QQL-Go is a standalone, compiled CLI for [Qdrant](https://qdrant.tech). It gives you a SQL-like surface for collection management, insert, search, filtering, explain plans, and delete operations.
 
 The current build is designed for two workflows:
@@ -411,19 +413,19 @@ Public, installable skills live under `skills/`.
 List the skills published by this repo:
 
 ```bash
-npx skills add qdrant/qql-go --list
+npx skills add srimon12/qql-go --list
 ```
 
 Install the bundled QQL skill:
 
 ```bash
-npx skills add qdrant/qql-go --skill qql-skill
+npx skills add srimon12/qql-go --skill qql-skill
 ```
 
 You can also install from the GitHub URL form:
 
 ```bash
-npx skills add https://github.com/qdrant/qql-go --skill qql-skill
+npx skills add https://github.com/srimon12/qql-go --skill qql-skill
 ```
 
 To validate the local repository layout before publishing:
@@ -452,7 +454,9 @@ Current fields:
 ## Changelog and Releases
 
 - [CHANGELOG.md](CHANGELOG.md) tracks notable user-facing changes.
-- [docs/releases/1.0.0.md](docs/releases/0.1.0.md) is the release note for the current seeded release.
+- [docs/releases/0.1.0.md](docs/releases/0.1.0.md) is the release note for the current seeded release.
+
+Prebuilt binaries for supported releases are attached to GitHub Releases for Windows, Linux, and macOS.
 
 ## Project Layout
 

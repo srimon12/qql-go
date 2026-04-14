@@ -1,3 +1,5 @@
 qql.exe
 *.pyc
+build-release/
+dist/
 skills/qql-skill/scripts/__pycache__/

@@ -3,9 +3,9 @@ package parser
 import (
 	"strconv"
 
-	"github.com/qdrant/qql-go/internal/ast"
-	"github.com/qdrant/qql-go/internal/errors"
-	"github.com/qdrant/qql-go/internal/lexer"
+	"github.com/srimon12/qql-go/internal/ast"
+	"github.com/srimon12/qql-go/internal/errors"
+	"github.com/srimon12/qql-go/internal/lexer"
 )
 
 type Parser struct {

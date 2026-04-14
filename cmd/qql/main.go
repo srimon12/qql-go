@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/qdrant/qql-go/internal/cli"
+	"github.com/srimon12/qql-go/internal/cli"
 )
 
 func main() {

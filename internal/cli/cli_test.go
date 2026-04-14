@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/qdrant/qql-go/internal/cli/commands"
-	"github.com/qdrant/qql-go/internal/output"
+	"github.com/srimon12/qql-go/internal/cli/commands"
+	"github.com/srimon12/qql-go/internal/output"
 	"github.com/stretchr/testify/require"
 )
 

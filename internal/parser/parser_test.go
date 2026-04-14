@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/qdrant/qql-go/internal/ast"
-	"github.com/qdrant/qql-go/internal/lexer"
+	"github.com/srimon12/qql-go/internal/ast"
+	"github.com/srimon12/qql-go/internal/lexer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

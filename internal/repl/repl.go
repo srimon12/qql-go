@@ -11,8 +11,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/qdrant/qql-go/internal/config"
-	"github.com/qdrant/qql-go/internal/output"
+	"github.com/srimon12/qql-go/internal/config"
+	"github.com/srimon12/qql-go/internal/output"
 )
 
 const Prompt = "\033[32m\033[1mqql>\033[0m "

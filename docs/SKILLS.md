@@ -47,7 +47,7 @@ npx skills add . --skill qql-skill --copy
 Install from GitHub after publishing:
 
 ```bash
-npx skills add qdrant/qql-go --skill qql-skill
+npx skills add srimon12/qql-go --skill qql-skill
 ```
 
 ## Adding a new skill

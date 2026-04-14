@@ -1,4 +1,4 @@
-module github.com/qdrant/qql-go
+module github.com/srimon12/qql-go
 
 go 1.24.0
 

@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/qdrant/go-client/qdrant"
-	"github.com/qdrant/qql-go/internal/ast"
-	"github.com/qdrant/qql-go/internal/config"
-	"github.com/qdrant/qql-go/internal/output"
+	"github.com/srimon12/qql-go/internal/ast"
+	"github.com/srimon12/qql-go/internal/config"
+	"github.com/srimon12/qql-go/internal/output"
 	"github.com/stretchr/testify/require"
 )
 

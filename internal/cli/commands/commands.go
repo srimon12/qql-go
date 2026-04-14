@@ -10,13 +10,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/qdrant/go-client/qdrant"
-	"github.com/qdrant/qql-go/internal/ast"
-	"github.com/qdrant/qql-go/internal/config"
-	"github.com/qdrant/qql-go/internal/filters"
-	"github.com/qdrant/qql-go/internal/lexer"
-	"github.com/qdrant/qql-go/internal/output"
-	"github.com/qdrant/qql-go/internal/parser"
-	"github.com/qdrant/qql-go/internal/repl"
+	"github.com/srimon12/qql-go/internal/ast"
+	"github.com/srimon12/qql-go/internal/config"
+	"github.com/srimon12/qql-go/internal/filters"
+	"github.com/srimon12/qql-go/internal/lexer"
+	"github.com/srimon12/qql-go/internal/output"
+	"github.com/srimon12/qql-go/internal/parser"
+	"github.com/srimon12/qql-go/internal/repl"
 	"github.com/spf13/cobra"
 )
 

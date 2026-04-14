@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/qdrant/qql-go/internal/config"
+	"github.com/srimon12/qql-go/internal/config"
 	"github.com/stretchr/testify/require"
 )
 

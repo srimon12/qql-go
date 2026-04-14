@@ -3,7 +3,7 @@ package lexer
 import (
 	"testing"
 
-	"github.com/qdrant/qql-go/internal/errors"
+	"github.com/srimon12/qql-go/internal/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -17,6 +17,7 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 - Structured JSON output mode for script and agent workflows.
 - Public `skills/qql-skill` package for agent installation through the `skills` CLI.
 - Basic GitHub Actions CI that runs tests and verifies the CLI builds on push and pull request.
+- Tagged release automation for publishing prebuilt binaries to GitHub Releases.
 - Open-source repo docs for release notes, changelog tracking, and skill authoring.
 
 ### Notes
