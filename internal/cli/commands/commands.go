@@ -36,7 +36,7 @@ const (
 	rerankPrefetchCap       = 200
 )
 
-var Version = "1.0.0"
+var Version = "0.1.0"
 
 type commandOutputMode struct {
 	json  bool

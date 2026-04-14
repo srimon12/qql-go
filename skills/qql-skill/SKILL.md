@@ -11,7 +11,7 @@ Treat QQL as a query language and execution surface, not as a retrieval strategy
 
 ## Source Of Truth
 
-Use [README.md](../../../README.md) as the canonical public contract.
+Use [README.md](../../README.md) as the canonical public contract.
 
 If you need the compact agent-facing mirror, use:
 

@@ -16,20 +16,44 @@ qql exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID RERANK"
 
 ## Table of Contents
 
-- [Quick Start](#quick-start)
-- [Connection and Health Commands](#connection-and-health-commands)
-- [Output Modes (Human vs Machine)](#output-modes-human-vs-machine)
-- [Inference Compatibility (Important)](#inference-compatibility-important)
-- [Supported QQL Statements](#supported-qql-statements)
-- [Search Modes](#search-modes)
-- [Query-Time Search Params](#query-time-search-params)
-- [Where Filters](#where-filters)
-- [REPL Behavior](#repl-behavior)
-- [Script and Agent Usage](#script-and-agent-usage)
-- [Demo Scripts](#demo-scripts)
-- [Configuration File](#configuration-file)
-- [Project Layout](#project-layout)
-- [Testing](#testing)
+- [QQL-Go](#qql-go)
+  - [Table of Contents](#table-of-contents)
+  - [Quick Start](#quick-start)
+    - [Build](#build)
+    - [Connect to Qdrant](#connect-to-qdrant)
+    - [Run one query](#run-one-query)
+    - [Explain a query plan](#explain-a-query-plan)
+    - [Check connection health](#check-connection-health)
+  - [Connection and Health Commands](#connection-and-health-commands)
+    - [connect](#connect)
+    - [disconnect](#disconnect)
+    - [doctor](#doctor)
+  - [Output Modes (Human vs Machine)](#output-modes-human-vs-machine)
+    - [Human-readable defaults](#human-readable-defaults)
+    - [Structured JSON](#structured-json)
+    - [Compact JSON (agent path)](#compact-json-agent-path)
+  - [Inference Compatibility (Important)](#inference-compatibility-important)
+  - [Supported QQL Statements](#supported-qql-statements)
+    - [Collection management](#collection-management)
+    - [Payload indexes](#payload-indexes)
+    - [Insert](#insert)
+    - [Search](#search)
+    - [Delete](#delete)
+    - [Explain](#explain)
+  - [Search Modes](#search-modes)
+    - [Dense](#dense)
+    - [Hybrid](#hybrid)
+    - [Rerank](#rerank)
+  - [Query-Time Search Params](#query-time-search-params)
+  - [Where Filters](#where-filters)
+  - [REPL Behavior](#repl-behavior)
+  - [Script and Agent Usage](#script-and-agent-usage)
+  - [Demo Scripts](#demo-scripts)
+  - [Skills](#skills)
+  - [Configuration File](#configuration-file)
+  - [Changelog and Releases](#changelog-and-releases)
+  - [Project Layout](#project-layout)
+  - [Testing](#testing)
 
 ## Quick Start
 
@@ -364,21 +388,51 @@ QQL-Go now waits for collection readiness after creation and before follow-up co
 
 ## Demo Scripts
 
-The repo includes demos under `.agents/skills/qql-skill/scripts` that shell out to the Go binary.
+The repo includes demos under `skills/qql-skill/scripts` that shell out to the Go binary.
 
 ```bash
-uv run python .agents/skills/qql-skill/scripts/demo_medical_records.py --execute
-uv run python .agents/skills/qql-skill/scripts/demo_kitchen_sink.py --execute
-uv run python .agents/skills/qql-skill/scripts/demo_retrieval_modes.py --json
+uv run python skills/qql-skill/scripts/demo_medical_records.py --execute
+uv run python skills/qql-skill/scripts/demo_kitchen_sink.py --execute
+uv run python skills/qql-skill/scripts/demo_retrieval_modes.py --json
 ```
 
-The helper `.agents/skills/qql-skill/scripts/_qql_cli.py` uses:
+The helper `skills/qql-skill/scripts/_qql_cli.py` uses:
 
 ```text
 qql exec --quiet --json ...
 ```
 
 so demos consume structured output instead of scraping prose.
+
+## Skills
+
+Public, installable skills live under `skills/`.
+
+List the skills published by this repo:
+
+```bash
+npx skills add qdrant/qql-go --list
+```
+
+Install the bundled QQL skill:
+
+```bash
+npx skills add qdrant/qql-go --skill qql-skill
+```
+
+You can also install from the GitHub URL form:
+
+```bash
+npx skills add https://github.com/qdrant/qql-go --skill qql-skill
+```
+
+To validate the local repository layout before publishing:
+
+```bash
+npx skills add . --list
+```
+
+Skill authoring conventions for this repo live in [docs/SKILLS.md](docs/SKILLS.md).
 
 ## Configuration File
 
@@ -395,6 +449,11 @@ Current fields:
 - `active_profile`
 - `inference_model`
 
+## Changelog and Releases
+
+- [CHANGELOG.md](CHANGELOG.md) tracks notable user-facing changes.
+- [docs/releases/1.0.0.md](docs/releases/0.1.0.md) is the release note for the current seeded release.
+
 ## Project Layout
 
 ```text
@@ -409,6 +468,7 @@ qql-go/
 ├── internal/output/
 ├── internal/parser/
 ├── internal/repl/
+├── skills/qql-skill/
 └── README.md
 ```
 
