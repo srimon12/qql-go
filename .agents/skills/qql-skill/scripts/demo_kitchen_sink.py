@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+from _qql_cli import execute_json, print_result
+COLLECTION = "qql_skill_demo_kitchen_sink"
+
+
+BASE_STATEMENTS = [
+    # Create collection with HYBRID vectors (dense + sparse).
+    (
+        "create-hybrid",
+        f"CREATE COLLECTION {COLLECTION} HYBRID",
+    ),
+    # Create payload indexes for filtering
+    (
+        "index-specialty",
+        f"CREATE INDEX ON COLLECTION {COLLECTION} FOR specialty TYPE keyword",
+    ),
+    (
+        "index-priority",
+        f"CREATE INDEX ON COLLECTION {COLLECTION} FOR priority TYPE keyword",
+    ),
+    (
+        "index-status",
+        f"CREATE INDEX ON COLLECTION {COLLECTION} FOR status TYPE keyword",
+    ),
+    (
+        "index-year",
+        f"CREATE INDEX ON COLLECTION {COLLECTION} FOR year TYPE integer",
+    ),
+    (
+        "index-patient",
+        f"CREATE INDEX ON COLLECTION {COLLECTION} FOR patient_id TYPE keyword",
+    ),
+    # Insert medical records using HYBRID (auto dense + sparse vectorization)
+    (
+        "insert-stroke",
+        f"""INSERT INTO COLLECTION {COLLECTION} VALUES {{
+  'text': 'Patient presents with sudden right-sided weakness and slurred speech. CT confirms left MCA infarct. Thrombolysis initiated within the treatment window.',
+  'patient_id': 'PT-1001',
+  'specialty': 'neurology',
+  'priority': 'high',
+  'diagnosis': 'Acute ischemic stroke',
+  'status': 'admitted',
+  'year': 2026,
+  'score': 9.7
+}} USING HYBRID""",
+    ),
+    (
+        "insert-stemi",
+        f"""INSERT INTO COLLECTION {COLLECTION} VALUES {{
+  'text': 'Patient with crushing chest pain radiating to the left arm. ECG shows ST elevation and troponin is elevated.',
+  'patient_id': 'PT-1002',
+  'specialty': 'cardiology',
+  'priority': 'high',
+  'diagnosis': 'STEMI',
+  'status': 'admitted',
+  'year': 2025,
+  'score': 9.2
+}} USING HYBRID""",
+    ),
+    (
+        "insert-pneumonia",
+        f"""INSERT INTO COLLECTION {COLLECTION} VALUES {{
+  'text': 'Patient has high-grade fever, productive cough, and right lower lobe consolidation on chest X-ray. Started on IV antibiotics.',
+  'patient_id': 'PT-1003',
+  'specialty': 'pulmonology',
+  'priority': 'medium',
+  'diagnosis': 'Community-acquired pneumonia',
+  'status': 'reviewed',
+  'year': 2024,
+  'score': 7.1
+}} USING HYBRID""",
+    ),
+    (
+        "insert-headache",
+        f"""INSERT INTO COLLECTION {COLLECTION} VALUES {{
+  'text': 'Mild tension headache improved with rest and hydration. No focal neurological deficits observed.',
+  'patient_id': 'PT-1004',
+  'specialty': 'general-medicine',
+  'priority': 'low',
+  'diagnosis': 'Tension headache',
+  'status': 'draft',
+  'year': 2023,
+  'score': 4.5
+}} USING HYBRID""",
+    ),
+    # Dense vector search (bypasses HNSW, scans exact)
+    (
+        "search-dense-exact",
+        f"SEARCH {COLLECTION} SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 EXACT",
+    ),
+    # HYBRID search (dense + sparse fusion)
+    (
+        "search-hybrid",
+        f"SEARCH {COLLECTION} SIMILAR TO 'stroke thrombolysis ICU' LIMIT 3 USING HYBRID",
+    ),
+    # HYBRID with WHERE filter (equality)
+    (
+        "filter-equality",
+        f"SEARCH {COLLECTION} SIMILAR TO 'stroke' LIMIT 3 USING HYBRID WHERE specialty = 'neurology'",
+    ),
+    # HYBRID with WHERE filter (IN operator)
+    (
+        "filter-in",
+        f"SEARCH {COLLECTION} SIMILAR TO 'emergency cardiac chest pain' LIMIT 3 WHERE priority IN ('high', 'medium')",
+    ),
+    # HYBRID with WHERE filter (BETWEEN range)
+    (
+        "filter-range",
+        f"SEARCH {COLLECTION} SIMILAR TO 'medical' LIMIT 3 WHERE year BETWEEN 2024 AND 2026",
+    ),
+    # HYBRID with multiple filters (AND)
+    (
+        "filter-and",
+        f"SEARCH {COLLECTION} SIMILAR TO 'cardiac emergency' LIMIT 3 WHERE priority = 'high' AND status = 'admitted'",
+    ),
+    # HYBRID with compound filter (OR)
+    (
+        "filter-or",
+        f"SEARCH {COLLECTION} SIMILAR TO 'brain scan' LIMIT 3 WHERE specialty = 'neurology' OR specialty = 'radiology'",
+    ),
+    # HYBRID with NOT filter
+    (
+        "filter-not",
+        f"SEARCH {COLLECTION} SIMILAR TO 'infection' LIMIT 3 WHERE status NOT IN ('draft')",
+    ),
+    # Combined: HYBRID + WHERE + multiple conditions
+    (
+        "filter-combined",
+        f"SEARCH {COLLECTION} SIMILAR TO 'cardiac chest pain' LIMIT 3 WHERE priority IN ('high', 'medium') AND status = 'admitted' AND year >= 2024",
+    ),
+    # SHOW COLLECTIONS
+    (
+        "show-collections",
+        "SHOW COLLECTIONS",
+    ),
+]
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="QQL Kitchen Sink Demo - showcases all QQL features"
+    )
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="Run the statements against Qdrant instead of printing them.",
+    )
+    parser.add_argument(
+        "--keep",
+        action="store_true",
+        help="Keep the demo collection instead of dropping it at the end.",
+    )
+    parser.add_argument(
+        "--rerank",
+        action="store_true",
+        help="Include the rerank showcase with a rerank-capable collection.",
+    )
+    args = parser.parse_args()
+
+    statements = list(BASE_STATEMENTS)
+    if args.rerank:
+        statements[0] = (
+            "create-hybrid",
+            f"CREATE COLLECTION {COLLECTION} HYBRID RERANK",
+        )
+        statements.insert(
+            len(statements) - 1,
+            (
+                "search-hybrid-rerank",
+                f"SEARCH {COLLECTION} SIMILAR TO 'stroke thrombolysis ICU' LIMIT 3 USING HYBRID RERANK",
+            ),
+        )
+
+    try:
+        if args.execute:
+            try:
+                execute_json(f"DROP COLLECTION {COLLECTION}")
+            except Exception:
+                pass
+
+        for label, statement in statements:
+            print(f"[{label}]")
+            print(statement)
+            print()
+
+            if not args.execute:
+                continue
+
+            try:
+                result = execute_json(statement)
+                print_result(label, result, limit=3)
+            except Exception as exc:
+                print(f"  ERROR: {exc}")
+                print()
+
+    finally:
+        if args.execute and not args.keep:
+            try:
+                result = execute_json(f"DROP COLLECTION {COLLECTION}")
+                print(f"[cleanup]\n{result.message}\n")
+            except Exception as exc:
+                print(f"[cleanup]\ncleanup failed: {exc}\n")
+
+
+if __name__ == "__main__":
+    main()

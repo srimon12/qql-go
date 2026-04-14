@@ -1,0 +1,134 @@
+package lexer
+
+type TokenKind int
+
+const (
+	TokenKindInsert TokenKind = iota
+	TokenKindInto
+	TokenKindCollection
+	TokenKindValues
+	TokenKindUsing
+	TokenKindModel
+	TokenKindHybrid
+	TokenKindDense
+	TokenKindSparse
+	TokenKindRerank
+	TokenKindExact
+	TokenKindWith
+	TokenKindAcorn
+	TokenKindCreate
+	TokenKindDrop
+	TokenKindShow
+	TokenKindCollections
+	TokenKindSearch
+	TokenKindSimilar
+	TokenKindTo
+	TokenKindLimit
+	TokenKindDelete
+	TokenKindFrom
+	TokenKindWhere
+	TokenKindId
+	TokenKindIndex
+	TokenKindOn
+	TokenKindFor
+	TokenKindType
+	TokenKindAnd
+	TokenKindOr
+	TokenKindNot
+	TokenKindIn
+	TokenKindBetween
+	TokenKindIs
+	TokenKindNull
+	TokenKindEmpty
+	TokenKindMatch
+	TokenKindAny
+	TokenKindPhrase
+	TokenKindIdentifier
+	TokenKindString
+	TokenKindInteger
+	TokenKindFloat
+	TokenKindLbrace
+	TokenKindRbrace
+	TokenKindLbracket
+	TokenKindRbracket
+	TokenKindLparen
+	TokenKindRparen
+	TokenKindColon
+	TokenKindComma
+	TokenKindEquals
+	TokenKindNotEquals
+	TokenKindGt
+	TokenKindGte
+	TokenKindLt
+	TokenKindLte
+	TokenKindEof
+)
+
+var tokenKindStrings = map[TokenKind]string{
+	TokenKindInsert:      "INSERT",
+	TokenKindInto:        "INTO",
+	TokenKindCollection:  "COLLECTION",
+	TokenKindValues:      "VALUES",
+	TokenKindUsing:       "USING",
+	TokenKindModel:       "MODEL",
+	TokenKindHybrid:      "HYBRID",
+	TokenKindDense:       "DENSE",
+	TokenKindSparse:      "SPARSE",
+	TokenKindRerank:      "RERANK",
+	TokenKindExact:       "EXACT",
+	TokenKindWith:        "WITH",
+	TokenKindAcorn:       "ACORN",
+	TokenKindCreate:      "CREATE",
+	TokenKindDrop:        "DROP",
+	TokenKindShow:        "SHOW",
+	TokenKindCollections: "COLLECTIONS",
+	TokenKindSearch:      "SEARCH",
+	TokenKindSimilar:     "SIMILAR",
+	TokenKindTo:          "TO",
+	TokenKindLimit:       "LIMIT",
+	TokenKindDelete:      "DELETE",
+	TokenKindFrom:        "FROM",
+	TokenKindWhere:       "WHERE",
+	TokenKindId:          "ID",
+	TokenKindIndex:       "INDEX",
+	TokenKindOn:          "ON",
+	TokenKindFor:         "FOR",
+	TokenKindType:        "TYPE",
+	TokenKindAnd:         "AND",
+	TokenKindOr:          "OR",
+	TokenKindNot:         "NOT",
+	TokenKindIn:          "IN",
+	TokenKindBetween:     "BETWEEN",
+	TokenKindIs:          "IS",
+	TokenKindNull:        "NULL",
+	TokenKindEmpty:       "EMPTY",
+	TokenKindMatch:       "MATCH",
+	TokenKindAny:         "ANY",
+	TokenKindPhrase:      "PHRASE",
+	TokenKindIdentifier:  "IDENTIFIER",
+	TokenKindString:      "STRING",
+	TokenKindInteger:     "INTEGER",
+	TokenKindFloat:       "FLOAT",
+	TokenKindLbrace:      "LBRACE",
+	TokenKindRbrace:      "RBRACE",
+	TokenKindLbracket:    "LBRACKET",
+	TokenKindRbracket:    "RBRACKET",
+	TokenKindLparen:      "LPAREN",
+	TokenKindRparen:      "RPAREN",
+	TokenKindColon:       "COLON",
+	TokenKindComma:       "COMMA",
+	TokenKindEquals:      "EQUALS",
+	TokenKindNotEquals:   "NOT_EQUALS",
+	TokenKindGt:          "GT",
+	TokenKindGte:         "GTE",
+	TokenKindLt:          "LT",
+	TokenKindLte:         "LTE",
+	TokenKindEof:         "EOF",
+}
+
+func (k TokenKind) String() string {
+	if s, ok := tokenKindStrings[k]; ok {
+		return s
+	}
+	return "UNKNOWN"
+}
