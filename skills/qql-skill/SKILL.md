@@ -33,6 +33,7 @@ Supported syntax in this repo includes:
 - `INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID`
 - `INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'`
 - `INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID SPARSE MODEL '<model>'`
+- keys inside `VALUES {...}` can be bare identifiers or quoted strings
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n>`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID`
@@ -44,7 +45,7 @@ Supported syntax in this repo includes:
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK`
 - `DELETE FROM <name> WHERE ...`
-- `EXPLAIN <statement>`
+- `qql-go explain <statement>`
 
 Current inference boundary:
 

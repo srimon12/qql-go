@@ -117,8 +117,8 @@ DELETE FROM notes WHERE category = 'archived'
 
 ## Explain
 
-```sql
-EXPLAIN SEARCH articles SIMILAR TO 'query' LIMIT 5 USING HYBRID WHERE year = 2024
+```powershell
+qql-go explain "SEARCH articles SIMILAR TO 'query' LIMIT 5 USING HYBRID WHERE year = 2024"
 ```
 
 ## Agent-safe CLI calls

@@ -27,6 +27,7 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - `INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID`
 - `INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'`
 - `INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID SPARSE MODEL '<model>'`
+- keys inside `VALUES {...}` can be bare identifiers or quoted strings
 
 ### Search
 
@@ -50,7 +51,7 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 
 ### Explain
 
-- `EXPLAIN <statement>`
+- `qql-go explain <statement>`
 
 ## CLI Output Modes
 

@@ -166,6 +166,7 @@ Important behavior in the current Go build:
 - self-hosted/local Qdrant is currently best for `SHOW`, `CREATE`, `DROP`, `CREATE INDEX`, and `DELETE`
 - collection auto-creation on insert is not supported
 - `text` is required in `INSERT ... VALUES {...}`
+- keys in `VALUES {...}` may be bare identifiers or quoted strings; quote them when they contain spaces or punctuation
 
 Put differently:
 
@@ -209,7 +210,7 @@ DELETE FROM <name> WHERE id = '<uuid>'
 DELETE FROM <name> WHERE id = <integer>
 DELETE FROM <name> WHERE <field> = '<value>'
 
-EXPLAIN <statement>
+`qql-go explain <statement>`
 ```
 
 ## Retrieval Modes

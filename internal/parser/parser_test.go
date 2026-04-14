@@ -26,6 +26,14 @@ func TestParseInsert(t *testing.T) {
 			},
 		},
 		{
+			name:  "insert with bare keys",
+			input: `INSERT INTO COLLECTION test VALUES {text: 'hello', topic: 'search'}`,
+			want: &ast.InsertStmt{
+				Collection: "test",
+				Values:     map[string]interface{}{"text": "hello", "topic": "search"},
+			},
+		},
+		{
 			name:  "insert with model",
 			input: `INSERT INTO COLLECTION test VALUES {"text": "hello"} USING MODEL 'model-name'`,
 			want: &ast.InsertStmt{
