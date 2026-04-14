@@ -35,4 +35,4 @@ jobs:
         run: go test ./...
 
       - name: Build CLI
-        run: go build ./cmd/qql
+        run: go build ./cmd/qql-go

@@ -6,7 +6,7 @@ This guide is for maintainers and contributors working on the qql-go codebase an
 
 Main areas:
 
-- `cmd/qql` entrypoint
+- `cmd/qql-go` entrypoint
 - `internal/lexer` tokenization
 - `internal/parser` syntax parsing
 - `internal/filters` QQL filter conversion
@@ -28,26 +28,26 @@ Test and build:
 
 ```bash
 go test ./...
-go build ./cmd/qql
+go build ./cmd/qql-go
 ```
 
 Run the CLI:
 
 ```bash
-go run ./cmd/qql version
-go run ./cmd/qql repl
+go run ./cmd/qql-go version
+go run ./cmd/qql-go repl
 ```
 
 Build a local binary:
 
 ```bash
-go build -o qql-go.exe ./cmd/qql
+go build -o qql-go.exe ./cmd/qql-go
 ```
 
 On non-Windows platforms:
 
 ```bash
-go build -o qql-go ./cmd/qql
+go build -o qql-go ./cmd/qql-go
 ```
 
 ## Versioning
@@ -104,7 +104,7 @@ Important:
 
 ```bash
 go test ./...
-go build ./cmd/qql
+go build ./cmd/qql-go
 ```
 
 5. Commit the release prep changes.

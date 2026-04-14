@@ -1,166 +1,136 @@
 # qql-go
 
-This project is an independent Go port of the original QQL work by [pavanjava/qql](https://github.com/pavanjava/qql), extended with additional CLI and agent-focused improvements.
+An independent Go port of the original [pavanjava/qql](https://github.com/pavanjava/qql), with a stronger CLI surface, structured machine output, install scripts, release assets, and agent-oriented usage patterns.
 
-qql-go is a standalone, compiled CLI for [Qdrant](https://qdrant.tech). It gives you a SQL-like surface for collection management, insert, search, filtering, explain plans, and delete operations.
+`qql-go` is a standalone CLI for [Qdrant](https://qdrant.tech) with a SQL-like surface for:
 
-The current build is designed for two workflows:
+- collection management
+- payload index creation
+- document insert
+- dense and hybrid retrieval
+- rerank retrieval
+- explain plans
+- filter-based delete
 
-- human CLI usage with readable text output
-- agent/script usage with structured JSON output
+It is designed for both:
 
-```text
+- humans using a readable terminal CLI
+- agents and scripts using stable JSON output
+
+## Fast Start
+
+Install the latest release on macOS or Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | sh
+```
+
+Install a specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | VERSION=v0.1.1 sh
+```
+
+The Unix installer defaults to `~/.local/bin/qql-go`. Override with `INSTALL_DIR=/your/bin/path` when needed.
+
+Install on Windows with PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/srimon12/qql-go/main/install.ps1 | iex
+```
+
+Build from source:
+
+```bash
+go build -o qql-go ./cmd/qql-go
+```
+
+On Windows:
+
+```powershell
+go build -o qql-go.exe ./cmd/qql-go
+```
+
+Install with Go:
+
+```bash
+go install github.com/srimon12/qql-go/cmd/qql-go@latest
+```
+
+Build from a fresh source checkout:
+
+```bash
+git clone https://github.com/srimon12/qql-go.git
+cd qql-go
+go build -o qql-go ./cmd/qql-go
+```
+
+## First Run
+
+Connect to Qdrant Cloud for text insert and text search:
+
+```bash
+qql-go connect --url https://<your-cluster>.qdrant.io --secret <your-api-key>
+```
+
+Or connect to a local/self-hosted Qdrant instance for non-inference operations:
+
+```bash
+qql-go connect --url http://localhost:6333
+```
+
+Run a simple query:
+
+```bash
+qql-go exec "SHOW COLLECTIONS"
+```
+
+Explain a query without executing it:
+
+```bash
+qql-go explain "SEARCH docs SIMILAR TO 'vector db' LIMIT 5 USING HYBRID"
+```
+
+Check saved connection health:
+
+```bash
+qql-go doctor
+```
+
+## Human Path
+
+Use the CLI directly:
+
+```bash
 qql-go exec "CREATE COLLECTION docs HYBRID"
 qql-go exec "INSERT INTO COLLECTION docs VALUES {'text': 'Qdrant stores vectors', 'topic': 'search'} USING HYBRID"
 qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID"
 qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID RERANK"
 ```
 
-## Table of Contents
-
-- [QQL-Go](#qql-go)
-  - [Table of Contents](#table-of-contents)
-  - [Quick Start](#quick-start)
-    - [Build](#build)
-    - [Connect to Qdrant](#connect-to-qdrant)
-    - [Run one query](#run-one-query)
-    - [Explain a query plan](#explain-a-query-plan)
-    - [Check connection health](#check-connection-health)
-  - [Connection and Health Commands](#connection-and-health-commands)
-    - [connect](#connect)
-    - [disconnect](#disconnect)
-    - [doctor](#doctor)
-  - [Output Modes (Human vs Machine)](#output-modes-human-vs-machine)
-    - [Human-readable defaults](#human-readable-defaults)
-    - [Structured JSON](#structured-json)
-    - [Compact JSON (agent path)](#compact-json-agent-path)
-  - [Inference Compatibility (Important)](#inference-compatibility-important)
-  - [Supported QQL Statements](#supported-qql-statements)
-    - [Collection management](#collection-management)
-    - [Payload indexes](#payload-indexes)
-    - [Insert](#insert)
-    - [Search](#search)
-    - [Delete](#delete)
-    - [Explain](#explain)
-  - [Search Modes](#search-modes)
-    - [Dense](#dense)
-    - [Hybrid](#hybrid)
-    - [Rerank](#rerank)
-  - [Query-Time Search Params](#query-time-search-params)
-  - [Where Filters](#where-filters)
-  - [REPL Behavior](#repl-behavior)
-  - [Script and Agent Usage](#script-and-agent-usage)
-  - [Demo Scripts](#demo-scripts)
-  - [Skills](#skills)
-  - [Configuration File](#configuration-file)
-  - [Changelog and Releases](#changelog-and-releases)
-  - [Project Layout](#project-layout)
-  - [Testing](#testing)
-
-## Quick Start
-
-### Build
+Start the interactive shell:
 
 ```bash
-go build -o qql-go.exe ./cmd/qql
+qql-go
 ```
 
-On non-Windows platforms:
+or:
 
 ```bash
-go build -o qql-go ./cmd/qql
+qql-go repl
 ```
 
-### Connect to Qdrant
+REPL shortcuts:
 
-For text `INSERT` and text `SEARCH` in the current Go build, connect to Qdrant Cloud.
+- `help`, `?`, `\h`
+- `explain <query>`
+- `exit`, `quit`, `\q`, `:q`
 
-```bash
-qql-go connect --url https://<your-cluster>.qdrant.io --secret <your-api-key>
-```
+## Agent Path
 
-Self-hosted/local URLs are supported for non-inference operations such as collection and index management.
+For automation, do not parse human prose output.
 
-```bash
-qql-go connect --url http://localhost:6333
-```
-
-By default, successful `connect` enters the interactive REPL.
-
-### Run one query
-
-```bash
-qql-go exec "SHOW COLLECTIONS"
-```
-
-### Explain a query plan
-
-```bash
-qql-go explain "SEARCH docs SIMILAR TO 'vector db' LIMIT 5 USING HYBRID"
-```
-
-### Check connection health
-
-```bash
-qql-go doctor
-```
-
-## Connection and Health Commands
-
-### connect
-
-```bash
-qql-go connect --url <url> [--secret <secret>]
-```
-
-- validates connectivity
-- saves config to `~/.qql/config.json`
-- enters REPL on success (default behavior)
-
-### disconnect
-
-```bash
-qql-go disconnect
-```
-
-- removes saved config
-
-### doctor
-
-```bash
-qql-go doctor
-```
-
-- checks saved connection
-- reports status and collection count
-
-## Output Modes (Human vs Machine)
-
-qql-go supports a consistent output contract across `connect`, `disconnect`, `exec`, `explain`, `doctor`, and `version`.
-
-### Human-readable defaults
-
-```bash
-qql-go exec "<query>"
-qql-go explain "<query>"
-qql-go doctor
-qql-go connect --url <url> [--secret <secret>]
-qql-go disconnect
-qql-go version
-```
-
-### Structured JSON
-
-```bash
-qql-go exec --json "<query>"
-qql-go explain --json "<query>"
-qql-go doctor --json
-qql-go connect --json --url <url> [--secret <secret>]
-qql-go disconnect --json
-qql-go version --json
-```
-
-### Compact JSON (agent path)
+Use compact structured output:
 
 ```bash
 qql-go exec --quiet --json "<query>"
@@ -171,32 +141,40 @@ qql-go disconnect --quiet --json
 qql-go version --quiet --json
 ```
 
-Notes:
+Recommended agent examples:
 
-- `--quiet --json` emits compact JSON (no pretty indentation).
-- `--json` controls machine-readable output. `--quiet` stays separate and reduces decoration in text mode; when paired with `--json`, it switches to compact JSON.
-- `qql-go explain --quiet "<query>"` prints the raw plan without the titled section wrapper.
-- `qql-go connect --json` and `qql-go connect --quiet` do not drop into REPL.
-- `qql-go version --quiet` prints only the version string.
+```bash
+qql-go exec --quiet --json "SHOW COLLECTIONS"
+qql-go explain --quiet --json "SEARCH docs SIMILAR TO 'vector db' LIMIT 5 USING HYBRID"
+qql-go doctor --quiet --json
+```
 
-## Inference Compatibility (Important)
+Output contract notes:
 
-Current Go behavior:
+- `--json` enables structured output
+- `--quiet --json` emits compact JSON
+- `qql-go explain --quiet "<query>"` prints raw plan text
+- `qql-go connect --json` and `qql-go connect --quiet` do not enter REPL
+- `qql-go version --quiet` prints only the version string
 
-- Text `INSERT` and text `SEARCH ... SIMILAR TO ...` support `USING MODEL '<model>'`.
-- `USING HYBRID` supports optional `DENSE MODEL '<model>'` and `SPARSE MODEL '<model>'` overrides.
-- `RERANK` supports an optional `MODEL '<model>'` override.
-- `USING HYBRID` and `RERANK` are Qdrant Cloud inference paths in this build.
-- qql-go currently depends on Qdrant Cloud inference for dense embeddings, BM25 sparse inference, and reranking.
-- Self-hosted/local Qdrant is currently best for non-inference operations (`SHOW`, `CREATE`, `DROP`, `CREATE INDEX`, `DELETE`).
+## Current Boundary
 
-Planned later:
+Important behavior in the current Go build:
 
-- local/external dense+sparse generation so self-hosted hybrid retrieval works end-to-end without cloud inference.
+- text `INSERT` and text `SEARCH ... SIMILAR TO ...` are Qdrant Cloud inference paths
+- `USING HYBRID` and `RERANK` depend on Qdrant Cloud inference in this build
+- self-hosted/local Qdrant is currently best for `SHOW`, `CREATE`, `DROP`, `CREATE INDEX`, and `DELETE`
+- collection auto-creation on insert is not supported
+- `text` is required in `INSERT ... VALUES {...}`
 
-## Supported QQL Statements
+Put differently:
 
-### Collection management
+- use Qdrant Cloud if you want text insert/search, hybrid, or rerank
+- use local/self-hosted freely for non-inference management operations
+
+## What Works Today
+
+Supported statements:
 
 ```sql
 CREATE COLLECTION <name>
@@ -204,36 +182,18 @@ CREATE COLLECTION <name> HYBRID
 CREATE COLLECTION <name> HYBRID RERANK
 DROP COLLECTION <name>
 SHOW COLLECTIONS
-```
 
-### Payload indexes
-
-```sql
 CREATE INDEX ON COLLECTION <name> FOR <field> TYPE keyword
 CREATE INDEX ON COLLECTION <name> FOR <field> TYPE integer
 CREATE INDEX ON COLLECTION <name> FOR <field> TYPE float
 CREATE INDEX ON COLLECTION <name> FOR <field> TYPE bool
-```
 
-### Insert
-
-```sql
 INSERT INTO COLLECTION <name> VALUES {...}
 INSERT INTO COLLECTION <name> VALUES {...} USING MODEL '<model>'
 INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID
 INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'
 INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID SPARSE MODEL '<model>'
-```
 
-Important:
-
-- `text` field is required in `VALUES`.
-- Collection must already exist; qql-go does not auto-create on insert.
-- In the current Go build, text insert embedding is a Qdrant Cloud inference path.
-
-### Search
-
-```sql
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n>
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING MODEL '<model>'
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID
@@ -244,80 +204,41 @@ SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef: <n>, exact: true|fa
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK
-```
 
-### Delete
-
-```sql
 DELETE FROM <name> WHERE id = '<uuid>'
 DELETE FROM <name> WHERE id = <integer>
 DELETE FROM <name> WHERE <field> = '<value>'
-```
 
-Field delete is equality-based filter delete.
-
-### Explain
-
-```sql
 EXPLAIN <statement>
 ```
 
-## Search Modes
+## Retrieval Modes
 
-### Dense
+Dense search:
 
-Use plain `SEARCH` for semantic retrieval.
+- use plain `SEARCH`
+- use `USING MODEL '<model>'` when you want to pin the dense model
+- default dense model: `sentence-transformers/all-minilm-l6-v2`
 
-Use `USING MODEL '<model>'` when you want to pin the dense model explicitly.
+Hybrid search:
 
-Default dense model:
+- use `USING HYBRID` when exact terms and semantic similarity both matter
+- default sparse model: `qdrant/bm25`
 
-- `sentence-transformers/all-minilm-l6-v2`
+Rerank:
 
-### Hybrid
-
-Use `USING HYBRID` when exact term matching and semantic matching both matter.
-
-Default sparse model:
-
-- `qdrant/bm25`
-
-`USING HYBRID` also supports explicit dense and sparse model overrides when you need to pin the retrieval stack.
-
-### Rerank
-
-Use `RERANK` when candidate ordering needs improvement.
-
-Default rerank model:
-
-- `answerdotai/answerai-colbert-small-v1`
-
-`RERANK MODEL '<model>'` lets you override the reranker when the cloud path is available.
-
-Rerank notes:
-
-- relies on Qdrant Cloud inference path
+- use `RERANK` when retrieval is okay but ordering needs improvement
+- default rerank model: `answerdotai/answerai-colbert-small-v1`
 - requires a collection created with `HYBRID RERANK`
-- is slower than plain dense/hybrid retrieval
 
-## Query-Time Search Params
-
-Supported search-time options:
+Search-time tuning:
 
 - `EXACT`
 - `WITH { hnsw_ef: <n> }`
 - `WITH { exact: true|false }`
 - `WITH { acorn: true|false }`
 
-Examples:
-
-```sql
-SEARCH docs SIMILAR TO 'retrieval' LIMIT 10 EXACT
-SEARCH docs SIMILAR TO 'retrieval' LIMIT 10 WITH { hnsw_ef: 256 }
-SEARCH docs SIMILAR TO 'retrieval' LIMIT 10 WHERE tag = 'search' WITH { acorn: true }
-```
-
-## Where Filters
+## Filters
 
 Supported predicates:
 
@@ -346,48 +267,6 @@ SEARCH docs SIMILAR TO 'incident' LIMIT 10 WHERE (team = 'search' OR team = 'inf
 
 If you filter heavily, create payload indexes first.
 
-## REPL Behavior
-
-Run shell:
-
-```bash
-qql-go
-```
-
-or:
-
-```bash
-qql-go repl
-```
-
-Inside REPL:
-
-- `help`, `?`, `\h` prints help
-- `explain <query>` prints plan
-- `exit`, `quit`, `\q`, `:q` exits
-
-Multiline input is supported while brackets, braces, or parentheses remain open.
-
-## Script and Agent Usage
-
-Recommended command style:
-
-- humans: `qql-go exec "<query>"`
-- scripts/agents: `qql-go exec --quiet --json "<query>"`
-
-Examples:
-
-```powershell
-qql-go exec --quiet --json "SHOW COLLECTIONS"
-qql-go explain --quiet --json "SEARCH docs SIMILAR TO 'vector db' LIMIT 5 USING HYBRID"
-qql-go doctor --quiet --json
-qql-go connect --quiet --json --url https://<cluster>.qdrant.io --secret <api-key>
-```
-
-For text `INSERT`/`SEARCH`, use a cloud connection URL in the current build.
-
-qql-go now waits for collection readiness after creation and before follow-up collection operations, so sequential `CREATE COLLECTION` -> `CREATE INDEX` / `INSERT` / `SEARCH` flows behave consistently from the CLI.
-
 ## Demo Scripts
 
 The repo includes demos under `skills/qql-skill/scripts` that shell out to the Go binary.
@@ -408,9 +287,9 @@ so demos consume structured output instead of scraping prose.
 
 ## Skills
 
-Public, installable skills live under `skills/`.
+This repo publishes installable skills from `skills/`.
 
-List the skills published by this repo:
+List available skills:
 
 ```bash
 npx skills add srimon12/qql-go --list
@@ -422,49 +301,51 @@ Install the bundled QQL skill:
 npx skills add srimon12/qql-go --skill qql-skill
 ```
 
-You can also install from the GitHub URL form:
+Install from the GitHub URL form:
 
 ```bash
 npx skills add https://github.com/srimon12/qql-go --skill qql-skill
 ```
 
-To validate the local repository layout before publishing:
+Validate the local layout before publishing:
 
 ```bash
 npx skills add . --list
 ```
 
-Skill authoring conventions for this repo live in [docs/SKILLS.md](docs/SKILLS.md).
+More skill authoring notes live in [docs/SKILLS.md](docs/SKILLS.md).
 
-## Configuration File
+## Install And Release Notes
 
-Saved at:
+Prebuilt binaries are published on [GitHub Releases](https://github.com/srimon12/qql-go/releases) for:
+
+- Windows
+- Linux
+- macOS
+
+The repo also ships direct install scripts:
+
+- [install.sh](install.sh)
+- [install.ps1](install.ps1)
+
+Config is stored at:
 
 ```text
 ~/.qql/config.json
 ```
 
-Current fields:
+## Contributing And Maintenance
 
-- `url`
-- `secret`
-- `active_profile`
-- `inference_model`
-
-## Changelog and Releases
-
-- [CHANGELOG.md](CHANGELOG.md) tracks notable user-facing changes.
-- [docs/releases/0.1.1.md](docs/releases/0.1.1.md) is the release note for the current seeded release.
-- [CONTRIBUTING.md](CONTRIBUTING.md) covers contribution expectations.
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) covers repo maintenance and release workflow details.
-
-Prebuilt binaries for supported releases are attached to GitHub Releases for Windows, Linux, and macOS.
+- [CONTRIBUTING.md](CONTRIBUTING.md) for contributors
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for maintainers and release workflow details
+- [CHANGELOG.md](CHANGELOG.md) for user-facing changes
+- [docs/releases/0.1.1.md](docs/releases/0.1.1.md) for the current release note
 
 ## Project Layout
 
 ```text
 qql-go/
-├── cmd/qql/
+├── cmd/qql-go/
 ├── internal/ast/
 ├── internal/cli/
 ├── internal/config/
@@ -475,13 +356,14 @@ qql-go/
 ├── internal/parser/
 ├── internal/repl/
 ├── skills/qql-skill/
+├── install.sh
+├── install.ps1
 └── README.md
 ```
 
-## Testing
+## Local Verification
 
 ```bash
 go test ./...
+go build ./cmd/qql-go
 ```
-
-The tests cover lexer, parser, filters, command request-building, config behavior, output formatting, and REPL command handling.

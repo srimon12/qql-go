@@ -65,7 +65,7 @@ jobs:
           export GOARCH="${{ matrix.goarch }}"
 
           binary_path="build/${{ matrix.binary_name }}"
-          go build -ldflags="-s -w -X github.com/srimon12/qql-go/internal/cli/commands.Version=$version" -o "$binary_path" ./cmd/qql
+          go build -ldflags="-s -w -X github.com/srimon12/qql-go/internal/cli/commands.Version=$version" -o "$binary_path" ./cmd/qql-go
 
           if [ "${{ matrix.archive }}" = "zip" ]; then
             (

@@ -23,15 +23,15 @@ Clone and test:
 
 ```bash
 go test ./...
-go build ./cmd/qql
+go build ./cmd/qql-go
 ```
 
 Run the CLI locally:
 
 ```bash
-go run ./cmd/qql version
-go run ./cmd/qql doctor
-go run ./cmd/qql exec "SHOW COLLECTIONS"
+go run ./cmd/qql-go version
+go run ./cmd/qql-go doctor
+go run ./cmd/qql-go exec "SHOW COLLECTIONS"
 ```
 
 ## What to include in a change
