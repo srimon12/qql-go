@@ -455,6 +455,8 @@ Current fields:
 
 - [CHANGELOG.md](CHANGELOG.md) tracks notable user-facing changes.
 - [docs/releases/0.1.0.md](docs/releases/0.1.0.md) is the release note for the current seeded release.
+- [CONTRIBUTING.md](CONTRIBUTING.md) covers contribution expectations.
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) covers repo maintenance and release workflow details.
 
 Prebuilt binaries for supported releases are attached to GitHub Releases for Windows, Linux, and macOS.
 

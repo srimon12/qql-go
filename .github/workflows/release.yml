@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -113,6 +112,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --title "QQL-Go ${GITHUB_REF_NAME#v}" \
-            --notes-file "docs/releases/${GITHUB_REF_NAME#v}.md"
+          tag="$GITHUB_REF_NAME"
+          title="QQL-Go ${tag#v}"
+          notes_file="docs/releases/${tag#v}.md"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/* --clobber
+            gh release edit "$tag" --title "$title" --notes-file "$notes_file" --latest
+          else
+            gh release create "$tag" dist/* \
+              --title "$title" \
+              --notes-file "$notes_file" \
+              --latest
+          fi
