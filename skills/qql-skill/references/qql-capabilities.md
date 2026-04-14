@@ -56,24 +56,24 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 
 Human-readable defaults:
 
-- `qql exec "<query>"`
-- `qql explain "<query>"`
-- `qql doctor`
+- `qql-go exec "<query>"`
+- `qql-go explain "<query>"`
+- `qql-go doctor`
 
 Structured JSON for automation:
 
-- `qql exec --json "<query>"`
-- `qql exec --quiet --json "<query>"` (compact JSON)
-- `qql explain --json "<query>"`
-- `qql explain --quiet --json "<query>"` (compact JSON)
-- `qql doctor --json`
-- `qql doctor --quiet --json` (compact JSON)
-- `qql connect --json --url <url> [--secret <secret>]`
-- `qql connect --quiet --json --url <url> [--secret <secret>]` (compact JSON)
+- `qql-go exec --json "<query>"`
+- `qql-go exec --quiet --json "<query>"` (compact JSON)
+- `qql-go explain --json "<query>"`
+- `qql-go explain --quiet --json "<query>"` (compact JSON)
+- `qql-go doctor --json`
+- `qql-go doctor --quiet --json` (compact JSON)
+- `qql-go connect --json --url <url> [--secret <secret>]`
+- `qql-go connect --quiet --json --url <url> [--secret <secret>]` (compact JSON)
 
 Text-mode quiet behavior:
 
-- `qql explain --quiet "<query>"` prints the raw plan text without the titled section.
+- `qql-go explain --quiet "<query>"` prints the raw plan text without the titled section.
 
 ## Search Modes
 

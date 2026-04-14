@@ -18,28 +18,28 @@ jobs:
           - goos: windows
             goarch: amd64
             archive: zip
-            binary_name: qql.exe
-            asset_name: qql_{{VERSION}}_windows_amd64.zip
+            binary_name: qql-go.exe
+            asset_name: qql-go_{{VERSION}}_windows_amd64.zip
           - goos: linux
             goarch: amd64
             archive: tar.gz
-            binary_name: qql
-            asset_name: qql_{{VERSION}}_linux_amd64.tar.gz
+            binary_name: qql-go
+            asset_name: qql-go_{{VERSION}}_linux_amd64.tar.gz
           - goos: linux
             goarch: arm64
             archive: tar.gz
-            binary_name: qql
-            asset_name: qql_{{VERSION}}_linux_arm64.tar.gz
+            binary_name: qql-go
+            asset_name: qql-go_{{VERSION}}_linux_arm64.tar.gz
           - goos: darwin
             goarch: amd64
             archive: tar.gz
-            binary_name: qql
-            asset_name: qql_{{VERSION}}_darwin_amd64.tar.gz
+            binary_name: qql-go
+            asset_name: qql-go_{{VERSION}}_darwin_amd64.tar.gz
           - goos: darwin
             goarch: arm64
             archive: tar.gz
-            binary_name: qql
-            asset_name: qql_{{VERSION}}_darwin_arm64.tar.gz
+            binary_name: qql-go
+            asset_name: qql-go_{{VERSION}}_darwin_arm64.tar.gz
 
     steps:
       - name: Check out repository
@@ -103,7 +103,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           (
             cd dist
-            sha256sum * > "qql_${version}_checksums.txt"
+            sha256sum * > "qql-go_${version}_checksums.txt"
           )
 
       - name: Publish release
@@ -113,7 +113,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="$GITHUB_REF_NAME"
-          title="QQL-Go ${tag#v}"
+          title="qql-go ${tag#v}"
           notes_file="docs/releases/${tag#v}.md"
 
           if gh release view "$tag" >/dev/null 2>&1; then

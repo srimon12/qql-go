@@ -1,6 +1,6 @@
 # Development Guide
 
-This guide is for maintainers and contributors working on the QQL-Go codebase and release process.
+This guide is for maintainers and contributors working on the qql-go codebase and release process.
 
 ## Repo layout
 
@@ -41,13 +41,13 @@ go run ./cmd/qql repl
 Build a local binary:
 
 ```bash
-go build -o qql.exe ./cmd/qql
+go build -o qql-go.exe ./cmd/qql
 ```
 
 On non-Windows platforms:
 
 ```bash
-go build -o qql ./cmd/qql
+go build -o qql-go ./cmd/qql
 ```
 
 ## Versioning
@@ -111,9 +111,9 @@ go build ./cmd/qql
 6. Tag the release:
 
 ```bash
-git tag v0.1.0
+git tag v<version>
 git push origin main
-git push origin v0.1.0
+git push origin v<version>
 ```
 
 7. Verify the GitHub Actions release workflow and release page assets.

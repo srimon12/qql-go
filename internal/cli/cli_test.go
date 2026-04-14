@@ -22,7 +22,7 @@ func TestRootCommandReturnsErrorWithoutSavedConfig(t *testing.T) {
 	require.Error(t, err)
 	require.False(t, ErrorPrinted(err))
 	require.Equal(t, 1, ExitCode(err))
-	require.Equal(t, "not connected. Run: qql connect --url <url>", err.Error())
+	require.Equal(t, "not connected. Run: qql-go connect --url <url>", err.Error())
 }
 
 func TestCliExitHelpersUseCommandExitErrors(t *testing.T) {

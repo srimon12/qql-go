@@ -1,4 +1,5 @@
-qql.exe
+qql-go
+qql-go.exe
 *.pyc
 build-release/
 dist/

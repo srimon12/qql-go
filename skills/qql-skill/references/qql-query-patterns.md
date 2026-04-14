@@ -124,10 +124,10 @@ EXPLAIN SEARCH articles SIMILAR TO 'query' LIMIT 5 USING HYBRID WHERE year = 202
 ## Agent-safe CLI calls
 
 ```powershell
-qql exec --quiet --json "SHOW COLLECTIONS"
-qql explain --quiet --json "SEARCH docs SIMILAR TO 'vector db' LIMIT 5 USING HYBRID"
-qql doctor --quiet --json
-qql connect --quiet --json --url https://<cluster>.qdrant.io --secret <api-key>
+qql-go exec --quiet --json "SHOW COLLECTIONS"
+qql-go explain --quiet --json "SEARCH docs SIMILAR TO 'vector db' LIMIT 5 USING HYBRID"
+qql-go doctor --quiet --json
+qql-go connect --quiet --json --url https://<cluster>.qdrant.io --secret <api-key>
 ```
 
 Use these forms for scripts and agents so output is structured and compact.

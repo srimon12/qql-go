@@ -20,7 +20,7 @@ func ErrorPrinted(err error) bool {
 
 func NewRootCmd(out *output.Outputter) *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:           "qql",
+		Use:           "qql-go",
 		Short:         "QQL — Qdrant Query Language CLI",
 		Long:          `QQL is a query language CLI for Qdrant vector database.`,
 		SilenceErrors: true,

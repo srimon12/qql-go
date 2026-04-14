@@ -488,7 +488,7 @@ func TestExecCommandWithoutConfigReturnsPrintedError(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, ErrorPrinted(err))
 	require.Equal(t, 1, ExitCode(err))
-	require.Contains(t, stderr, "not connected. Run: qql connect --url <url>")
+	require.Contains(t, stderr, "not connected. Run: qql-go connect --url <url>")
 }
 
 func TestDoctorCommandWithoutConfigReturnsPrintedError(t *testing.T) {
@@ -506,7 +506,7 @@ func TestDoctorCommandWithoutConfigReturnsPrintedError(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, ErrorPrinted(err))
 	require.Equal(t, 1, ExitCode(err))
-	require.Contains(t, stderr, "not connected. Run: qql connect --url <url>")
+	require.Contains(t, stderr, "not connected. Run: qql-go connect --url <url>")
 }
 
 func TestREPLCommandWithoutConfigReturnsError(t *testing.T) {
@@ -517,7 +517,7 @@ func TestREPLCommandWithoutConfigReturnsError(t *testing.T) {
 
 	cmd := NewREPLCmd(output.NewOutputterWithWriters(&bytes.Buffer{}, &bytes.Buffer{}))
 	err := cmd.RunE(cmd, nil)
-	require.EqualError(t, err, "not connected. Run: qql connect --url <url>")
+	require.EqualError(t, err, "not connected. Run: qql-go connect --url <url>")
 	require.False(t, ErrorPrinted(err))
 }
 

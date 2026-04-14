@@ -9,7 +9,7 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-DEFAULT_QQL_BIN = REPO_ROOT / ("qql.exe" if os.name == "nt" else "qql")
+DEFAULT_QQL_BIN = REPO_ROOT / ("qql-go.exe" if os.name == "nt" else "qql-go")
 QQL_BIN = os.environ.get("QQL_BIN", str(DEFAULT_QQL_BIN))
 
 
@@ -28,21 +28,21 @@ def execute_json(query: str) -> Result:
             text=True,
         )
     except FileNotFoundError as exc:
-        raise RuntimeError(f"Unable to run qql binary at {QQL_BIN}") from exc
+        raise RuntimeError(f"Unable to run qql-go binary at {QQL_BIN}") from exc
 
     stdout = completed.stdout.strip()
     stderr = completed.stderr.strip()
 
     if not stdout:
-        raise RuntimeError(stderr or f"qql exited with code {completed.returncode}")
+        raise RuntimeError(stderr or f"qql-go exited with code {completed.returncode}")
 
     try:
         payload = json.loads(stdout)
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"qql did not return valid JSON: {stdout}") from exc
+        raise RuntimeError(f"qql-go did not return valid JSON: {stdout}") from exc
 
     if completed.returncode != 0 or not payload.get("ok", False):
-        raise RuntimeError(payload.get("error") or stderr or "qql command failed")
+        raise RuntimeError(payload.get("error") or stderr or "qql-go command failed")
 
     return Result(
         message=payload.get("message", ""),

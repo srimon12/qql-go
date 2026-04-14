@@ -8,6 +8,18 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 - No unreleased changes yet.
 
+## [0.1.1] - 2026-04-14
+
+### Changed
+
+- Renamed the shipped CLI binary and release artifacts from `qql` to `qql-go`.
+- Updated CLI help text, docs, skill references, and helper scripts to use `qql-go`.
+- Made GitHub release publishing idempotent so reruns update assets instead of failing when a release already exists.
+
+### Notes
+
+- This is a maintenance follow-up to `0.1.0` focused on packaging, naming, and release automation polish.
+
 ## [0.1.0] - 2026-04-14
 
 ### Added

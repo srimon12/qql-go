@@ -57,14 +57,14 @@ For automation, do not parse human CLI prose.
 
 Use structured output:
 
-- `qql exec --quiet --json "<query>"`
-- `qql explain --quiet --json "<query>"`
-- `qql doctor --quiet --json`
-- `qql connect --quiet --json --url <url> [--secret <secret>]`
+- `qql-go exec --quiet --json "<query>"`
+- `qql-go explain --quiet --json "<query>"`
+- `qql-go doctor --quiet --json`
+- `qql-go connect --quiet --json --url <url> [--secret <secret>]`
 
-For human debugging, use the text path (`qql exec "..."`, `qql explain "..."`, `qql doctor`).
+For human debugging, use the text path (`qql-go exec "..."`, `qql-go explain "..."`, `qql-go doctor`).
 
-`qql explain --quiet "<query>"` prints the raw plan text without the titled section wrapper.
+`qql-go explain --quiet "<query>"` prints the raw plan text without the titled section wrapper.
 
 ## Choose The Mode Before Writing The Query
 
@@ -143,6 +143,6 @@ Use the bundled scripts when a runnable example is actually useful:
 - [scripts/demo_medical_records.py](scripts/demo_medical_records.py)
 - [scripts/demo_kitchen_sink.py](scripts/demo_kitchen_sink.py)
 
-These demos use [scripts/_qql_cli.py](scripts/_qql_cli.py), which calls `qql exec --quiet --json ...`.
+These demos use [scripts/_qql_cli.py](scripts/_qql_cli.py), which calls `qql-go exec --quiet --json ...`.
 
 Do not dump demos into the answer when one query would do.

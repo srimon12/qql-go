@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for contributing to QQL-Go.
+Thanks for contributing to qql-go.
 
 This project is an independent Go port of the original QQL work from [pavanjava/qql](https://github.com/pavanjava/qql). Contributions should stay aligned with the current Go CLI surface documented in [README.md](README.md).
 

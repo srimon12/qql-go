@@ -1,8 +1,8 @@
-# QQL-Go
+# qql-go
 
 This project is an independent Go port of the original QQL work by [pavanjava/qql](https://github.com/pavanjava/qql), extended with additional CLI and agent-focused improvements.
 
-QQL-Go is a standalone, compiled CLI for [Qdrant](https://qdrant.tech). It gives you a SQL-like surface for collection management, insert, search, filtering, explain plans, and delete operations.
+qql-go is a standalone, compiled CLI for [Qdrant](https://qdrant.tech). It gives you a SQL-like surface for collection management, insert, search, filtering, explain plans, and delete operations.
 
 The current build is designed for two workflows:
 
@@ -10,10 +10,10 @@ The current build is designed for two workflows:
 - agent/script usage with structured JSON output
 
 ```text
-qql exec "CREATE COLLECTION docs HYBRID"
-qql exec "INSERT INTO COLLECTION docs VALUES {'text': 'Qdrant stores vectors', 'topic': 'search'} USING HYBRID"
-qql exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID"
-qql exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID RERANK"
+qql-go exec "CREATE COLLECTION docs HYBRID"
+qql-go exec "INSERT INTO COLLECTION docs VALUES {'text': 'Qdrant stores vectors', 'topic': 'search'} USING HYBRID"
+qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID"
+qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID RERANK"
 ```
 
 ## Table of Contents
@@ -62,13 +62,13 @@ qql exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID RERANK"
 ### Build
 
 ```bash
-go build -o qql.exe ./cmd/qql
+go build -o qql-go.exe ./cmd/qql
 ```
 
 On non-Windows platforms:
 
 ```bash
-go build -o qql ./cmd/qql
+go build -o qql-go ./cmd/qql
 ```
 
 ### Connect to Qdrant
@@ -76,13 +76,13 @@ go build -o qql ./cmd/qql
 For text `INSERT` and text `SEARCH` in the current Go build, connect to Qdrant Cloud.
 
 ```bash
-qql connect --url https://<your-cluster>.qdrant.io --secret <your-api-key>
+qql-go connect --url https://<your-cluster>.qdrant.io --secret <your-api-key>
 ```
 
 Self-hosted/local URLs are supported for non-inference operations such as collection and index management.
 
 ```bash
-qql connect --url http://localhost:6333
+qql-go connect --url http://localhost:6333
 ```
 
 By default, successful `connect` enters the interactive REPL.
@@ -90,19 +90,19 @@ By default, successful `connect` enters the interactive REPL.
 ### Run one query
 
 ```bash
-qql exec "SHOW COLLECTIONS"
+qql-go exec "SHOW COLLECTIONS"
 ```
 
 ### Explain a query plan
 
 ```bash
-qql explain "SEARCH docs SIMILAR TO 'vector db' LIMIT 5 USING HYBRID"
+qql-go explain "SEARCH docs SIMILAR TO 'vector db' LIMIT 5 USING HYBRID"
 ```
 
 ### Check connection health
 
 ```bash
-qql doctor
+qql-go doctor
 ```
 
 ## Connection and Health Commands
@@ -110,7 +110,7 @@ qql doctor
 ### connect
 
 ```bash
-qql connect --url <url> [--secret <secret>]
+qql-go connect --url <url> [--secret <secret>]
 ```
 
 - validates connectivity
@@ -120,7 +120,7 @@ qql connect --url <url> [--secret <secret>]
 ### disconnect
 
 ```bash
-qql disconnect
+qql-go disconnect
 ```
 
 - removes saved config
@@ -128,7 +128,7 @@ qql disconnect
 ### doctor
 
 ```bash
-qql doctor
+qql-go doctor
 ```
 
 - checks saved connection
@@ -136,48 +136,48 @@ qql doctor
 
 ## Output Modes (Human vs Machine)
 
-QQL-Go supports a consistent output contract across `connect`, `disconnect`, `exec`, `explain`, `doctor`, and `version`.
+qql-go supports a consistent output contract across `connect`, `disconnect`, `exec`, `explain`, `doctor`, and `version`.
 
 ### Human-readable defaults
 
 ```bash
-qql exec "<query>"
-qql explain "<query>"
-qql doctor
-qql connect --url <url> [--secret <secret>]
-qql disconnect
-qql version
+qql-go exec "<query>"
+qql-go explain "<query>"
+qql-go doctor
+qql-go connect --url <url> [--secret <secret>]
+qql-go disconnect
+qql-go version
 ```
 
 ### Structured JSON
 
 ```bash
-qql exec --json "<query>"
-qql explain --json "<query>"
-qql doctor --json
-qql connect --json --url <url> [--secret <secret>]
-qql disconnect --json
-qql version --json
+qql-go exec --json "<query>"
+qql-go explain --json "<query>"
+qql-go doctor --json
+qql-go connect --json --url <url> [--secret <secret>]
+qql-go disconnect --json
+qql-go version --json
 ```
 
 ### Compact JSON (agent path)
 
 ```bash
-qql exec --quiet --json "<query>"
-qql explain --quiet --json "<query>"
-qql doctor --quiet --json
-qql connect --quiet --json --url <url> [--secret <secret>]
-qql disconnect --quiet --json
-qql version --quiet --json
+qql-go exec --quiet --json "<query>"
+qql-go explain --quiet --json "<query>"
+qql-go doctor --quiet --json
+qql-go connect --quiet --json --url <url> [--secret <secret>]
+qql-go disconnect --quiet --json
+qql-go version --quiet --json
 ```
 
 Notes:
 
 - `--quiet --json` emits compact JSON (no pretty indentation).
 - `--json` controls machine-readable output. `--quiet` stays separate and reduces decoration in text mode; when paired with `--json`, it switches to compact JSON.
-- `qql explain --quiet "<query>"` prints the raw plan without the titled section wrapper.
-- `qql connect --json` and `qql connect --quiet` do not drop into REPL.
-- `qql version --quiet` prints only the version string.
+- `qql-go explain --quiet "<query>"` prints the raw plan without the titled section wrapper.
+- `qql-go connect --json` and `qql-go connect --quiet` do not drop into REPL.
+- `qql-go version --quiet` prints only the version string.
 
 ## Inference Compatibility (Important)
 
@@ -187,7 +187,7 @@ Current Go behavior:
 - `USING HYBRID` supports optional `DENSE MODEL '<model>'` and `SPARSE MODEL '<model>'` overrides.
 - `RERANK` supports an optional `MODEL '<model>'` override.
 - `USING HYBRID` and `RERANK` are Qdrant Cloud inference paths in this build.
-- QQL-Go currently depends on Qdrant Cloud inference for dense embeddings, BM25 sparse inference, and reranking.
+- qql-go currently depends on Qdrant Cloud inference for dense embeddings, BM25 sparse inference, and reranking.
 - Self-hosted/local Qdrant is currently best for non-inference operations (`SHOW`, `CREATE`, `DROP`, `CREATE INDEX`, `DELETE`).
 
 Planned later:
@@ -228,7 +228,7 @@ INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID SPARSE MODEL '<model>'
 Important:
 
 - `text` field is required in `VALUES`.
-- Collection must already exist; QQL-Go does not auto-create on insert.
+- Collection must already exist; qql-go does not auto-create on insert.
 - In the current Go build, text insert embedding is a Qdrant Cloud inference path.
 
 ### Search
@@ -351,13 +351,13 @@ If you filter heavily, create payload indexes first.
 Run shell:
 
 ```bash
-qql
+qql-go
 ```
 
 or:
 
 ```bash
-qql repl
+qql-go repl
 ```
 
 Inside REPL:
@@ -372,21 +372,21 @@ Multiline input is supported while brackets, braces, or parentheses remain open.
 
 Recommended command style:
 
-- humans: `qql exec "<query>"`
-- scripts/agents: `qql exec --quiet --json "<query>"`
+- humans: `qql-go exec "<query>"`
+- scripts/agents: `qql-go exec --quiet --json "<query>"`
 
 Examples:
 
 ```powershell
-qql exec --quiet --json "SHOW COLLECTIONS"
-qql explain --quiet --json "SEARCH docs SIMILAR TO 'vector db' LIMIT 5 USING HYBRID"
-qql doctor --quiet --json
-qql connect --quiet --json --url https://<cluster>.qdrant.io --secret <api-key>
+qql-go exec --quiet --json "SHOW COLLECTIONS"
+qql-go explain --quiet --json "SEARCH docs SIMILAR TO 'vector db' LIMIT 5 USING HYBRID"
+qql-go doctor --quiet --json
+qql-go connect --quiet --json --url https://<cluster>.qdrant.io --secret <api-key>
 ```
 
 For text `INSERT`/`SEARCH`, use a cloud connection URL in the current build.
 
-QQL-Go now waits for collection readiness after creation and before follow-up collection operations, so sequential `CREATE COLLECTION` -> `CREATE INDEX` / `INSERT` / `SEARCH` flows behave consistently from the CLI.
+qql-go now waits for collection readiness after creation and before follow-up collection operations, so sequential `CREATE COLLECTION` -> `CREATE INDEX` / `INSERT` / `SEARCH` flows behave consistently from the CLI.
 
 ## Demo Scripts
 
@@ -401,7 +401,7 @@ uv run python skills/qql-skill/scripts/demo_retrieval_modes.py --json
 The helper `skills/qql-skill/scripts/_qql_cli.py` uses:
 
 ```text
-qql exec --quiet --json ...
+qql-go exec --quiet --json ...
 ```
 
 so demos consume structured output instead of scraping prose.
@@ -454,7 +454,7 @@ Current fields:
 ## Changelog and Releases
 
 - [CHANGELOG.md](CHANGELOG.md) tracks notable user-facing changes.
-- [docs/releases/0.1.0.md](docs/releases/0.1.0.md) is the release note for the current seeded release.
+- [docs/releases/0.1.1.md](docs/releases/0.1.1.md) is the release note for the current seeded release.
 - [CONTRIBUTING.md](CONTRIBUTING.md) covers contribution expectations.
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) covers repo maintenance and release workflow details.
 

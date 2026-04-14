@@ -36,7 +36,7 @@ const (
 	rerankPrefetchCap       = 200
 )
 
-var Version = "0.1.0"
+var Version = "0.1.1"
 
 type commandOutputMode struct {
 	json  bool
@@ -860,7 +860,7 @@ func loadSavedConfig() (*config.Config, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 	if cfg == nil || cfg.URL == "" {
-		return nil, fmt.Errorf("not connected. Run: qql connect --url <url>")
+		return nil, fmt.Errorf("not connected. Run: qql-go connect --url <url>")
 	}
 	return cfg, nil
 }
@@ -932,7 +932,7 @@ func displayVersion() string {
 }
 
 func versionMessage() string {
-	return fmt.Sprintf("QQL %s", displayVersion())
+	return fmt.Sprintf("qql-go %s", displayVersion())
 }
 
 func (e *Executor) collectionReady(ctx context.Context, collection string) (bool, bool, error) {
@@ -1263,7 +1263,7 @@ func NewVersionCmd(out *output.Outputter) *cobra.Command {
 				out.Print(version)
 				return nil
 			}
-			out.PrintSection("QQL Version", version)
+			out.PrintSection("qql-go Version", version)
 			return nil
 		},
 	}
