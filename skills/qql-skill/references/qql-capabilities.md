@@ -60,9 +60,9 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> OFFSET <n>`
 - `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> SCORE THRESHOLD <f>`
 - `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> WITH { exact: true, hnsw_ef: <n> }`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> LOOKUP FROM <collection>`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> LOOKUP FROM <collection> VECTOR '<name>'`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> USING '<vector_name>'`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LOOKUP FROM <collection> LIMIT <n>`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LOOKUP FROM <collection> VECTOR '<model>' LIMIT <n>`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) USING '<vector_name>' LIMIT <n>`
 
 Supported strategies: `average_vector`, `best_score`, `sum_scores`.
 

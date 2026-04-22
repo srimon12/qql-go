@@ -125,10 +125,10 @@ Cross-collection recommend (lookup IDs from another collection):
 
 ```sql
 RECOMMEND FROM target_collection
-POSITIVE IDS ('uuid-1')
-LIMIT 5
-LOOKUP FROM source_collection VECTOR 'dense'
-USING 'sparse'
+  POSITIVE IDS ('uuid-1')
+  LOOKUP FROM source_collection VECTOR 'dense'
+  USING 'sparse'
+  LIMIT 5
 ```
 
 With filter:
