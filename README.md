@@ -52,26 +52,13 @@ Install on Windows with PowerShell:
 ```powershell
 irm https://raw.githubusercontent.com/srimon12/qql-go/main/install.ps1 | iex
 ```
+install the bundled QQL skill for agent use:
+
+```bash
+npx skills add srimon12/qql-go --skill qql-skill
+```
 
 ### Build from source
-
-```bash
-go build -o qql-go ./cmd/qql-go
-```
-
-On Windows:
-
-```powershell
-go build -o qql-go.exe ./cmd/qql-go
-```
-
-Install with Go:
-
-```bash
-go install github.com/srimon12/qql-go/cmd/qql-go@latest
-```
-
-Build from a fresh source checkout:
 
 ```bash
 git clone https://github.com/srimon12/qql-go.git
