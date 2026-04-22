@@ -8,10 +8,15 @@ import (
 )
 
 type Config struct {
-	URL            string `json:"url"`
-	Secret         string `json:"secret"`
-	ActiveProfile  string `json:"active_profile"`
-	InferenceModel string `json:"inference_model"`
+	URL                string `json:"url"`
+	Secret             string `json:"secret"`
+	ActiveProfile      string `json:"active_profile"`
+	InferenceModel     string `json:"inference_model"`
+	InferenceMode      string `json:"inference_mode"`
+	EmbeddingEndpoint  string `json:"embedding_endpoint"`
+	EmbeddingAPIKey    string `json:"embedding_api_key"`
+	EmbeddingModel     string `json:"embedding_model"`
+	EmbeddingDimension int    `json:"embedding_dimension"`
 }
 
 type Profile struct {

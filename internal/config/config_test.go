@@ -54,10 +54,15 @@ func TestSaveLoadAndDeleteConfigRoundTrip(t *testing.T) {
 	resetTestConfigState(t)
 
 	original := &Config{
-		URL:            "https://qdrant.example.com",
-		Secret:         "secret",
-		ActiveProfile:  "prod",
-		InferenceModel: "legacy-model",
+		URL:                "https://qdrant.example.com",
+		Secret:             "secret",
+		ActiveProfile:      "prod",
+		InferenceModel:     "legacy-model",
+		InferenceMode:      "external",
+		EmbeddingEndpoint:  "https://api.example.com/v1/embeddings",
+		EmbeddingAPIKey:    "embed-secret",
+		EmbeddingModel:     "text-embedding-3-small",
+		EmbeddingDimension: 1536,
 	}
 
 	require.NoError(t, SaveConfig(original))
@@ -76,6 +81,11 @@ func TestSaveLoadAndDeleteConfigRoundTrip(t *testing.T) {
 	require.Equal(t, "secret", loaded.Secret)
 	require.Equal(t, "prod", loaded.ActiveProfile)
 	require.Equal(t, "legacy-model", loaded.InferenceModel)
+	require.Equal(t, "external", loaded.InferenceMode)
+	require.Equal(t, "https://api.example.com/v1/embeddings", loaded.EmbeddingEndpoint)
+	require.Equal(t, "embed-secret", loaded.EmbeddingAPIKey)
+	require.Equal(t, "text-embedding-3-small", loaded.EmbeddingModel)
+	require.Equal(t, 1536, loaded.EmbeddingDimension)
 
 	require.NoError(t, DeleteConfig())
 	_, err = os.Stat(path)
