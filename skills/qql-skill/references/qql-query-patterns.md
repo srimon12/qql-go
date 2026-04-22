@@ -102,6 +102,44 @@ STRATEGY 'average_vector'
 LIMIT 5
 ```
 
+With pagination and score threshold:
+
+```sql
+RECOMMEND FROM articles
+POSITIVE IDS ('uuid-1')
+LIMIT 10
+OFFSET 5
+SCORE THRESHOLD 0.5
+```
+
+With search params (exact search baseline):
+
+```sql
+RECOMMEND FROM articles
+POSITIVE IDS ('uuid-1')
+LIMIT 5
+WITH { exact: true }
+```
+
+Cross-collection recommend (lookup IDs from another collection):
+
+```sql
+RECOMMEND FROM target_collection
+POSITIVE IDS ('uuid-1')
+LIMIT 5
+LOOKUP FROM source_collection VECTOR 'dense'
+USING 'sparse'
+```
+
+With filter:
+
+```sql
+RECOMMEND FROM articles
+POSITIVE IDS ('uuid-1')
+LIMIT 5
+WHERE year >= 2024
+```
+
 ## Insert
 
 Dense-only:

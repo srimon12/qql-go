@@ -57,8 +57,16 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n>`
 - `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) NEGATIVE IDS (<id>, ...) LIMIT <n>`
 - `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) STRATEGY '<strategy>' LIMIT <n>`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> OFFSET <n>`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> SCORE THRESHOLD <f>`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> WITH { exact: true, hnsw_ef: <n> }`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> LOOKUP FROM <collection>`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> LOOKUP FROM <collection> VECTOR '<name>'`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> USING '<vector_name>'`
 
 Supported strategies: `average_vector`, `best_score`, `sum_scores`.
+
+All recommend clauses can be combined in order: `POSITIVE IDS`, `NEGATIVE IDS`, `STRATEGY`, `LOOKUP FROM`, `USING`, `LIMIT`, `OFFSET`, `SCORE THRESHOLD`, `WHERE`, `WITH`.
 
 ### Delete
 
