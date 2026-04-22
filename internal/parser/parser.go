@@ -391,6 +391,33 @@ func (p *Parser) parseRecommend() (*ast.RecommendStmt, error) {
 			return nil, err
 		}
 	}
+	var lookupFrom string
+	var lookupVector *string
+	if p.peek().Kind == lexer.TokenKindLookup {
+		p.advance()
+		if _, err := p.expect(lexer.TokenKindFrom); err != nil {
+			return nil, err
+		}
+		lookupFrom, err = p.parseIdentifier()
+		if err != nil {
+			return nil, err
+		}
+		if p.peek().Kind == lexer.TokenKindIdentifier && toUpper(p.peek().Value) == "VECTOR" {
+			p.advance()
+			lookupVector, err = p.parseStringPtr()
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	var using *string
+	if p.peek().Kind == lexer.TokenKindUsing {
+		p.advance()
+		using, err = p.parseStringPtr()
+		if err != nil {
+			return nil, err
+		}
+	}
 	if _, err := p.expect(lexer.TokenKindLimit); err != nil {
 		return nil, err
 	}
@@ -402,6 +429,44 @@ func (p *Parser) parseRecommend() (*ast.RecommendStmt, error) {
 	if err != nil {
 		return nil, err
 	}
+	var offset int
+	if p.peek().Kind == lexer.TokenKindOffset {
+		p.advance()
+		offsetTok, err := p.expect(lexer.TokenKindInteger)
+		if err != nil {
+			return nil, err
+		}
+		offset, err = parseIntToken(offsetTok)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var scoreThreshold *float64
+	if p.peek().Kind == lexer.TokenKindScore {
+		p.advance()
+		if _, err := p.expect(lexer.TokenKindThreshold); err != nil {
+			return nil, err
+		}
+		scoreTok := p.peek()
+		if scoreTok.Kind == lexer.TokenKindFloat {
+			p.advance()
+			f, err := parseFloatToken(scoreTok)
+			if err != nil {
+				return nil, err
+			}
+			scoreThreshold = &f
+		} else if scoreTok.Kind == lexer.TokenKindInteger {
+			p.advance()
+			v, err := parseIntToken(scoreTok)
+			if err != nil {
+				return nil, err
+			}
+			f := float64(v)
+			scoreThreshold = &f
+		} else {
+			return nil, errors.NewQQLSyntaxError("Expected float or integer for SCORE THRESHOLD, got '"+scoreTok.Value+"'", scoreTok.Pos)
+		}
+	}
 	var queryFilter ast.FilterExpr
 	if p.peek().Kind == lexer.TokenKindWhere {
 		p.advance()
@@ -410,13 +475,27 @@ func (p *Parser) parseRecommend() (*ast.RecommendStmt, error) {
 			return nil, err
 		}
 	}
+	var withClause *ast.SearchWith
+	if p.peek().Kind == lexer.TokenKindWith {
+		p.advance()
+		withClause, err = p.parseWithClause()
+		if err != nil {
+			return nil, err
+		}
+	}
 	return &ast.RecommendStmt{
-		Collection:  collection,
-		PositiveIDs: positiveIDs,
-		NegativeIDs: negativeIDs,
-		Limit:       limit,
-		Strategy:    strategy,
-		QueryFilter: queryFilter,
+		Collection:     collection,
+		PositiveIDs:    positiveIDs,
+		NegativeIDs:    negativeIDs,
+		Limit:          limit,
+		Strategy:       strategy,
+		QueryFilter:    queryFilter,
+		Offset:         offset,
+		ScoreThreshold: scoreThreshold,
+		WithClause:     withClause,
+		LookupFrom:     lookupFrom,
+		LookupVector:   lookupVector,
+		Using:          using,
 	}, nil
 }
 
@@ -645,7 +724,7 @@ func (p *Parser) parsePredicate() (ast.FilterExpr, error) {
 
 func (p *Parser) parseFieldPath() (string, error) {
 	tok := p.peek()
-	if tok.Kind != lexer.TokenKindIdentifier {
+	if tok.Kind != lexer.TokenKindIdentifier && !isContextualFieldName(tok.Kind) {
 		return "", errors.NewQQLSyntaxError("Expected a field name, got '"+tok.Value+"'", tok.Pos)
 	}
 	p.advance()
@@ -728,11 +807,23 @@ func (p *Parser) parsePointIDList() ([]interface{}, error) {
 
 func (p *Parser) parseIdentifier() (string, error) {
 	tok := p.peek()
-	if tok.Kind == lexer.TokenKindIdentifier || tok.Kind == lexer.TokenKindString {
+	if tok.Kind == lexer.TokenKindIdentifier || tok.Kind == lexer.TokenKindString || isContextualIdentifier(tok.Kind) {
 		p.advance()
 		return tok.Value, nil
 	}
 	return "", errors.NewQQLSyntaxError("Expected identifier or quoted name, got '"+tok.Value+"'", tok.Pos)
+}
+
+func isContextualIdentifier(kind lexer.TokenKind) bool {
+	switch kind {
+	case lexer.TokenKindOffset, lexer.TokenKindScore, lexer.TokenKindThreshold, lexer.TokenKindLookup:
+		return true
+	}
+	return false
+}
+
+func isContextualFieldName(kind lexer.TokenKind) bool {
+	return isContextualIdentifier(kind)
 }
 
 func (p *Parser) parseDict() (map[string]interface{}, error) {

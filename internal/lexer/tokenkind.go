@@ -49,6 +49,10 @@ const (
 	TokenKindMatch
 	TokenKindAny
 	TokenKindPhrase
+	TokenKindOffset
+	TokenKindScore
+	TokenKindThreshold
+	TokenKindLookup
 	TokenKindIdentifier
 	TokenKindString
 	TokenKindInteger
@@ -117,6 +121,10 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindMatch:       "MATCH",
 	TokenKindAny:         "ANY",
 	TokenKindPhrase:      "PHRASE",
+	TokenKindOffset:      "OFFSET",
+	TokenKindScore:       "SCORE",
+	TokenKindThreshold:   "THRESHOLD",
+	TokenKindLookup:      "LOOKUP",
 	TokenKindIdentifier:  "IDENTIFIER",
 	TokenKindString:      "STRING",
 	TokenKindInteger:     "INTEGER",

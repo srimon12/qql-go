@@ -555,25 +555,176 @@ func TestParseSearch(t *testing.T) {
 }
 
 func TestParseRecommend(t *testing.T) {
-	input := "RECOMMEND FROM docs POSITIVE IDS ('seed-1', 'seed-2') NEGATIVE IDS ('seed-3') STRATEGY 'average' LIMIT 5 WHERE score > 0"
-	l := &lexer.Lexer{}
-	tokens, err := l.Tokenize(input)
-	require.NoError(t, err)
+	tests := []struct {
+		name  string
+		input string
+		want  *ast.RecommendStmt
+	}{
+		{
+			name:  "basic recommend",
+			input: "RECOMMEND FROM docs POSITIVE IDS ('seed-1', 'seed-2') NEGATIVE IDS ('seed-3') STRATEGY 'average' LIMIT 5 WHERE score > 0",
+			want: &ast.RecommendStmt{
+				Collection:  "docs",
+				PositiveIDs: []interface{}{"seed-1", "seed-2"},
+				NegativeIDs: []interface{}{"seed-3"},
+				Limit:       5,
+				Strategy:    strPtr("average"),
+				QueryFilter: &ast.CompareExpr{Field: "score", Op: ">", Value: 0},
+			},
+		},
+		{
+			name:  "recommend with offset",
+			input: "RECOMMEND FROM docs POSITIVE IDS ('a') LIMIT 10 OFFSET 5",
+			want: &ast.RecommendStmt{
+				Collection:  "docs",
+				PositiveIDs: []interface{}{"a"},
+				Limit:       10,
+				Offset:      5,
+			},
+		},
+		{
+			name:  "recommend with score threshold",
+			input: "RECOMMEND FROM docs POSITIVE IDS ('a') LIMIT 10 SCORE THRESHOLD 0.5",
+			want: &ast.RecommendStmt{
+				Collection:     "docs",
+				PositiveIDs:    []interface{}{"a"},
+				Limit:          10,
+				ScoreThreshold: float64Ptr(0.5),
+			},
+		},
+		{
+			name:  "recommend with score threshold integer",
+			input: "RECOMMEND FROM docs POSITIVE IDS ('a') LIMIT 10 SCORE THRESHOLD 1",
+			want: &ast.RecommendStmt{
+				Collection:     "docs",
+				PositiveIDs:    []interface{}{"a"},
+				Limit:          10,
+				ScoreThreshold: float64Ptr(1.0),
+			},
+		},
+		{
+			name:  "recommend with with clause",
+			input: "RECOMMEND FROM docs POSITIVE IDS ('a') LIMIT 10 WITH {exact: true, hnsw_ef: 128}",
+			want: &ast.RecommendStmt{
+				Collection:  "docs",
+				PositiveIDs: []interface{}{"a"},
+				Limit:       10,
+				WithClause:  &ast.SearchWith{Exact: true, HnswEf: 128},
+			},
+		},
+		{
+			name:  "recommend with lookup from",
+			input: "RECOMMEND FROM target_collection POSITIVE IDS ('a') LOOKUP FROM source_collection LIMIT 5",
+			want: &ast.RecommendStmt{
+				Collection:  "target_collection",
+				PositiveIDs: []interface{}{"a"},
+				Limit:       5,
+				LookupFrom:  "source_collection",
+			},
+		},
+		{
+			name:  "recommend with lookup from and vector",
+			input: "RECOMMEND FROM target_collection POSITIVE IDS ('a') LOOKUP FROM source_collection VECTOR 'dense' LIMIT 5",
+			want: &ast.RecommendStmt{
+				Collection:   "target_collection",
+				PositiveIDs:  []interface{}{"a"},
+				Limit:        5,
+				LookupFrom:   "source_collection",
+				LookupVector: strPtr("dense"),
+			},
+		},
+		{
+			name:  "recommend with using",
+			input: "RECOMMEND FROM docs POSITIVE IDS ('a') USING 'sparse' LIMIT 5",
+			want: &ast.RecommendStmt{
+				Collection:  "docs",
+				PositiveIDs: []interface{}{"a"},
+				Limit:       5,
+				Using:       strPtr("sparse"),
+			},
+		},
+		{
+			name:  "recommend with lookup from and using",
+			input: "RECOMMEND FROM target_collection POSITIVE IDS ('a') LOOKUP FROM source_collection VECTOR 'dense' USING 'sparse' LIMIT 5",
+			want: &ast.RecommendStmt{
+				Collection:   "target_collection",
+				PositiveIDs:  []interface{}{"a"},
+				Limit:        5,
+				LookupFrom:   "source_collection",
+				LookupVector: strPtr("dense"),
+				Using:        strPtr("sparse"),
+			},
+		},
+		{
+			name:  "recommend full featured",
+			input: "RECOMMEND FROM docs POSITIVE IDS ('a', 'b') NEGATIVE IDS ('c') STRATEGY 'best_score' LOOKUP FROM src VECTOR 'dense' USING 'sparse' LIMIT 5 OFFSET 2 SCORE THRESHOLD 0.25 WHERE status = 'active' WITH {exact: true}",
+			want: &ast.RecommendStmt{
+				Collection:     "docs",
+				PositiveIDs:    []interface{}{"a", "b"},
+				NegativeIDs:    []interface{}{"c"},
+				Limit:          5,
+				Strategy:       strPtr("best_score"),
+				Offset:         2,
+				ScoreThreshold: float64Ptr(0.25),
+				WithClause:     &ast.SearchWith{Exact: true},
+				LookupFrom:     "src",
+				LookupVector:   strPtr("dense"),
+				Using:          strPtr("sparse"),
+				QueryFilter:    &ast.CompareExpr{Field: "status", Op: "=", Value: "active"},
+			},
+		},
+	}
 
-	p := NewParser()
-	node, err := p.Parse(tokens)
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.input)
+			require.NoError(t, err)
 
-	stmt, ok := node.(*ast.RecommendStmt)
-	require.True(t, ok, "expected RecommendStmt")
-	assert.Equal(t, "docs", stmt.Collection)
-	assert.Equal(t, []interface{}{"seed-1", "seed-2"}, stmt.PositiveIDs)
-	assert.Equal(t, []interface{}{"seed-3"}, stmt.NegativeIDs)
-	assert.Equal(t, 5, stmt.Limit)
-	require.NotNil(t, stmt.Strategy)
-	assert.Equal(t, "average", *stmt.Strategy)
-	require.NotNil(t, stmt.QueryFilter)
-	assertFilterExprEqual(t, &ast.CompareExpr{Field: "score", Op: ">", Value: 0}, stmt.QueryFilter)
+			p := NewParser()
+			node, err := p.Parse(tokens)
+			require.NoError(t, err)
+
+			stmt, ok := node.(*ast.RecommendStmt)
+			require.True(t, ok, "expected RecommendStmt")
+			assert.Equal(t, tt.want.Collection, stmt.Collection)
+			assert.Equal(t, tt.want.PositiveIDs, stmt.PositiveIDs)
+			assert.Equal(t, tt.want.NegativeIDs, stmt.NegativeIDs)
+			assert.Equal(t, tt.want.Limit, stmt.Limit)
+			assert.Equal(t, tt.want.Offset, stmt.Offset)
+			if tt.want.Strategy != nil {
+				require.NotNil(t, stmt.Strategy)
+				assert.Equal(t, *tt.want.Strategy, *stmt.Strategy)
+			}
+			if tt.want.ScoreThreshold != nil {
+				require.NotNil(t, stmt.ScoreThreshold)
+				assert.InDelta(t, *tt.want.ScoreThreshold, *stmt.ScoreThreshold, 0.0001)
+			}
+			if tt.want.WithClause != nil {
+				require.NotNil(t, stmt.WithClause)
+				assert.Equal(t, tt.want.WithClause.HnswEf, stmt.WithClause.HnswEf)
+				assert.Equal(t, tt.want.WithClause.Exact, stmt.WithClause.Exact)
+				assert.Equal(t, tt.want.WithClause.Acorn, stmt.WithClause.Acorn)
+			}
+			assert.Equal(t, tt.want.LookupFrom, stmt.LookupFrom)
+			if tt.want.LookupVector != nil {
+				require.NotNil(t, stmt.LookupVector)
+				assert.Equal(t, *tt.want.LookupVector, *stmt.LookupVector)
+			}
+			if tt.want.Using != nil {
+				require.NotNil(t, stmt.Using)
+				assert.Equal(t, *tt.want.Using, *stmt.Using)
+			}
+			if tt.want.QueryFilter != nil {
+				require.NotNil(t, stmt.QueryFilter)
+				assertFilterExprEqual(t, tt.want.QueryFilter, stmt.QueryFilter)
+			}
+		})
+	}
+}
+
+func float64Ptr(f float64) *float64 {
+	return &f
 }
 
 func TestParseDelete(t *testing.T) {

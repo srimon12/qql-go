@@ -46,12 +46,18 @@ type SearchStmt struct {
 }
 
 type RecommendStmt struct {
-	Collection  string
-	PositiveIDs []interface{}
-	NegativeIDs []interface{}
-	Limit       int
-	Strategy    *string
-	QueryFilter FilterExpr
+	Collection     string
+	PositiveIDs    []interface{}
+	NegativeIDs    []interface{}
+	Limit          int
+	Strategy       *string
+	QueryFilter    FilterExpr
+	Offset         int
+	ScoreThreshold *float64
+	WithClause     *SearchWith
+	LookupFrom     string
+	LookupVector   *string
+	Using          *string
 }
 
 type DeleteStmt struct {

@@ -51,6 +51,10 @@ var keywords = map[string]TokenKind{
 	"MATCH":       TokenKindMatch,
 	"ANY":         TokenKindAny,
 	"PHRASE":      TokenKindPhrase,
+	"OFFSET":      TokenKindOffset,
+	"SCORE":       TokenKindScore,
+	"THRESHOLD":   TokenKindThreshold,
+	"LOOKUP":      TokenKindLookup,
 }
 
 type Lexer struct{}

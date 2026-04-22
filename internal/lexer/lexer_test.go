@@ -840,7 +840,7 @@ func TestTokenizeWhereClause(t *testing.T) {
 	assert.Equal(t, TokenKindString, tokens[3].Kind)
 	assert.Equal(t, "123", tokens[3].Value)
 	assert.Equal(t, TokenKindAnd, tokens[4].Kind)
-	assert.Equal(t, TokenKindIdentifier, tokens[5].Kind)
+	assert.Equal(t, TokenKindScore, tokens[5].Kind)
 	assert.Equal(t, "score", tokens[5].Value)
 	assert.Equal(t, TokenKindGte, tokens[6].Kind)
 	assert.Equal(t, TokenKindFloat, tokens[7].Kind)
