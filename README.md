@@ -1,12 +1,19 @@
-# qql-go
+# qql-go - SQL-Like CLI for Qdrant Vector Databases
 
-An independent Go port of the original [pavanjava/qql](https://github.com/pavanjava/qql), with a stronger CLI surface, structured machine output, install scripts, release assets, and agent-oriented usage patterns.
+`qql-go` is an open-source CLI for [Qdrant](https://qdrant.tech) that gives vector search a SQL-like interface. It is built for humans who want a readable terminal workflow and for agents that need stable JSON output.
 
-`qql-go` is a standalone CLI for [Qdrant](https://qdrant.tech) with a SQL-like surface for:
+It is an independent Go port of the original [pavanjava/qql](https://github.com/pavanjava/qql), with a cleaner CLI surface, structured machine output, install scripts, release assets, and agent-oriented usage patterns.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Go 1.24+](https://img.shields.io/badge/Go-1.24%2B-00ADD8.svg)](https://go.dev/)
+[![Version](https://img.shields.io/badge/Version-0.1.2-blue.svg)](VERSION)
+[![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/srimon12/qql-go/releases)
+
+`qql-go` supports:
 
 - collection management
 - payload index creation
-- document insert
+- document insertion
 - dense and hybrid retrieval
 - rerank retrieval
 - explain plans
@@ -17,7 +24,14 @@ It is designed for both:
 - humans using a readable terminal CLI
 - agents and scripts using stable JSON output
 
-## Fast Start
+## Why qql-go?
+
+- Use it as a **Qdrant CLI** for day-to-day collection and retrieval workflows.
+- Use it as a **Qdrant SQL-like interface** when you want repeatable commands instead of ad-hoc API calls.
+- Use it for **agent automation** when you need structured output that is easy to parse.
+- Use it for **local scripts and demos** when you want a small, explicit command surface.
+
+## Installation
 
 Install the latest release on macOS or Linux:
 
@@ -28,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | s
 Install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | VERSION=v0.1.1 sh
+curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | VERSION=v0.1.2 sh
 ```
 
 The Unix installer defaults to `~/.local/bin/qql-go`. Override with `INSTALL_DIR=/your/bin/path` when needed.
@@ -39,7 +53,7 @@ Install on Windows with PowerShell:
 irm https://raw.githubusercontent.com/srimon12/qql-go/main/install.ps1 | iex
 ```
 
-## Build from source:
+### Build from source
 
 ```bash
 go build -o qql-go ./cmd/qql-go
@@ -65,7 +79,7 @@ cd qql-go
 go build -o qql-go ./cmd/qql-go
 ```
 
-## First Run
+## Quick Start
 
 Connect to Qdrant Cloud for text insert and text search:
 
@@ -97,7 +111,7 @@ Check saved connection health:
 qql-go doctor
 ```
 
-## Human Path
+## CLI Usage
 
 Use the CLI directly:
 
@@ -126,7 +140,7 @@ REPL shortcuts:
 - `explain <query>`
 - `exit`, `quit`, `\q`, `:q`
 
-## Agent Path
+## Agent & Scripting Mode
 
 For automation, do not parse human prose output.
 
@@ -155,9 +169,16 @@ Output contract notes:
 - `--quiet --json` emits compact JSON
 - `qql-go explain --quiet "<query>"` prints raw plan text
 - `qql-go connect --json` and `qql-go connect --quiet` do not enter REPL
-- `qql-go version --quiet` prints only the version string
+- `qql-go version` prints the current version
 
-## Current Boundary
+## Use Cases
+
+- Qdrant collection management
+- Hybrid search and rerank exploration
+- Agent-driven retrieval workflows
+- Scripted demos and reproducible queries
+
+## Known Limitations
 
 Important behavior in the current Go build:
 
@@ -173,7 +194,7 @@ Put differently:
 - use Qdrant Cloud if you want text insert/search, hybrid, or rerank
 - use local/self-hosted freely for non-inference management operations
 
-## What Works Today
+## Supported Statements
 
 Supported statements:
 
@@ -239,7 +260,7 @@ Search-time tuning:
 - `WITH { exact: true|false }`
 - `WITH { acorn: true|false }`
 
-## Filters
+## Filter Syntax
 
 Supported predicates:
 
@@ -267,6 +288,11 @@ SEARCH docs SIMILAR TO 'incident' LIMIT 10 WHERE (team = 'search' OR team = 'inf
 ```
 
 If you filter heavily, create payload indexes first.
+
+## Release Notes
+
+- [CHANGELOG.md](CHANGELOG.md) for user-facing changes
+- [docs/releases/0.1.2.md](docs/releases/0.1.2.md) for the current release note
 
 ## Demo Scripts
 
@@ -316,7 +342,7 @@ npx skills add . --list
 
 More skill authoring notes live in [docs/SKILLS.md](docs/SKILLS.md).
 
-## Install And Release Notes
+## Configuration
 
 Prebuilt binaries are published on [GitHub Releases](https://github.com/srimon12/qql-go/releases) for:
 
