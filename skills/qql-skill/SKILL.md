@@ -71,7 +71,7 @@ Supported syntax in this repo includes:
 
 ### Local mode
 
-- `qql-go connect --url http://localhost:6334 --inference-mode local --embedding-endpoint <url> --embedding-model <name> --embedding-dimension <n>`
+- `qql-go connect --url http://localhost:6334 --inference-mode local --embedding-endpoint <url> --embedding-model <name> [--embedding-dimension <n>]`
 - Dense vectors come from an OpenAI-compatible embeddings API (e.g., LM Studio, llamafile).
 - Sparse vectors are generated client-side with BM25-style weighting.
 - Corpus statistics are stored in `~/.qql/corpus/<collection>.json`.

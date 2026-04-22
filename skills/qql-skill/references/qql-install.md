@@ -80,6 +80,6 @@ Requirements for local/external mode:
 
 - `--embedding-endpoint` — an OpenAI-compatible `/v1/embeddings` endpoint
 - `--embedding-model` — the model name to pass in the request
-- `--embedding-dimension` — the expected output dimension (validated strictly)
+- `--embedding-dimension` — optional; auto-probed from the endpoint if omitted and reachable
 
 For cloud mode, only `--url` (and `--secret` if needed) are required.

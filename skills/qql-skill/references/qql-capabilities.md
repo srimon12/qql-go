@@ -144,7 +144,7 @@ Rerank caveat:
 Local/external mode requirements:
 - `--embedding-endpoint` pointing to an OpenAI-compatible `/v1/embeddings` endpoint
 - `--embedding-model` name
-- `--embedding-dimension` for strict validation
+- `--embedding-dimension` — optional; auto-probed from the endpoint if omitted and reachable
 
 ## Query-Time Params
 
