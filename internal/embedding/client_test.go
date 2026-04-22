@@ -73,3 +73,30 @@ func TestEmbedRejectsDimensionMismatch(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "dimension mismatch")
 }
+
+func TestProbeDimensionReturnsVectorLength(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(response{
+			Data: []responseItem{
+				{Index: 0, Embedding: []float32{1, 2, 3, 4, 5}},
+			},
+		}))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{
+		Endpoint:   server.URL + "/v1/embeddings",
+		Model:      "test",
+		Dimension:  999, // ignored by ProbeDimension
+		HTTPClient: server.Client(),
+	})
+	require.NoError(t, err)
+
+	dim, err := client.ProbeDimension(context.Background(), "probe")
+	require.NoError(t, err)
+	require.Equal(t, 5, dim)
+}
