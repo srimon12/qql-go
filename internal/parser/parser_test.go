@@ -34,6 +34,15 @@ func TestParseInsert(t *testing.T) {
 			},
 		},
 		{
+			name:  "insert with explicit id",
+			input: `INSERT INTO COLLECTION test VALUES {id: 'point-123', text: 'hello'}`,
+			want: &ast.InsertStmt{
+				Collection: "test",
+				PointID:    "point-123",
+				Values:     map[string]interface{}{"text": "hello"},
+			},
+		},
+		{
 			name:  "insert with model",
 			input: `INSERT INTO COLLECTION test VALUES {"text": "hello"} USING MODEL 'model-name'`,
 			want: &ast.InsertStmt{
@@ -92,6 +101,7 @@ func TestParseInsert(t *testing.T) {
 			require.True(t, ok, "expected InsertStmt")
 			assert.Equal(t, tt.want.Collection, stmt.Collection)
 			assert.Equal(t, tt.want.Values, stmt.Values)
+			assert.Equal(t, tt.want.PointID, stmt.PointID)
 			assert.Equal(t, tt.want.Hybrid, stmt.Hybrid)
 			if tt.want.Model != nil {
 				assert.Equal(t, *tt.want.Model, *stmt.Model)
@@ -124,6 +134,14 @@ func TestParseCreate(t *testing.T) {
 				Hybrid:     true,
 			},
 		},
+		{
+			name:  "create with model",
+			input: "CREATE COLLECTION mycollection USING MODEL 'dense-model'",
+			want: &ast.CreateCollectionStmt{
+				Collection: "mycollection",
+				Model:      strPtr("dense-model"),
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -140,6 +158,68 @@ func TestParseCreate(t *testing.T) {
 			require.True(t, ok, "expected CreateCollectionStmt")
 			assert.Equal(t, tt.want.Collection, stmt.Collection)
 			assert.Equal(t, tt.want.Hybrid, stmt.Hybrid)
+			if tt.want.Model != nil {
+				assert.Equal(t, *tt.want.Model, *stmt.Model)
+			}
+		})
+	}
+}
+
+func TestParseInsertBulk(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  *ast.InsertBulkStmt
+	}{
+		{
+			name:  "simple bulk insert",
+			input: `INSERT BULK INTO COLLECTION test VALUES [{"text": "hello"}, {"text": "world"}]`,
+			want: &ast.InsertBulkStmt{
+				Collection: "test",
+				ValuesList: []map[string]interface{}{
+					{"text": "hello"},
+					{"text": "world"},
+				},
+			},
+		},
+		{
+			name:  "bulk insert with hybrid models",
+			input: `INSERT BULK INTO COLLECTION test VALUES [{"text": "hello"}] USING HYBRID DENSE MODEL 'dense-model' SPARSE MODEL 'sparse-model'`,
+			want: &ast.InsertBulkStmt{
+				Collection: "test",
+				ValuesList: []map[string]interface{}{
+					{"text": "hello"},
+				},
+				Hybrid:      true,
+				Model:       strPtr("dense-model"),
+				SparseModel: strPtr("sparse-model"),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.input)
+			require.NoError(t, err)
+
+			p := NewParser()
+			node, err := p.Parse(tokens)
+			require.NoError(t, err)
+
+			stmt, ok := node.(*ast.InsertBulkStmt)
+			require.True(t, ok, "expected InsertBulkStmt")
+			assert.Equal(t, tt.want.Collection, stmt.Collection)
+			assert.Equal(t, tt.want.ValuesList, stmt.ValuesList)
+			assert.Equal(t, tt.want.Hybrid, stmt.Hybrid)
+			if tt.want.Model != nil {
+				require.NotNil(t, stmt.Model)
+				assert.Equal(t, *tt.want.Model, *stmt.Model)
+			}
+			if tt.want.SparseModel != nil {
+				require.NotNil(t, stmt.SparseModel)
+				assert.Equal(t, *tt.want.SparseModel, *stmt.SparseModel)
+			}
 		})
 	}
 }
@@ -327,6 +407,27 @@ func TestParseSearch(t *testing.T) {
 			},
 		},
 		{
+			name:  "search with sparse",
+			input: "SEARCH mycollection SIMILAR TO 'query text' LIMIT 10 USING SPARSE",
+			want: &ast.SearchStmt{
+				Collection: "mycollection",
+				QueryText:  "query text",
+				Limit:      10,
+				SparseOnly: true,
+			},
+		},
+		{
+			name:  "search with sparse model",
+			input: "SEARCH mycollection SIMILAR TO 'query text' LIMIT 10 USING SPARSE MODEL 'sparse-model'",
+			want: &ast.SearchStmt{
+				Collection:  "mycollection",
+				QueryText:   "query text",
+				Limit:       10,
+				SparseOnly:  true,
+				SparseModel: strPtr("sparse-model"),
+			},
+		},
+		{
 			name:  "search with hybrid",
 			input: "SEARCH mycollection SIMILAR TO 'query text' LIMIT 10 USING HYBRID",
 			want: &ast.SearchStmt{
@@ -425,6 +526,7 @@ func TestParseSearch(t *testing.T) {
 			assert.Equal(t, tt.want.QueryText, stmt.QueryText)
 			assert.Equal(t, tt.want.Limit, stmt.Limit)
 			assert.Equal(t, tt.want.Hybrid, stmt.Hybrid)
+			assert.Equal(t, tt.want.SparseOnly, stmt.SparseOnly)
 			if tt.want.Model != nil {
 				require.NotNil(t, stmt.Model)
 				assert.Equal(t, *tt.want.Model, *stmt.Model)
@@ -450,6 +552,179 @@ func TestParseSearch(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseRecommend(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  *ast.RecommendStmt
+	}{
+		{
+			name:  "basic recommend",
+			input: "RECOMMEND FROM docs POSITIVE IDS ('seed-1', 'seed-2') NEGATIVE IDS ('seed-3') STRATEGY 'average' LIMIT 5 WHERE score > 0",
+			want: &ast.RecommendStmt{
+				Collection:  "docs",
+				PositiveIDs: []interface{}{"seed-1", "seed-2"},
+				NegativeIDs: []interface{}{"seed-3"},
+				Limit:       5,
+				Strategy:    strPtr("average"),
+				QueryFilter: &ast.CompareExpr{Field: "score", Op: ">", Value: 0},
+			},
+		},
+		{
+			name:  "recommend with offset",
+			input: "RECOMMEND FROM docs POSITIVE IDS ('a') LIMIT 10 OFFSET 5",
+			want: &ast.RecommendStmt{
+				Collection:  "docs",
+				PositiveIDs: []interface{}{"a"},
+				Limit:       10,
+				Offset:      5,
+			},
+		},
+		{
+			name:  "recommend with score threshold",
+			input: "RECOMMEND FROM docs POSITIVE IDS ('a') LIMIT 10 SCORE THRESHOLD 0.5",
+			want: &ast.RecommendStmt{
+				Collection:     "docs",
+				PositiveIDs:    []interface{}{"a"},
+				Limit:          10,
+				ScoreThreshold: float64Ptr(0.5),
+			},
+		},
+		{
+			name:  "recommend with score threshold integer",
+			input: "RECOMMEND FROM docs POSITIVE IDS ('a') LIMIT 10 SCORE THRESHOLD 1",
+			want: &ast.RecommendStmt{
+				Collection:     "docs",
+				PositiveIDs:    []interface{}{"a"},
+				Limit:          10,
+				ScoreThreshold: float64Ptr(1.0),
+			},
+		},
+		{
+			name:  "recommend with with clause",
+			input: "RECOMMEND FROM docs POSITIVE IDS ('a') LIMIT 10 WITH {exact: true, hnsw_ef: 128}",
+			want: &ast.RecommendStmt{
+				Collection:  "docs",
+				PositiveIDs: []interface{}{"a"},
+				Limit:       10,
+				WithClause:  &ast.SearchWith{Exact: true, HnswEf: 128},
+			},
+		},
+		{
+			name:  "recommend with lookup from",
+			input: "RECOMMEND FROM target_collection POSITIVE IDS ('a') LOOKUP FROM source_collection LIMIT 5",
+			want: &ast.RecommendStmt{
+				Collection:  "target_collection",
+				PositiveIDs: []interface{}{"a"},
+				Limit:       5,
+				LookupFrom:  "source_collection",
+			},
+		},
+		{
+			name:  "recommend with lookup from and vector",
+			input: "RECOMMEND FROM target_collection POSITIVE IDS ('a') LOOKUP FROM source_collection VECTOR 'dense' LIMIT 5",
+			want: &ast.RecommendStmt{
+				Collection:   "target_collection",
+				PositiveIDs:  []interface{}{"a"},
+				Limit:        5,
+				LookupFrom:   "source_collection",
+				LookupVector: strPtr("dense"),
+			},
+		},
+		{
+			name:  "recommend with using",
+			input: "RECOMMEND FROM docs POSITIVE IDS ('a') USING 'sparse' LIMIT 5",
+			want: &ast.RecommendStmt{
+				Collection:  "docs",
+				PositiveIDs: []interface{}{"a"},
+				Limit:       5,
+				Using:       strPtr("sparse"),
+			},
+		},
+		{
+			name:  "recommend with lookup from and using",
+			input: "RECOMMEND FROM target_collection POSITIVE IDS ('a') LOOKUP FROM source_collection VECTOR 'dense' USING 'sparse' LIMIT 5",
+			want: &ast.RecommendStmt{
+				Collection:   "target_collection",
+				PositiveIDs:  []interface{}{"a"},
+				Limit:        5,
+				LookupFrom:   "source_collection",
+				LookupVector: strPtr("dense"),
+				Using:        strPtr("sparse"),
+			},
+		},
+		{
+			name:  "recommend full featured",
+			input: "RECOMMEND FROM docs POSITIVE IDS ('a', 'b') NEGATIVE IDS ('c') STRATEGY 'best_score' LOOKUP FROM src VECTOR 'dense' USING 'sparse' LIMIT 5 OFFSET 2 SCORE THRESHOLD 0.25 WHERE status = 'active' WITH {exact: true}",
+			want: &ast.RecommendStmt{
+				Collection:     "docs",
+				PositiveIDs:    []interface{}{"a", "b"},
+				NegativeIDs:    []interface{}{"c"},
+				Limit:          5,
+				Strategy:       strPtr("best_score"),
+				Offset:         2,
+				ScoreThreshold: float64Ptr(0.25),
+				WithClause:     &ast.SearchWith{Exact: true},
+				LookupFrom:     "src",
+				LookupVector:   strPtr("dense"),
+				Using:          strPtr("sparse"),
+				QueryFilter:    &ast.CompareExpr{Field: "status", Op: "=", Value: "active"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.input)
+			require.NoError(t, err)
+
+			p := NewParser()
+			node, err := p.Parse(tokens)
+			require.NoError(t, err)
+
+			stmt, ok := node.(*ast.RecommendStmt)
+			require.True(t, ok, "expected RecommendStmt")
+			assert.Equal(t, tt.want.Collection, stmt.Collection)
+			assert.Equal(t, tt.want.PositiveIDs, stmt.PositiveIDs)
+			assert.Equal(t, tt.want.NegativeIDs, stmt.NegativeIDs)
+			assert.Equal(t, tt.want.Limit, stmt.Limit)
+			assert.Equal(t, tt.want.Offset, stmt.Offset)
+			if tt.want.Strategy != nil {
+				require.NotNil(t, stmt.Strategy)
+				assert.Equal(t, *tt.want.Strategy, *stmt.Strategy)
+			}
+			if tt.want.ScoreThreshold != nil {
+				require.NotNil(t, stmt.ScoreThreshold)
+				assert.InDelta(t, *tt.want.ScoreThreshold, *stmt.ScoreThreshold, 0.0001)
+			}
+			if tt.want.WithClause != nil {
+				require.NotNil(t, stmt.WithClause)
+				assert.Equal(t, tt.want.WithClause.HnswEf, stmt.WithClause.HnswEf)
+				assert.Equal(t, tt.want.WithClause.Exact, stmt.WithClause.Exact)
+				assert.Equal(t, tt.want.WithClause.Acorn, stmt.WithClause.Acorn)
+			}
+			assert.Equal(t, tt.want.LookupFrom, stmt.LookupFrom)
+			if tt.want.LookupVector != nil {
+				require.NotNil(t, stmt.LookupVector)
+				assert.Equal(t, *tt.want.LookupVector, *stmt.LookupVector)
+			}
+			if tt.want.Using != nil {
+				require.NotNil(t, stmt.Using)
+				assert.Equal(t, *tt.want.Using, *stmt.Using)
+			}
+			if tt.want.QueryFilter != nil {
+				require.NotNil(t, stmt.QueryFilter)
+				assertFilterExprEqual(t, tt.want.QueryFilter, stmt.QueryFilter)
+			}
+		})
+	}
+}
+
+func float64Ptr(f float64) *float64 {
+	return &f
 }
 
 func TestParseDelete(t *testing.T) {

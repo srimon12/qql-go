@@ -1,6 +1,6 @@
 ---
 name: qql-skill
-description: "Use QQL to create collections, create payload indexes, insert documents, search with dense or hybrid retrieval, use exact and query-time search params, explain plans, and delete data. Use when Codex needs to write or review QQL statements for the Go CLI, choose between dense, hybrid, and reranked search, or explain what QQL can and cannot do in the current Go implementation."
+description: "Use QQL to create collections, create payload indexes, insert documents (single or bulk), search with dense, sparse, or hybrid retrieval, recommend by example IDs, use exact and query-time search params, explain plans, execute scripts, dump collections, and delete data. Use when Codex needs to write or review QQL statements for the Go CLI, choose between dense, sparse, hybrid, and reranked search, or explain what QQL can and cannot do in the current Go implementation."
 ---
 
 # QQL Skill
@@ -13,7 +13,7 @@ Treat QQL as a query language and execution surface, not as a retrieval strategy
 
 Use these bundled references first:
 
-- [references/qql-install.md](references/qql-install.md) for first-time CLI install
+- [references/qql-install.md](references/qql-install.md) for first-time CLI install and local mode setup
 - [references/qql-capabilities.md](references/qql-capabilities.md) for supported syntax
 - [references/qql-query-patterns.md](references/qql-query-patterns.md) for short runnable examples
 - [references/qql-gaps.md](references/qql-gaps.md) for unsupported features only
@@ -25,6 +25,8 @@ Supported syntax in this repo includes:
 - `CREATE COLLECTION <name>`
 - `CREATE COLLECTION <name> HYBRID`
 - `CREATE COLLECTION <name> HYBRID RERANK`
+- `CREATE COLLECTION <name> USING MODEL '<model>'`
+- `CREATE COLLECTION <name> USING HYBRID`
 - `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE <kind>`
 - `SHOW COLLECTIONS`
 - `DROP COLLECTION <name>`
@@ -33,25 +35,57 @@ Supported syntax in this repo includes:
 - `INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID`
 - `INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'`
 - `INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID SPARSE MODEL '<model>'`
+- `INSERT BULK INTO COLLECTION <name> VALUES [{...}, {...}]`
+- `INSERT BULK INTO COLLECTION <name> VALUES [{...}, {...}] USING HYBRID`
 - keys inside `VALUES {...}` can be bare identifiers or quoted strings
+- explicit `id` inside `VALUES` is accepted (unsigned int or UUID string)
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n>`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WHERE <filter>`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef, exact, acorn }`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n>`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) NEGATIVE IDS (<id>, ...) LIMIT <n>`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) STRATEGY '<strategy>' LIMIT <n>`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> OFFSET <n>`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> SCORE THRESHOLD <f>`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> WITH { exact: true, hnsw_ef: <n> }`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LOOKUP FROM <collection> [VECTOR '<name>'] LIMIT <n>`
+- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) USING '<vector_name>' LIMIT <n>`
 - `DELETE FROM <name> WHERE ...`
 - `qql-go explain <statement>`
+- `qql-go execute <script.qql>`
+- `qql-go dump <collection> <output.qql>`
 
-Current inference boundary:
+## Inference Modes
 
-- Text `INSERT` and text `SEARCH ... SIMILAR TO ...` are cloud inference paths.
-- `USING HYBRID` and `RERANK` are cloud-only behavior for now.
-- For self-hosted/local URLs, prefer non-inference statements (`SHOW`, `CREATE`, `DROP`, `CREATE INDEX`, `DELETE`).
+`qql-go` supports three inference modes configured at `connect` time:
+
+### Cloud mode (default)
+
+- `qql-go connect --url <qdrant-cloud-url> --secret <api-key>`
+- Text `INSERT` and `SEARCH ... SIMILAR TO ...` use Qdrant Cloud inference via `qdrant.Document` objects.
+- `RERANK` is available.
+
+### Local mode
+
+- `qql-go connect --url http://localhost:6334 --inference-mode local --embedding-endpoint <url> --embedding-model <name> [--embedding-dimension <n>]`
+- Dense vectors come from an OpenAI-compatible embeddings API (e.g., LM Studio, llamafile).
+- Sparse vectors are generated client-side with BM25-style weighting.
+- Corpus statistics are stored in `~/.qql/corpus/<collection>.json`.
+- `RERANK` is **not** available in local mode.
+
+### External mode
+
+- Same vector-generation path as local, but intended for remote embedding endpoints and remote Qdrant.
+- `RERANK` is **not** available in external mode.
 
 ## Agent and Script Output Contract
 
@@ -63,6 +97,8 @@ Use structured output:
 - `qql-go explain --quiet --json "<query>"`
 - `qql-go doctor --quiet --json`
 - `qql-go connect --quiet --json --url <url> [--secret <secret>]`
+- `qql-go execute --quiet --json <script.qql>`
+- `qql-go dump --quiet --json <collection> <output.qql>`
 
 For human debugging, use the text path (`qql-go exec "..."`, `qql-go explain "..."`, `qql-go doctor`).
 
@@ -80,9 +116,15 @@ Use plain `SEARCH` when the request is mostly semantic and exact keyword matchin
 
 ### Hybrid search
 
-Use `USING HYBRID` when exact terms, model names, acronyms, codes, or domain vocabulary matter.
+Use `USING HYBRID` when exact terms, model names, acronyms, codes, or domain vocabulary matter alongside semantic similarity.
 
-Do not recommend hybrid for self-hosted-only flows in the current Go build.
+Works in cloud, local, and external modes.
+
+### Sparse-only search
+
+Use `USING SPARSE` when the request is purely keyword/BM25 retrieval with no semantic component.
+
+Works in cloud, local, and external modes.
 
 ### Exact baseline
 
@@ -98,7 +140,13 @@ Use `WITH { acorn: true }` only when filtered-query recall is the actual problem
 
 Use `RERANK` when the right candidates are likely already retrieved but the top ordering is weak.
 
-In the current Go implementation, reranking depends on Qdrant Cloud query-time inference. Do not recommend it casually for self-hosted flows.
+**Cloud mode only.** In local/external mode, reranking returns an explicit error.
+
+### Recommend
+
+Use `RECOMMEND` when the user has example document IDs and wants to find similar items.
+
+Works in all modes because it operates on stored vectors, not query-time inference.
 
 ## Index Before You Filter
 
@@ -121,6 +169,7 @@ Do not pretend that unindexed filtering is the happy path.
 - Do not invent syntax that the parser does not support.
 - Do not recommend hybrid by default when the real issue may be model quality or bad chunking.
 - Do not recommend rerank when latency matters more than precision.
+- Do not recommend rerank in local/external mode.
 - State clearly when a request is outside current QQL support.
 
 ## Explain Limits Clearly
@@ -129,13 +178,14 @@ When the request needs unsupported Qdrant features, say so directly and stop at 
 
 Examples of current gaps:
 
-- recommend or discovery APIs
+- local/external rerank
+- discovery API
 - MMR or diversity controls
 - score boosting
 - relevance feedback
 - pagination or scroll
-- update or upsert by explicit id
-- collection diagnostics
+- update or upsert by explicit id (you can overwrite with `INSERT` + explicit `id`)
+- collection diagnostics beyond `doctor`
 
 Use [references/qql-gaps.md](references/qql-gaps.md) for the current boundary.
 

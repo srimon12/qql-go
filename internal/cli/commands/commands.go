@@ -4,20 +4,26 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/qdrant/go-client/qdrant"
+	"github.com/spf13/cobra"
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/config"
+	"github.com/srimon12/qql-go/internal/dump"
+	"github.com/srimon12/qql-go/internal/embedding"
 	"github.com/srimon12/qql-go/internal/filters"
 	"github.com/srimon12/qql-go/internal/lexer"
 	"github.com/srimon12/qql-go/internal/output"
 	"github.com/srimon12/qql-go/internal/parser"
 	"github.com/srimon12/qql-go/internal/repl"
-	"github.com/spf13/cobra"
+	"github.com/srimon12/qql-go/internal/script"
+	"github.com/srimon12/qql-go/internal/sparse"
 )
 
 const (
@@ -34,9 +40,10 @@ const (
 	collectionReadyInterval = 250 * time.Millisecond
 	rerankPrefetchFactor    = 4
 	rerankPrefetchCap       = 200
+	defaultInferenceMode    = "cloud"
 )
 
-var Version = "0.1.1"
+var Version = "0.1.2"
 
 type commandOutputMode struct {
 	json  bool
@@ -121,6 +128,22 @@ func (e *Executor) Execute(query string) (string, error) {
 	return result.Message, nil
 }
 
+func (e *Executor) ExecuteFile(path string, stopOnError bool) (string, error) {
+	okCount, failCount, err := script.RunFile(path, e, stopOnError)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Executed script %s (%d succeeded, %d failed)", path, okCount, failCount), nil
+}
+
+func (e *Executor) DumpCollection(collection, outputPath string) (string, error) {
+	written, skipped, err := dump.Collection(context.Background(), e.client, collection, outputPath)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Dumped collection '%s' to %s (%d written, %d skipped)", collection, outputPath, written, skipped), nil
+}
+
 func (e *Executor) ExecuteResult(query string) (*ExecResponse, error) {
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(query)
@@ -143,8 +166,12 @@ func (e *Executor) ExecuteResult(query string) (*ExecResponse, error) {
 		return e.doDropCollection(n)
 	case *ast.InsertStmt:
 		return e.doInsert(n)
+	case *ast.InsertBulkStmt:
+		return e.doInsertBulk(n)
 	case *ast.SearchStmt:
 		return e.doSearch(n)
+	case *ast.RecommendStmt:
+		return e.doRecommend(n)
 	case *ast.DeleteStmt:
 		return e.doDelete(n)
 	case *ast.CreateIndexStmt:
@@ -183,6 +210,9 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		plan.WriteString("Action: List all collections\n")
 	case *ast.CreateCollectionStmt:
 		plan.WriteString(fmt.Sprintf("Statement: CREATE COLLECTION %s\n", n.Collection))
+		if n.Model != nil && *n.Model != "" {
+			plan.WriteString(fmt.Sprintf("Model: %s\n", *n.Model))
+		}
 		if n.Rerank {
 			plan.WriteString("Type: HYBRID + RERANK (dense + sparse + ColBERT multivector)\n")
 		} else if n.Hybrid {
@@ -204,14 +234,31 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		} else {
 			plan.WriteString("Search: DENSE\n")
 		}
+		if n.PointID != nil {
+			plan.WriteString(fmt.Sprintf("Point ID: %v\n", n.PointID))
+		}
 		plan.WriteString("Action: Insert point with auto-vectorization\n")
+	case *ast.InsertBulkStmt:
+		plan.WriteString(fmt.Sprintf("Statement: INSERT BULK INTO %s\n", n.Collection))
+		if n.Model != nil && *n.Model != "" {
+			plan.WriteString(fmt.Sprintf("Model: %s\n", *n.Model))
+		}
+		if n.Hybrid {
+			plan.WriteString("Search: HYBRID (dense + sparse)\n")
+		} else {
+			plan.WriteString("Search: DENSE\n")
+		}
+		plan.WriteString(fmt.Sprintf("Batch size: %d\n", len(n.ValuesList)))
+		plan.WriteString("Action: Insert multiple points with auto-vectorization\n")
 	case *ast.SearchStmt:
 		plan.WriteString(fmt.Sprintf("Statement: SEARCH %s SIMILAR TO '%s' LIMIT %d\n",
 			n.Collection, n.QueryText, n.Limit))
 		if n.Model != nil && *n.Model != "" {
 			plan.WriteString(fmt.Sprintf("Model: %s\n", *n.Model))
 		}
-		if n.Hybrid {
+		if n.SparseOnly {
+			plan.WriteString("Search: SPARSE\n")
+		} else if n.Hybrid {
 			plan.WriteString("Search: HYBRID (dense + sparse)\n")
 		} else {
 			plan.WriteString("Search: DENSE\n")
@@ -232,6 +279,41 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			}
 			plan.WriteString(fmt.Sprintf("Rerank vector: %s\n", rerankVectorName))
 		}
+	case *ast.RecommendStmt:
+		plan.WriteString(fmt.Sprintf("Statement: RECOMMEND FROM %s LIMIT %d\n", n.Collection, n.Limit))
+		plan.WriteString(fmt.Sprintf("Positive IDs: %d\n", len(n.PositiveIDs)))
+		if len(n.NegativeIDs) > 0 {
+			plan.WriteString(fmt.Sprintf("Negative IDs: %d\n", len(n.NegativeIDs)))
+		}
+		if n.Strategy != nil && *n.Strategy != "" {
+			plan.WriteString(fmt.Sprintf("Strategy: %s\n", *n.Strategy))
+		}
+		if n.LookupFrom != "" {
+			plan.WriteString(fmt.Sprintf("Lookup from: %s", n.LookupFrom))
+			if n.LookupVector != nil && *n.LookupVector != "" {
+				plan.WriteString(fmt.Sprintf(" (vector: %s)", *n.LookupVector))
+			}
+			plan.WriteString("\n")
+		}
+		if n.Using != nil && *n.Using != "" {
+			plan.WriteString(fmt.Sprintf("Using vector: %s\n", *n.Using))
+		}
+		if n.Offset > 0 {
+			plan.WriteString(fmt.Sprintf("Offset: %d\n", n.Offset))
+		}
+		if n.ScoreThreshold != nil {
+			plan.WriteString(fmt.Sprintf("Score threshold: %.4f\n", *n.ScoreThreshold))
+		}
+		if n.QueryFilter != nil {
+			plan.WriteString(fmt.Sprintf("Filter: %s\n", e.filterToString(n.QueryFilter)))
+		}
+		if n.WithClause != nil && n.WithClause.Exact {
+			plan.WriteString("Search params: EXACT (bypass HNSW)\n")
+		}
+		if n.WithClause != nil && n.WithClause.HnswEf > 0 {
+			plan.WriteString(fmt.Sprintf("Search params: hnsw_ef=%d\n", n.WithClause.HnswEf))
+		}
+		plan.WriteString("Action: Recommend points by example IDs\n")
 	case *ast.DeleteStmt:
 		if n.Field != "" {
 			plan.WriteString(fmt.Sprintf("Statement: DELETE FROM %s WHERE %s = '%v'\n",
@@ -325,9 +407,14 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 		}, nil
 	}
 
+	denseSize, err := e.resolveDenseVectorSize(ctx, n.Model)
+	if err != nil {
+		return nil, err
+	}
+
 	collection := &qdrant.CreateCollection{
 		CollectionName: n.Collection,
-		VectorsConfig:  qdrant.NewVectorsConfigMap(collectionVectorParams(n.Rerank)),
+		VectorsConfig:  qdrant.NewVectorsConfigMap(collectionVectorParams(denseSize, n.Rerank)),
 	}
 	if n.Hybrid || n.Rerank {
 		collection.SparseVectorsConfig = qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
@@ -360,6 +447,7 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 			"exists":     false,
 			"hybrid":     n.Hybrid,
 			"rerank":     n.Rerank,
+			"dense_size": denseSize,
 		},
 	}, nil
 }
@@ -378,6 +466,7 @@ func (e *Executor) doDropCollection(n *ast.DropCollectionStmt) (*ExecResponse, e
 	if err := e.client.DeleteCollection(ctx, n.Collection); err != nil {
 		return nil, fmt.Errorf("failed to drop collection: %w", err)
 	}
+	e.deleteCorpusStats(n.Collection)
 	return &ExecResponse{
 		OK:        true,
 		Operation: "drop_collection",
@@ -400,59 +489,124 @@ func (e *Executor) doInsert(n *ast.InsertStmt) (*ExecResponse, error) {
 		return nil, fmt.Errorf("'text' field must be a string")
 	}
 
-	model := e.configuredModel()
-	if n.Model != nil && *n.Model != "" {
-		model = *n.Model
+	model := e.resolveDenseModel(n.Model)
+	sparseModel := e.resolveSparseModel(n.SparseModel)
+	useHybrid, err := e.shouldUseHybrid(ctx, n.Collection, n.Hybrid)
+	if err != nil {
+		return nil, err
 	}
-
-	sparseModel := sparseModelDefault
-	if n.SparseModel != nil && *n.SparseModel != "" {
-		sparseModel = *n.SparseModel
-	}
-
 	includeRerank, err := e.collectionHasRerankVector(ctx, n.Collection)
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect collection: %w", err)
 	}
 
-	pointID := uuid.New().String()
+	pointID, payload, err := insertPointIDAndPayload(n.PointID, n.Values)
+	if err != nil {
+		return nil, err
+	}
 
-	if n.Hybrid {
-		point := &qdrant.PointStruct{
-			Id:      qdrant.NewID(pointID),
-			Vectors: qdrant.NewVectorsMap(buildPointVectors(text, model, sparseModel, true, includeRerank)),
-			Payload: e.buildPayload(n.Values),
-		}
-		_, err := e.client.Upsert(ctx, &qdrant.UpsertPoints{
-			CollectionName: n.Collection,
-			Points:         []*qdrant.PointStruct{point},
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to insert: %w", err)
-		}
-	} else {
-		point := &qdrant.PointStruct{
-			Id:      qdrant.NewID(pointID),
-			Vectors: qdrant.NewVectorsMap(buildPointVectors(text, model, sparseModel, false, includeRerank)),
-			Payload: e.buildPayload(n.Values),
-		}
-		_, err := e.client.Upsert(ctx, &qdrant.UpsertPoints{
-			CollectionName: n.Collection,
-			Points:         []*qdrant.PointStruct{point},
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to insert: %w", err)
-		}
+	vectors, err := e.buildInsertVectors(ctx, text, model, sparseModel, useHybrid, includeRerank, n.Collection)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = e.client.Upsert(ctx, &qdrant.UpsertPoints{
+		CollectionName: n.Collection,
+		Points: []*qdrant.PointStruct{
+			{
+				Id:      newPointID(pointID),
+				Vectors: qdrant.NewVectorsMap(vectors),
+				Payload: e.buildPayload(payload),
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert: %w", err)
 	}
 
 	return &ExecResponse{
 		OK:        true,
 		Operation: "insert",
-		Message:   fmt.Sprintf("Inserted 1 point [%s] into '%s'", pointID, n.Collection),
+		Message:   fmt.Sprintf("Inserted 1 point [%v] into '%s'", pointID, n.Collection),
 		Data: map[string]any{
 			"id":           pointID,
 			"collection":   n.Collection,
-			"hybrid":       n.Hybrid,
+			"hybrid":       useHybrid,
+			"dense_model":  model,
+			"sparse_model": sparseModel,
+			"rerank":       includeRerank,
+		},
+	}, nil
+}
+
+func (e *Executor) doInsertBulk(n *ast.InsertBulkStmt) (*ExecResponse, error) {
+	ctx := context.Background()
+	if len(n.ValuesList) == 0 {
+		return nil, fmt.Errorf("INSERT BULK VALUES list is empty")
+	}
+
+	model := e.resolveDenseModel(n.Model)
+	sparseModel := e.resolveSparseModel(n.SparseModel)
+	useHybrid, err := e.shouldUseHybrid(ctx, n.Collection, n.Hybrid)
+	if err != nil {
+		return nil, err
+	}
+	includeRerank, err := e.collectionHasRerankVector(ctx, n.Collection)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect collection: %w", err)
+	}
+
+	texts := make([]string, 0, len(n.ValuesList))
+	pointIDs := make([]interface{}, 0, len(n.ValuesList))
+	payloads := make([]map[string]interface{}, 0, len(n.ValuesList))
+	for idx, values := range n.ValuesList {
+		textVal, ok := values["text"]
+		if !ok {
+			return nil, fmt.Errorf("INSERT BULK item %d requires a 'text' field in VALUES", idx)
+		}
+		text, ok := textVal.(string)
+		if !ok {
+			return nil, fmt.Errorf("INSERT BULK item %d 'text' field must be a string", idx)
+		}
+		pointID, payload, err := insertPointIDAndPayload(nil, values)
+		if err != nil {
+			return nil, fmt.Errorf("INSERT BULK item %d: %w", idx, err)
+		}
+		texts = append(texts, text)
+		pointIDs = append(pointIDs, pointID)
+		payloads = append(payloads, payload)
+	}
+
+	vectorsBatch, err := e.buildInsertVectorsBatch(ctx, texts, model, sparseModel, useHybrid, includeRerank, n.Collection)
+	if err != nil {
+		return nil, err
+	}
+
+	points := make([]*qdrant.PointStruct, 0, len(texts))
+	for idx, vectors := range vectorsBatch {
+		points = append(points, &qdrant.PointStruct{
+			Id:      newPointID(pointIDs[idx]),
+			Vectors: qdrant.NewVectorsMap(vectors),
+			Payload: e.buildPayload(payloads[idx]),
+		})
+	}
+
+	_, err = e.client.Upsert(ctx, &qdrant.UpsertPoints{
+		CollectionName: n.Collection,
+		Points:         points,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert bulk points: %w", err)
+	}
+
+	return &ExecResponse{
+		OK:        true,
+		Operation: "insert_bulk",
+		Message:   fmt.Sprintf("Inserted %d point(s) into '%s'", len(points), n.Collection),
+		Data: map[string]any{
+			"count":        len(points),
+			"collection":   n.Collection,
+			"hybrid":       useHybrid,
 			"dense_model":  model,
 			"sparse_model": sparseModel,
 			"rerank":       includeRerank,
@@ -471,15 +625,8 @@ func (e *Executor) doSearch(n *ast.SearchStmt) (*ExecResponse, error) {
 		return nil, fmt.Errorf("collection '%s' does not exist", n.Collection)
 	}
 
-	model := e.configuredModel()
-	if n.Model != nil && *n.Model != "" {
-		model = *n.Model
-	}
-
-	sparseModel := sparseModelDefault
-	if n.SparseModel != nil && *n.SparseModel != "" {
-		sparseModel = *n.SparseModel
-	}
+	model := e.resolveDenseModel(n.Model)
+	sparseModel := e.resolveSparseModel(n.SparseModel)
 
 	hasRerankVector, err := e.collectionHasRerankVector(ctx, n.Collection)
 	if err != nil {
@@ -493,7 +640,7 @@ func (e *Executor) doSearch(n *ast.SearchStmt) (*ExecResponse, error) {
 
 	fetchLimit := effectiveSearchLimit(limit, n.Rerank)
 
-	searchReq, err := buildSearchRequest(n, model, sparseModel, hasRerankVector, fetchLimit)
+	searchReq, err := e.buildSearchRequest(ctx, n, model, sparseModel, hasRerankVector, fetchLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -522,6 +669,96 @@ func (e *Executor) doSearch(n *ast.SearchStmt) (*ExecResponse, error) {
 			"collection": n.Collection,
 			"hybrid":     n.Hybrid,
 			"rerank":     n.Rerank,
+		},
+	}, nil
+}
+
+func buildRecommendRequest(n *ast.RecommendStmt) (*qdrant.QueryPoints, error) {
+	query := qdrant.NewQueryRecommend(&qdrant.RecommendInput{
+		Positive: buildRecommendVectorInputs(n.PositiveIDs),
+		Negative: buildRecommendVectorInputs(n.NegativeIDs),
+	})
+	if n.Strategy != nil && *n.Strategy != "" {
+		strategy, ok := recommendStrategy(*n.Strategy)
+		if !ok {
+			return nil, fmt.Errorf("unknown recommend strategy '%s'", *n.Strategy)
+		}
+		query = qdrant.NewQueryRecommend(&qdrant.RecommendInput{
+			Positive: buildRecommendVectorInputs(n.PositiveIDs),
+			Negative: buildRecommendVectorInputs(n.NegativeIDs),
+			Strategy: strategy.Enum(),
+		})
+	}
+
+	using := denseVectorName
+	if n.Using != nil && *n.Using != "" {
+		using = *n.Using
+	}
+
+	req := &qdrant.QueryPoints{
+		CollectionName: n.Collection,
+		Query:          query,
+		Limit:          qdrant.PtrOf(uint64(n.Limit)),
+		Using:          qdrant.PtrOf(using),
+		Params:         searchParamsFromWithClause(n.WithClause),
+	}
+	if n.Offset > 0 {
+		req.Offset = qdrant.PtrOf(uint64(n.Offset))
+	}
+	if n.ScoreThreshold != nil {
+		req.ScoreThreshold = qdrant.PtrOf(float32(*n.ScoreThreshold))
+	}
+	if n.LookupFrom != "" {
+		req.LookupFrom = &qdrant.LookupLocation{
+			CollectionName: n.LookupFrom,
+		}
+		if n.LookupVector != nil && *n.LookupVector != "" {
+			req.LookupFrom.VectorName = n.LookupVector
+		}
+	}
+	if n.QueryFilter != nil {
+		filter, err := filters.NewFilterConverter().BuildFilter(n.QueryFilter)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build filter: %w", err)
+		}
+		req.Filter = addExcludedIDsToFilter(filter, append(append([]interface{}{}, n.PositiveIDs...), n.NegativeIDs...))
+	} else {
+		req.Filter = addExcludedIDsToFilter(nil, append(append([]interface{}{}, n.PositiveIDs...), n.NegativeIDs...))
+	}
+
+	return req, nil
+}
+
+func (e *Executor) doRecommend(n *ast.RecommendStmt) (*ExecResponse, error) {
+	ctx := context.Background()
+
+	exists, err := e.client.CollectionExists(ctx, n.Collection)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check collection: %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("collection '%s' does not exist", n.Collection)
+	}
+
+	req, err := buildRecommendRequest(n)
+	if err != nil {
+		return nil, err
+	}
+
+	results, err := e.client.Query(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("recommend failed: %w", err)
+	}
+
+	message, hits := e.formatSearchResults(results)
+	return &ExecResponse{
+		OK:        true,
+		Operation: "recommend",
+		Message:   message,
+		Data: map[string]any{
+			"count":      len(hits),
+			"results":    hits,
+			"collection": n.Collection,
 		},
 	}, nil
 }
@@ -609,10 +846,10 @@ func (e *Executor) buildPayload(values map[string]interface{}) map[string]*qdran
 	return qdrant.NewValueMap(values)
 }
 
-func collectionVectorParams(includeRerank bool) map[string]*qdrant.VectorParams {
+func collectionVectorParams(denseSize int, includeRerank bool) map[string]*qdrant.VectorParams {
 	vectors := map[string]*qdrant.VectorParams{
 		denseVectorName: {
-			Size:     denseVectorSize,
+			Size:     uint64(denseSize),
 			Distance: qdrant.Distance_Cosine,
 		},
 	}
@@ -631,7 +868,32 @@ func collectionVectorParams(includeRerank bool) map[string]*qdrant.VectorParams 
 	return vectors
 }
 
-func buildPointVectors(text, denseModel, sparseModel string, includeSparse, includeRerank bool) map[string]*qdrant.Vector {
+func (e *Executor) buildInsertVectors(ctx context.Context, text, denseModel, sparseModel string, includeSparse, includeRerank bool, collection string) (map[string]*qdrant.Vector, error) {
+	if e.usesLocalEmbeddings() {
+		embedClient, err := e.embeddingClient(denseModel)
+		if err != nil {
+			return nil, err
+		}
+		denseVector, err := embedClient.Embed(ctx, text)
+		if err != nil {
+			return nil, fmt.Errorf("failed to embed insert text: %w", err)
+		}
+		vectors := map[string]*qdrant.Vector{
+			denseVectorName: qdrant.NewVectorDense(denseVector),
+		}
+		if includeSparse {
+			stats := e.loadCorpusStats(collection)
+			sv := sparse.BuildDocument(text, stats)
+			vectors[sparseVectorName] = qdrant.NewVectorSparse(sv.Indices, sv.Values)
+			stats.Update(sparse.Tokenize(text))
+			e.saveCorpusStats(collection, stats)
+		}
+		if includeRerank {
+			return nil, fmt.Errorf("local/external rerank vectors are not implemented yet")
+		}
+		return vectors, nil
+	}
+
 	vectors := map[string]*qdrant.Vector{
 		denseVectorName: qdrant.NewVectorDocument(&qdrant.Document{
 			Text:  text,
@@ -650,13 +912,70 @@ func buildPointVectors(text, denseModel, sparseModel string, includeSparse, incl
 			Model: rerankModelDefault,
 		})
 	}
-	return vectors
+	return vectors, nil
 }
 
-func buildSearchRequest(n *ast.SearchStmt, denseModel, sparseModel string, hasRerankVector bool, limit uint64) (*qdrant.QueryPoints, error) {
+func (e *Executor) buildInsertVectorsBatch(ctx context.Context, texts []string, denseModel, sparseModel string, includeSparse, includeRerank bool, collection string) ([]map[string]*qdrant.Vector, error) {
+	if e.usesLocalEmbeddings() {
+		embedClient, err := e.embeddingClient(denseModel)
+		if err != nil {
+			return nil, err
+		}
+		denseVectors, err := embedClient.EmbedBatch(ctx, texts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to embed insert texts: %w", err)
+		}
+		if includeRerank {
+			return nil, fmt.Errorf("local/external rerank vectors are not implemented yet")
+		}
+
+		// Build corpus stats from the batch for BM25 weighting
+		var stats *sparse.CorpusStats
+		if includeSparse {
+			stats = e.loadCorpusStats(collection)
+			docTokens := make([][]string, len(texts))
+			for i, text := range texts {
+				docTokens[i] = sparse.Tokenize(text)
+			}
+			stats.UpdateBatch(docTokens)
+		}
+
+		batch := make([]map[string]*qdrant.Vector, 0, len(texts))
+		for idx, text := range texts {
+			vectors := map[string]*qdrant.Vector{
+				denseVectorName: qdrant.NewVectorDense(denseVectors[idx]),
+			}
+			if includeSparse {
+				sv := sparse.BuildDocument(text, stats)
+				vectors[sparseVectorName] = qdrant.NewVectorSparse(sv.Indices, sv.Values)
+			}
+			batch = append(batch, vectors)
+		}
+
+		if includeSparse {
+			e.saveCorpusStats(collection, stats)
+		}
+		return batch, nil
+	}
+
+	batch := make([]map[string]*qdrant.Vector, 0, len(texts))
+	for _, text := range texts {
+		vectors, err := e.buildInsertVectors(ctx, text, denseModel, sparseModel, includeSparse, includeRerank, collection)
+		if err != nil {
+			return nil, err
+		}
+		batch = append(batch, vectors)
+	}
+	return batch, nil
+}
+
+func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, denseModel, sparseModel string, hasRerankVector bool, limit uint64) (*qdrant.QueryPoints, error) {
 	params := searchParamsFromWithClause(n.WithClause)
 
 	if n.Rerank {
+		if e.usesLocalEmbeddings() {
+			return nil, fmt.Errorf("RERANK is currently only available in cloud inference mode")
+		}
 		if !hasRerankVector {
 			return nil, fmt.Errorf("collection '%s' does not support rerank; create it with HYBRID RERANK", n.Collection)
 		}
@@ -664,53 +983,107 @@ func buildSearchRequest(n *ast.SearchStmt, denseModel, sparseModel string, hasRe
 		if n.RerankModel != nil && *n.RerankModel != "" {
 			rerankModel = *n.RerankModel
 		}
-		prefetch := buildSearchPrefetches(n.QueryText, denseModel, sparseModel, limit, params)
+		prefetch, err := e.buildSearchPrefetches(ctx, n.QueryText, denseModel, sparseModel, limit, params)
+		if err != nil {
+			return nil, err
+		}
 		return buildRerankSearchRequest(n.Collection, n.QueryText, rerankModel, limit, prefetch, params), nil
 	}
 
 	if n.Hybrid {
+		prefetch, err := e.buildSearchPrefetches(ctx, n.QueryText, denseModel, sparseModel, limit, params)
+		if err != nil {
+			return nil, err
+		}
 		return &qdrant.QueryPoints{
 			CollectionName: n.Collection,
-			Prefetch:       buildSearchPrefetches(n.QueryText, denseModel, sparseModel, limit, params),
+			Prefetch:       prefetch,
 			Query:          qdrant.NewQueryFusion(qdrant.Fusion_RRF),
 			Limit:          qdrant.PtrOf(limit),
 			Params:         params,
 		}, nil
 	}
 
+	if n.SparseOnly {
+		query := qdrant.NewQueryDocument(&qdrant.Document{
+			Text:  n.QueryText,
+			Model: sparseModel,
+		})
+		if e.usesLocalEmbeddings() {
+			sv := sparse.BuildQuery(n.QueryText)
+			query = qdrant.NewQuerySparse(sv.Indices, sv.Values)
+		}
+		return &qdrant.QueryPoints{
+			CollectionName: n.Collection,
+			Query:          query,
+			Using:          qdrant.PtrOf(sparseVectorName),
+			Limit:          qdrant.PtrOf(limit),
+			Params:         params,
+		}, nil
+	}
+
+	query := qdrant.NewQueryDocument(&qdrant.Document{
+		Text:  n.QueryText,
+		Model: denseModel,
+	})
+	if e.usesLocalEmbeddings() {
+		embedClient, err := e.embeddingClient(denseModel)
+		if err != nil {
+			return nil, err
+		}
+		denseVector, err := embedClient.Embed(ctx, n.QueryText)
+		if err != nil {
+			return nil, fmt.Errorf("failed to embed search query: %w", err)
+		}
+		query = qdrant.NewQueryDense(denseVector)
+	}
+
 	return &qdrant.QueryPoints{
 		CollectionName: n.Collection,
-		Query: qdrant.NewQueryDocument(&qdrant.Document{
-			Text:  n.QueryText,
-			Model: denseModel,
-		}),
-		Using:  qdrant.PtrOf(denseVectorName),
-		Limit:  qdrant.PtrOf(limit),
-		Params: params,
+		Query:          query,
+		Using:          qdrant.PtrOf(denseVectorName),
+		Limit:          qdrant.PtrOf(limit),
+		Params:         params,
 	}, nil
 }
 
-func buildSearchPrefetches(queryText, denseModel, sparseModel string, limit uint64, params *qdrant.SearchParams) []*qdrant.PrefetchQuery {
+func (e *Executor) buildSearchPrefetches(ctx context.Context, queryText, denseModel, sparseModel string, limit uint64, params *qdrant.SearchParams) ([]*qdrant.PrefetchQuery, error) {
+	denseQuery := qdrant.NewQueryDocument(&qdrant.Document{
+		Text:  queryText,
+		Model: denseModel,
+	})
+	sparseQuery := qdrant.NewQueryDocument(&qdrant.Document{
+		Text:  queryText,
+		Model: sparseModel,
+	})
+	if e.usesLocalEmbeddings() {
+		embedClient, err := e.embeddingClient(denseModel)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create embedding client for search: %w", err)
+		}
+		denseVector, err := embedClient.Embed(ctx, queryText)
+		if err != nil {
+			return nil, fmt.Errorf("failed to embed search query: %w", err)
+		}
+		denseQuery = qdrant.NewQueryDense(denseVector)
+		sv := sparse.BuildQuery(queryText)
+		sparseQuery = qdrant.NewQuerySparse(sv.Indices, sv.Values)
+	}
+
 	return []*qdrant.PrefetchQuery{
 		{
-			Query: qdrant.NewQueryDocument(&qdrant.Document{
-				Text:  queryText,
-				Model: sparseModel,
-			}),
+			Query:  sparseQuery,
 			Using:  qdrant.PtrOf(sparseVectorName),
 			Limit:  qdrant.PtrOf(limit),
 			Params: params,
 		},
 		{
-			Query: qdrant.NewQueryDocument(&qdrant.Document{
-				Text:  queryText,
-				Model: denseModel,
-			}),
+			Query:  denseQuery,
 			Using:  qdrant.PtrOf(denseVectorName),
 			Limit:  qdrant.PtrOf(limit),
 			Params: params,
 		},
-	}
+	}, nil
 }
 
 func searchParamsFromWithClause(withClause *ast.SearchWith) *qdrant.SearchParams {
@@ -734,6 +1107,234 @@ func searchParamsFromWithClause(withClause *ast.SearchWith) *qdrant.SearchParams
 	}
 
 	return params
+}
+
+func (e *Executor) resolveDenseModel(override *string) string {
+	if override != nil && *override != "" {
+		return *override
+	}
+	if e != nil && e.config != nil {
+		if e.config.EmbeddingModel != "" {
+			return e.config.EmbeddingModel
+		}
+		if e.config.InferenceModel != "" {
+			return e.config.InferenceModel
+		}
+	}
+	return denseModelDefault
+}
+
+func (e *Executor) resolveSparseModel(override *string) string {
+	if override != nil && *override != "" {
+		return *override
+	}
+	return sparseModelDefault
+}
+
+func (e *Executor) inferenceMode() string {
+	if e != nil && e.config != nil && strings.TrimSpace(e.config.InferenceMode) != "" {
+		return strings.ToLower(strings.TrimSpace(e.config.InferenceMode))
+	}
+	return defaultInferenceMode
+}
+
+func (e *Executor) usesLocalEmbeddings() bool {
+	mode := e.inferenceMode()
+	return mode == "local" || mode == "external"
+}
+
+func (e *Executor) embeddingClient(model string) (*embedding.Client, error) {
+	if e == nil || e.config == nil {
+		return nil, fmt.Errorf("embedding configuration is missing")
+	}
+	if e.config.EmbeddingDimension <= 0 {
+		return nil, fmt.Errorf("embedding_dimension must be configured for %s inference mode", e.inferenceMode())
+	}
+	endpoint := strings.TrimSpace(e.config.EmbeddingEndpoint)
+	if endpoint == "" {
+		return nil, fmt.Errorf("embedding_endpoint must be configured for %s inference mode", e.inferenceMode())
+	}
+	return embedding.NewClient(embedding.Config{
+		Endpoint:  endpoint,
+		Model:     model,
+		APIKey:    e.config.EmbeddingAPIKey,
+		Dimension: e.config.EmbeddingDimension,
+	})
+}
+
+func (e *Executor) corpusStatsPath(collection string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	// Sanitize collection name to prevent directory traversal
+	safe := strings.ReplaceAll(collection, "/", "_")
+	safe = strings.ReplaceAll(safe, "\\", "_")
+	safe = strings.ReplaceAll(safe, "..", "_")
+	return filepath.Join(home, ".qql", "corpus", safe+".json")
+}
+
+func (e *Executor) loadCorpusStats(collection string) *sparse.CorpusStats {
+	path := e.corpusStatsPath(collection)
+	if path == "" {
+		return sparse.NewCorpusStats()
+	}
+	stats, err := sparse.LoadCorpusStats(path)
+	if err != nil {
+		return sparse.NewCorpusStats()
+	}
+	return stats
+}
+
+func (e *Executor) saveCorpusStats(collection string, stats *sparse.CorpusStats) {
+	path := e.corpusStatsPath(collection)
+	if path == "" {
+		return
+	}
+	_ = stats.Save(path)
+}
+
+func (e *Executor) deleteCorpusStats(collection string) {
+	path := e.corpusStatsPath(collection)
+	if path == "" {
+		return
+	}
+	_ = os.Remove(path)
+}
+
+func (e *Executor) resolveDenseVectorSize(ctx context.Context, model *string) (int, error) {
+	if e.usesLocalEmbeddings() {
+		if e.config != nil && e.config.EmbeddingDimension > 0 {
+			return e.config.EmbeddingDimension, nil
+		}
+		// Auto-probe dimension from embedding endpoint when not configured
+		if e.config != nil && e.config.EmbeddingEndpoint != "" && e.config.EmbeddingModel != "" {
+			probeClient, err := embedding.NewClient(embedding.Config{
+				Endpoint:   e.config.EmbeddingEndpoint,
+				Model:      e.config.EmbeddingModel,
+				APIKey:     e.config.EmbeddingAPIKey,
+				Dimension:  1, // ignored by ProbeDimension
+				HTTPClient: nil,
+			})
+			if err != nil {
+				return 0, fmt.Errorf("failed to create probe client: %w", err)
+			}
+			dim, err := probeClient.ProbeDimension(ctx, "probe")
+			if err != nil {
+				return 0, fmt.Errorf("failed to probe embedding dimension (set --embedding-dimension or ensure endpoint is reachable): %w", err)
+			}
+			return dim, nil
+		}
+		return 0, fmt.Errorf("embedding_dimension must be configured for %s inference mode", e.inferenceMode())
+	}
+	if e != nil && e.config != nil && e.config.EmbeddingDimension > 0 {
+		return e.config.EmbeddingDimension, nil
+	}
+	_ = ctx
+	if model != nil && *model != "" && e != nil && e.config != nil && e.config.EmbeddingDimension == 0 {
+		return 0, fmt.Errorf("embedding_dimension must be configured when creating collections with USING MODEL")
+	}
+	return denseVectorSize, nil
+}
+
+func (e *Executor) shouldUseHybrid(ctx context.Context, collection string, requested bool) (bool, error) {
+	if requested {
+		return true, nil
+	}
+	return e.collectionHasSparseVector(ctx, collection)
+}
+
+func insertPointIDAndPayload(pointID interface{}, values map[string]interface{}) (interface{}, map[string]interface{}, error) {
+	payload := make(map[string]interface{}, len(values))
+	for key, value := range values {
+		payload[key] = value
+	}
+	rawID := pointID
+	if rawID == nil {
+		var ok bool
+		rawID, ok = payload["id"]
+		if ok {
+			delete(payload, "id")
+		}
+	}
+	if rawID == nil {
+		return uuid.New().String(), payload, nil
+	}
+	switch value := rawID.(type) {
+	case int:
+		if value < 0 {
+			return nil, nil, fmt.Errorf("INSERT id must be an unsigned integer or UUID string when provided")
+		}
+		return value, payload, nil
+	case string:
+		if _, err := uuid.Parse(value); err != nil {
+			return nil, nil, fmt.Errorf("INSERT id must be an unsigned integer or UUID string when provided")
+		}
+		return value, payload, nil
+	default:
+		return nil, nil, fmt.Errorf("INSERT id must be an unsigned integer or UUID string when provided")
+	}
+}
+
+func newPointID(value interface{}) *qdrant.PointId {
+	switch id := value.(type) {
+	case int:
+		return qdrant.NewIDNum(uint64(id))
+	case uint64:
+		return qdrant.NewIDNum(id)
+	case string:
+		return qdrant.NewIDUUID(id)
+	default:
+		return qdrant.NewIDUUID(fmt.Sprintf("%v", value))
+	}
+}
+
+func buildRecommendVectorInputs(ids []interface{}) []*qdrant.VectorInput {
+	if len(ids) == 0 {
+		return nil
+	}
+	inputs := make([]*qdrant.VectorInput, 0, len(ids))
+	for _, id := range ids {
+		inputs = append(inputs, qdrant.NewVectorInputID(newPointID(id)))
+	}
+	return inputs
+}
+
+func recommendStrategy(value string) (qdrant.RecommendStrategy, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "average_vector":
+		return qdrant.RecommendStrategy_AverageVector, true
+	case "best_score":
+		return qdrant.RecommendStrategy_BestScore, true
+	case "sum_scores":
+		return qdrant.RecommendStrategy_SumScores, true
+	default:
+		return 0, false
+	}
+}
+
+func addExcludedIDsToFilter(filter *qdrant.Filter, ids []interface{}) *qdrant.Filter {
+	if len(ids) == 0 {
+		return filter
+	}
+	pointIDs := make([]*qdrant.PointId, 0, len(ids))
+	for _, id := range ids {
+		pointIDs = append(pointIDs, newPointID(id))
+	}
+	exclude := &qdrant.Condition{
+		ConditionOneOf: &qdrant.Condition_HasId{
+			HasId: &qdrant.HasIdCondition{
+				HasId: pointIDs,
+			},
+		},
+	}
+	if filter == nil {
+		return &qdrant.Filter{
+			MustNot: []*qdrant.Condition{exclude},
+		}
+	}
+	filter.MustNot = append(filter.MustNot, exclude)
+	return filter
 }
 
 func buildDeleteRequest(n *ast.DeleteStmt) (*qdrant.DeletePoints, error) {
@@ -775,15 +1376,31 @@ func (e *Executor) collectionHasRerankVector(ctx context.Context, collection str
 	if err != nil {
 		return false, err
 	}
-	params := info.GetConfig().GetParams()
-	if params == nil {
-		return false, nil
-	}
-	vectors := params.GetVectorsConfig().GetParamsMap()
+	vectors := info.GetConfig().GetParams().GetVectorsConfig().GetParamsMap()
 	if vectors == nil {
 		return false, nil
 	}
 	_, ok := vectors.GetMap()[rerankVectorName]
+	return ok, nil
+}
+
+func (e *Executor) collectionHasSparseVector(ctx context.Context, collection string) (bool, error) {
+	exists, err := e.client.CollectionExists(ctx, collection)
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		return false, nil
+	}
+	info, err := e.client.GetCollectionInfo(ctx, collection)
+	if err != nil {
+		return false, err
+	}
+	sparseVectors := info.GetConfig().GetParams().GetSparseVectorsConfig()
+	if sparseVectors == nil {
+		return false, nil
+	}
+	_, ok := sparseVectors.GetMap()[sparseVectorName]
 	return ok, nil
 }
 
@@ -1025,9 +1642,48 @@ func NewConnectCmd(out *output.Outputter) *cobra.Command {
 			mode := readOutputMode(cmd)
 			url, _ := cmd.Flags().GetString("url")
 			secret, _ := cmd.Flags().GetString("secret")
+			inferenceMode, _ := cmd.Flags().GetString("inference-mode")
+			embeddingEndpoint, _ := cmd.Flags().GetString("embedding-endpoint")
+			embeddingKey, _ := cmd.Flags().GetString("embedding-key")
+			embeddingModel, _ := cmd.Flags().GetString("embedding-model")
+			embeddingDimension, _ := cmd.Flags().GetInt("embedding-dimension")
 
 			if url == "" {
 				return commandError(out, mode, "connect", "", fmt.Errorf("--url is required"))
+			}
+			if inferenceMode == "" {
+				inferenceMode = defaultInferenceMode
+			}
+			if (inferenceMode == "local" || inferenceMode == "external") && (embeddingEndpoint == "" || embeddingModel == "") {
+				return commandError(out, mode, "connect", "", fmt.Errorf("--embedding-endpoint and --embedding-model are required for %s mode", inferenceMode))
+			}
+
+			// Auto-probe embedding dimension if not provided
+			if (inferenceMode == "local" || inferenceMode == "external") && embeddingDimension <= 0 && embeddingEndpoint != "" && embeddingModel != "" {
+				if !mode.json && !mode.quiet {
+					out.Print("Probing embedding dimension from endpoint...")
+				}
+				probeClient, probeErr := embedding.NewClient(embedding.Config{
+					Endpoint:  embeddingEndpoint,
+					Model:     embeddingModel,
+					APIKey:    embeddingKey,
+					Dimension: 1,
+				})
+				if probeErr == nil {
+					dim, probeErr := probeClient.ProbeDimension(context.Background(), "probe")
+					if probeErr == nil {
+						embeddingDimension = dim
+						if !mode.json && !mode.quiet {
+							out.Print(fmt.Sprintf("Auto-detected embedding dimension: %d", dim))
+						}
+					}
+				}
+				if probeErr != nil && !mode.json && !mode.quiet {
+					out.Print(fmt.Sprintf("Warning: could not probe embedding dimension: %v", probeErr))
+				}
+			}
+			if (inferenceMode == "local" || inferenceMode == "external") && embeddingDimension <= 0 {
+				return commandError(out, mode, "connect", "", fmt.Errorf("--embedding-dimension is required (or endpoint must be reachable for auto-probe) for %s mode", inferenceMode))
 			}
 
 			if !mode.json && !mode.quiet {
@@ -1045,8 +1701,29 @@ func NewConnectCmd(out *output.Outputter) *cobra.Command {
 			}
 
 			cfg := &config.Config{
-				URL:    url,
-				Secret: secret,
+				URL:                url,
+				Secret:             secret,
+				InferenceMode:      inferenceMode,
+				EmbeddingEndpoint:  embeddingEndpoint,
+				EmbeddingAPIKey:    embeddingKey,
+				EmbeddingModel:     embeddingModel,
+				EmbeddingDimension: embeddingDimension,
+			}
+
+			// Validate embedding endpoint is reachable in local/external mode
+			if (inferenceMode == "local" || inferenceMode == "external") && embeddingEndpoint != "" {
+				testClient, testErr := embedding.NewClient(embedding.Config{
+					Endpoint:  embeddingEndpoint,
+					Model:     embeddingModel,
+					APIKey:    embeddingKey,
+					Dimension: embeddingDimension,
+				})
+				if testErr == nil {
+					_, testErr = testClient.Embed(context.Background(), "test")
+				}
+				if testErr != nil && !mode.json && !mode.quiet {
+					out.Print(fmt.Sprintf("Warning: embedding endpoint test failed: %v", testErr))
+				}
 			}
 
 			if err := config.SaveConfig(cfg); err != nil {
@@ -1079,6 +1756,11 @@ func NewConnectCmd(out *output.Outputter) *cobra.Command {
 
 	cmd.Flags().String("url", "", "Qdrant instance URL (for text INSERT/SEARCH use your Qdrant Cloud URL)")
 	cmd.Flags().String("secret", "", "API key / secret (optional)")
+	cmd.Flags().String("inference-mode", defaultInferenceMode, "Inference mode: cloud, external, or local")
+	cmd.Flags().String("embedding-endpoint", "", "OpenAI-compatible embeddings endpoint for local/external modes")
+	cmd.Flags().String("embedding-key", "", "API key for the embeddings endpoint")
+	cmd.Flags().String("embedding-model", "", "Embedding model name for local/external modes")
+	cmd.Flags().Int("embedding-dimension", 0, "Embedding dimension for local/external modes")
 	addOutputFlags(cmd)
 	_ = cmd.MarkFlagRequired("url")
 
@@ -1155,6 +1837,43 @@ func NewExecCmd(out *output.Outputter) *cobra.Command {
 		},
 	}
 
+	addOutputFlags(cmd)
+	return cmd
+}
+
+func NewExecuteCmd(out *output.Outputter) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "execute",
+		Short: "Execute a .qql script file",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			mode := readOutputMode(cmd)
+			stopOnError, _ := cmd.Flags().GetBool("stop-on-error")
+			cfg, client, err := loadSavedConfigAndClient()
+			if err != nil {
+				return commandError(out, mode, "execute", args[0], err)
+			}
+			executor := NewExecutor(client, cfg)
+			okCount, failCount, err := script.RunFile(args[0], executor, stopOnError)
+			if err != nil {
+				return commandError(out, mode, "execute", args[0], err)
+			}
+			message := fmt.Sprintf("Executed script %s (%d succeeded, %d failed)", args[0], okCount, failCount)
+			if mode.json {
+				return writeJSON(out, &ScriptResponse{
+					OK:        true,
+					Command:   "execute",
+					Path:      args[0],
+					Succeeded: okCount,
+					Failed:    failCount,
+					Message:   message,
+				}, mode.quiet)
+			}
+			out.Print(message)
+			return nil
+		},
+	}
+	cmd.Flags().Bool("stop-on-error", false, "Stop after the first failing statement")
 	addOutputFlags(cmd)
 	return cmd
 }
@@ -1240,6 +1959,42 @@ func NewDoctorCmd(out *output.Outputter) *cobra.Command {
 
 	addOutputFlags(cmd)
 
+	return cmd
+}
+
+func NewDumpCmd(out *output.Outputter) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "dump",
+		Short: "Dump a collection to a .qql script file",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			mode := readOutputMode(cmd)
+			cfg, client, err := loadSavedConfigAndClient()
+			if err != nil {
+				return commandError(out, mode, "dump", strings.Join(args, " "), err)
+			}
+			_ = cfg
+			written, skipped, err := dump.Collection(context.Background(), client, args[0], args[1])
+			if err != nil {
+				return commandError(out, mode, "dump", strings.Join(args, " "), err)
+			}
+			message := fmt.Sprintf("Dumped collection '%s' to %s (%d written, %d skipped)", args[0], args[1], written, skipped)
+			if mode.json {
+				return writeJSON(out, &DumpResponse{
+					OK:         true,
+					Command:    "dump",
+					Collection: args[0],
+					Path:       args[1],
+					Written:    written,
+					Skipped:    skipped,
+					Message:    message,
+				}, mode.quiet)
+			}
+			out.Print(message)
+			return nil
+		},
+	}
+	addOutputFlags(cmd)
 	return cmd
 }
 

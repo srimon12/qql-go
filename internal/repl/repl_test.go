@@ -20,6 +20,15 @@ type stubExecutor struct {
 	explainQuery  string
 	explainResult string
 	explainErr    error
+
+	executeFilePath   string
+	executeFileResult string
+	executeFileErr    error
+
+	dumpCollection string
+	dumpPath       string
+	dumpResult     string
+	dumpErr        error
 }
 
 func (s *stubExecutor) Execute(query string) (string, error) {
@@ -30,6 +39,17 @@ func (s *stubExecutor) Execute(query string) (string, error) {
 func (s *stubExecutor) Explain(query string) (string, error) {
 	s.explainQuery = query
 	return s.explainResult, s.explainErr
+}
+
+func (s *stubExecutor) ExecuteFile(path string, _ bool) (string, error) {
+	s.executeFilePath = path
+	return s.executeFileResult, s.executeFileErr
+}
+
+func (s *stubExecutor) DumpCollection(collection, outputPath string) (string, error) {
+	s.dumpCollection = collection
+	s.dumpPath = outputPath
+	return s.dumpResult, s.dumpErr
 }
 
 func captureREPL(t *testing.T, exec QueryExecutor, fn func(r *REPL)) (string, string) {
@@ -121,6 +141,33 @@ func TestHandleCommandExecutesQuery(t *testing.T) {
 	require.Empty(t, stderr)
 	require.Equal(t, "SHOW COLLECTIONS", exec.executeQuery)
 	require.Contains(t, stdout, "executed")
+}
+
+func TestHandleCommandExecuteFile(t *testing.T) {
+	exec := &stubExecutor{executeFileResult: "script done"}
+
+	stdout, stderr := captureREPL(t, exec, func(r *REPL) {
+		err := r.handleCommand("execute demo.qql")
+		require.NoError(t, err)
+	})
+
+	require.Empty(t, stderr)
+	require.Equal(t, "demo.qql", exec.executeFilePath)
+	require.Contains(t, stdout, "script done")
+}
+
+func TestHandleCommandDumpCollection(t *testing.T) {
+	exec := &stubExecutor{dumpResult: "dump done"}
+
+	stdout, stderr := captureREPL(t, exec, func(r *REPL) {
+		err := r.handleCommand("dump docs dump.qql")
+		require.NoError(t, err)
+	})
+
+	require.Empty(t, stderr)
+	require.Equal(t, "docs", exec.dumpCollection)
+	require.Equal(t, "dump.qql", exec.dumpPath)
+	require.Contains(t, stdout, "dump done")
 }
 
 func TestReadLineSupportsMultilineStatements(t *testing.T) {

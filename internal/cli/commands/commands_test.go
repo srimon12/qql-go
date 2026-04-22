@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -27,7 +29,7 @@ func TestConfiguredModelFallsBackToDenseDefault(t *testing.T) {
 }
 
 func TestCollectionVectorParamsOmitsColbertByDefault(t *testing.T) {
-	vectors := collectionVectorParams(false)
+	vectors := collectionVectorParams(denseVectorSize, false)
 
 	dense := vectors[denseVectorName]
 	require.NotNil(t, dense)
@@ -37,7 +39,7 @@ func TestCollectionVectorParamsOmitsColbertByDefault(t *testing.T) {
 }
 
 func TestCollectionVectorParamsIncludesColbertWhenEnabled(t *testing.T) {
-	vectors := collectionVectorParams(true)
+	vectors := collectionVectorParams(denseVectorSize, true)
 
 	rerank := vectors[rerankVectorName]
 	require.NotNil(t, rerank)
@@ -49,8 +51,10 @@ func TestCollectionVectorParamsIncludesColbertWhenEnabled(t *testing.T) {
 	require.Zero(t, rerank.GetHnswConfig().GetM())
 }
 
-func TestBuildPointVectorsIncludesColbertOnlyWhenEnabled(t *testing.T) {
-	vectors := buildPointVectors("hello world", "dense-model", "sparse-model", true, true)
+func TestBuildInsertVectorsIncludesColbertOnlyWhenEnabled(t *testing.T) {
+	exec := NewExecutor(nil, &config.Config{})
+	vectors, err := exec.buildInsertVectors(context.Background(), "hello world", "dense-model", "sparse-model", true, true, "test")
+	require.NoError(t, err)
 
 	dense := vectors[denseVectorName]
 	require.NotNil(t, dense)
@@ -68,7 +72,8 @@ func TestBuildPointVectorsIncludesColbertOnlyWhenEnabled(t *testing.T) {
 	require.NotNil(t, sparse.GetDocument())
 	require.Equal(t, "sparse-model", sparse.GetDocument().GetModel())
 
-	withoutRerank := buildPointVectors("hello world", "dense-model", "sparse-model", true, false)
+	withoutRerank, err := exec.buildInsertVectors(context.Background(), "hello world", "dense-model", "sparse-model", true, false, "test")
+	require.NoError(t, err)
 	require.NotContains(t, withoutRerank, rerankVectorName)
 }
 
@@ -108,7 +113,8 @@ func TestEffectiveSearchLimit(t *testing.T) {
 
 func TestBuildSearchRequestAppliesWithClauseAndSparseOverride(t *testing.T) {
 	sparseModel := "custom-sparse"
-	req, err := buildSearchRequest(&ast.SearchStmt{
+	exec := NewExecutor(nil, &config.Config{})
+	req, err := exec.buildSearchRequest(context.Background(), &ast.SearchStmt{
 		Collection:  "demo",
 		QueryText:   "vector database",
 		Limit:       5,
@@ -139,13 +145,29 @@ func TestBuildSearchRequestAppliesWithClauseAndSparseOverride(t *testing.T) {
 }
 
 func TestBuildSearchRequestRejectsRerankWithoutCollectionSupport(t *testing.T) {
-	_, err := buildSearchRequest(&ast.SearchStmt{
+	exec := NewExecutor(nil, &config.Config{})
+	_, err := exec.buildSearchRequest(context.Background(), &ast.SearchStmt{
 		Collection: "demo",
 		QueryText:  "vector database",
 		Limit:      5,
 		Rerank:     true,
 	}, "dense-model", "custom-sparse", false, 5)
 	require.Error(t, err)
+}
+
+func TestInsertPointIDAndPayloadHonorsExplicitID(t *testing.T) {
+	pointID, payload, err := insertPointIDAndPayload(42, map[string]interface{}{"text": "hello"})
+	require.NoError(t, err)
+	require.Equal(t, 42, pointID)
+	require.Equal(t, map[string]interface{}{"text": "hello"}, payload)
+}
+
+func TestInsertPointIDAndPayloadExtractsIDFromValues(t *testing.T) {
+	id := "123e4567-e89b-12d3-a456-426614174000"
+	pointID, payload, err := insertPointIDAndPayload(nil, map[string]interface{}{"id": id, "text": "hello"})
+	require.NoError(t, err)
+	require.Equal(t, id, pointID)
+	require.Equal(t, map[string]interface{}{"text": "hello"}, payload)
 }
 
 func TestBuildDeleteRequestByFieldUsesFilterSelector(t *testing.T) {
@@ -624,4 +646,253 @@ type failingWriter struct{}
 
 func (failingWriter) Write([]byte) (int, error) {
 	return 0, context.DeadlineExceeded
+}
+
+func TestBuildInsertVectorsLocalModeGeneratesExplicitVectors(t *testing.T) {
+	server := newEmbeddingServer(t, []float32{1, 2, 3})
+	defer server.Close()
+
+	exec := NewExecutor(nil, &config.Config{
+		InferenceMode:      "local",
+		EmbeddingEndpoint:  server.URL + "/v1/embeddings",
+		EmbeddingModel:     "test-model",
+		EmbeddingDimension: 3,
+	})
+
+	vectors, err := exec.buildInsertVectors(context.Background(), "hello world", "dense-model", "sparse-model", true, false, "test_local")
+	require.NoError(t, err)
+
+	dense := vectors[denseVectorName]
+	require.NotNil(t, dense)
+
+	sparseVec := vectors[sparseVectorName]
+	require.NotNil(t, sparseVec)
+
+	require.NotContains(t, vectors, rerankVectorName)
+}
+
+func TestBuildInsertVectorsLocalModeRejectsRerank(t *testing.T) {
+	server := newEmbeddingServer(t, []float32{1, 2, 3})
+	defer server.Close()
+
+	exec := NewExecutor(nil, &config.Config{
+		InferenceMode:      "local",
+		EmbeddingEndpoint:  server.URL + "/v1/embeddings",
+		EmbeddingModel:     "test-model",
+		EmbeddingDimension: 3,
+	})
+
+	_, err := exec.buildInsertVectors(context.Background(), "hello", "dense-model", "sparse-model", true, true, "test_local")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "rerank vectors are not implemented yet")
+}
+
+func TestBuildSearchPrefetchesLocalModeReturnsExplicitQueries(t *testing.T) {
+	server := newEmbeddingServer(t, []float32{1, 2, 3})
+	defer server.Close()
+
+	exec := NewExecutor(nil, &config.Config{
+		InferenceMode:      "local",
+		EmbeddingEndpoint:  server.URL + "/v1/embeddings",
+		EmbeddingModel:     "test-model",
+		EmbeddingDimension: 3,
+	})
+
+	prefetch, err := exec.buildSearchPrefetches(context.Background(), "hello world", "dense-model", "sparse-model", 5, nil)
+	require.NoError(t, err)
+	require.Len(t, prefetch, 2)
+
+	// Sparse prefetch
+	sparse := prefetch[0]
+	require.Equal(t, sparseVectorName, sparse.GetUsing())
+	require.NotNil(t, sparse.GetQuery().GetNearest().GetSparse())
+
+	// Dense prefetch
+	dense := prefetch[1]
+	require.Equal(t, denseVectorName, dense.GetUsing())
+	require.NotNil(t, dense.GetQuery().GetNearest().GetDense())
+}
+
+func TestBuildSearchPrefetchesLocalModePropagatesEmbeddingError(t *testing.T) {
+	exec := NewExecutor(nil, &config.Config{
+		InferenceMode:      "local",
+		EmbeddingEndpoint:  "http://localhost:1", // will fail
+		EmbeddingModel:     "test-model",
+		EmbeddingDimension: 3,
+	})
+
+	_, err := exec.buildSearchPrefetches(context.Background(), "hello world", "dense-model", "sparse-model", 5, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to embed search query")
+}
+
+func TestBuildSearchRequestSparseOnlyLocalMode(t *testing.T) {
+	exec := NewExecutor(nil, &config.Config{
+		InferenceMode:      "local",
+		EmbeddingEndpoint:  "http://localhost:1",
+		EmbeddingModel:     "test-model",
+		EmbeddingDimension: 3,
+	})
+
+	req, err := exec.buildSearchRequest(context.Background(), &ast.SearchStmt{
+		Collection: "demo",
+		QueryText:  "hello world",
+		Limit:      5,
+		SparseOnly: true,
+	}, "dense-model", "sparse-model", false, 5)
+	require.NoError(t, err)
+
+	require.Equal(t, "demo", req.GetCollectionName())
+	require.Equal(t, sparseVectorName, req.GetUsing())
+	require.NotNil(t, req.GetQuery().GetNearest().GetSparse())
+}
+
+func TestBuildSearchRequestHybridLocalMode(t *testing.T) {
+	server := newEmbeddingServer(t, []float32{1, 2, 3})
+	defer server.Close()
+
+	exec := NewExecutor(nil, &config.Config{
+		InferenceMode:      "local",
+		EmbeddingEndpoint:  server.URL + "/v1/embeddings",
+		EmbeddingModel:     "test-model",
+		EmbeddingDimension: 3,
+	})
+
+	req, err := exec.buildSearchRequest(context.Background(), &ast.SearchStmt{
+		Collection: "demo",
+		QueryText:  "hello world",
+		Limit:      5,
+		Hybrid:     true,
+	}, "dense-model", "sparse-model", false, 5)
+	require.NoError(t, err)
+
+	require.Equal(t, "demo", req.GetCollectionName())
+	require.Len(t, req.GetPrefetch(), 2)
+	require.NotNil(t, req.GetQuery().GetFusion())
+}
+
+func TestBuildSearchRequestHybridLocalModePropagatesError(t *testing.T) {
+	exec := NewExecutor(nil, &config.Config{
+		InferenceMode:      "local",
+		EmbeddingEndpoint:  "http://localhost:1",
+		EmbeddingModel:     "test-model",
+		EmbeddingDimension: 3,
+	})
+
+	_, err := exec.buildSearchRequest(context.Background(), &ast.SearchStmt{
+		Collection: "demo",
+		QueryText:  "hello world",
+		Limit:      5,
+		Hybrid:     true,
+	}, "dense-model", "sparse-model", false, 5)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to embed search query")
+}
+
+func TestBuildRecommendRequestDefaults(t *testing.T) {
+	req, err := buildRecommendRequest(&ast.RecommendStmt{
+		Collection:  "docs",
+		PositiveIDs: []interface{}{"a"},
+		Limit:       5,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "docs", req.GetCollectionName())
+	require.Equal(t, uint64(5), req.GetLimit())
+	require.Equal(t, denseVectorName, req.GetUsing())
+	require.Zero(t, req.GetOffset())
+	require.Zero(t, req.GetScoreThreshold())
+	require.Nil(t, req.GetLookupFrom())
+	require.Nil(t, req.GetParams())
+	require.NotNil(t, req.GetQuery().GetRecommend())
+}
+
+func TestBuildRecommendRequestWithAllNewFields(t *testing.T) {
+	req, err := buildRecommendRequest(&ast.RecommendStmt{
+		Collection:     "docs",
+		PositiveIDs:    []interface{}{"a", "b"},
+		NegativeIDs:    []interface{}{"c"},
+		Limit:          5,
+		Strategy:       strPtr("best_score"),
+		Offset:         2,
+		ScoreThreshold: float64Ptr(0.25),
+		WithClause: &ast.SearchWith{
+			Exact:  true,
+			HnswEf: 128,
+		},
+		LookupFrom:   "src",
+		LookupVector: strPtr("dense"),
+		Using:        strPtr("sparse"),
+	})
+	require.NoError(t, err)
+	require.Equal(t, "docs", req.GetCollectionName())
+	require.Equal(t, uint64(5), req.GetLimit())
+	require.Equal(t, uint64(2), req.GetOffset())
+	require.Equal(t, "sparse", req.GetUsing())
+	require.InDelta(t, float32(0.25), req.GetScoreThreshold(), 0.0001)
+	require.NotNil(t, req.GetParams())
+	require.True(t, req.GetParams().GetExact())
+	require.Equal(t, uint64(128), req.GetParams().GetHnswEf())
+	require.NotNil(t, req.GetLookupFrom())
+	require.Equal(t, "src", req.GetLookupFrom().GetCollectionName())
+	require.Equal(t, "dense", req.GetLookupFrom().GetVectorName())
+	require.NotNil(t, req.GetQuery().GetRecommend())
+	require.Equal(t, qdrant.RecommendStrategy_BestScore, req.GetQuery().GetRecommend().GetStrategy())
+}
+
+func TestBuildRecommendRequestWithLookupFromNoVector(t *testing.T) {
+	req, err := buildRecommendRequest(&ast.RecommendStmt{
+		Collection:  "docs",
+		PositiveIDs: []interface{}{"a"},
+		Limit:       5,
+		LookupFrom:  "src",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, req.GetLookupFrom())
+	require.Equal(t, "src", req.GetLookupFrom().GetCollectionName())
+	require.Empty(t, req.GetLookupFrom().GetVectorName())
+}
+
+func TestBuildRecommendRequestUnknownStrategy(t *testing.T) {
+	_, err := buildRecommendRequest(&ast.RecommendStmt{
+		Collection:  "docs",
+		PositiveIDs: []interface{}{"a"},
+		Limit:       5,
+		Strategy:    strPtr("bad_strategy"),
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unknown recommend strategy")
+}
+
+func TestBuildRecommendRequestFilterExcludesIDs(t *testing.T) {
+	req, err := buildRecommendRequest(&ast.RecommendStmt{
+		Collection:  "docs",
+		PositiveIDs: []interface{}{"a"},
+		NegativeIDs: []interface{}{"b"},
+		Limit:       5,
+		QueryFilter: &ast.CompareExpr{Field: "status", Op: "=", Value: "active"},
+	})
+	require.NoError(t, err)
+	filter := req.GetFilter()
+	require.NotNil(t, filter)
+	require.Len(t, filter.GetMust(), 1)
+	require.Len(t, filter.GetMustNot(), 1)
+	require.Equal(t, "active", filter.GetMust()[0].GetField().GetMatch().GetKeyword())
+	require.Len(t, filter.GetMustNot()[0].GetHasId().GetHasId(), 2)
+}
+
+func float64Ptr(f float64) *float64 {
+	return &f
+}
+
+func newEmbeddingServer(t *testing.T, embedding []float32) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/v1/embeddings", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{"index": 0, "embedding": embedding},
+			},
+		}))
+	}))
 }

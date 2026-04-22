@@ -1,9 +1,9 @@
 package cli
 
 import (
+	"github.com/spf13/cobra"
 	"github.com/srimon12/qql-go/internal/cli/commands"
 	"github.com/srimon12/qql-go/internal/output"
-	"github.com/spf13/cobra"
 )
 
 func Execute() error {
@@ -23,6 +23,7 @@ func NewRootCmd(out *output.Outputter) *cobra.Command {
 		Use:           "qql-go",
 		Short:         "QQL — Qdrant Query Language CLI",
 		Long:          `QQL is a query language CLI for Qdrant vector database.`,
+		Version:       commands.Version,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -35,7 +36,9 @@ func NewRootCmd(out *output.Outputter) *cobra.Command {
 		commands.NewDisconnectCmd(out),
 		commands.NewREPLCmd(out),
 		commands.NewExecCmd(out),
+		commands.NewExecuteCmd(out),
 		commands.NewExplainCmd(out),
+		commands.NewDumpCmd(out),
 		commands.NewDoctorCmd(out),
 		commands.NewVersionCmd(out),
 	)

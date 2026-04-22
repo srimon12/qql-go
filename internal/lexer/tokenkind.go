@@ -4,6 +4,7 @@ type TokenKind int
 
 const (
 	TokenKindInsert TokenKind = iota
+	TokenKindBulk
 	TokenKindInto
 	TokenKindCollection
 	TokenKindValues
@@ -21,9 +22,14 @@ const (
 	TokenKindShow
 	TokenKindCollections
 	TokenKindSearch
+	TokenKindRecommend
 	TokenKindSimilar
 	TokenKindTo
 	TokenKindLimit
+	TokenKindPositive
+	TokenKindNegative
+	TokenKindIds
+	TokenKindStrategy
 	TokenKindDelete
 	TokenKindFrom
 	TokenKindWhere
@@ -43,6 +49,10 @@ const (
 	TokenKindMatch
 	TokenKindAny
 	TokenKindPhrase
+	TokenKindOffset
+	TokenKindScore
+	TokenKindThreshold
+	TokenKindLookup
 	TokenKindIdentifier
 	TokenKindString
 	TokenKindInteger
@@ -66,6 +76,7 @@ const (
 
 var tokenKindStrings = map[TokenKind]string{
 	TokenKindInsert:      "INSERT",
+	TokenKindBulk:        "BULK",
 	TokenKindInto:        "INTO",
 	TokenKindCollection:  "COLLECTION",
 	TokenKindValues:      "VALUES",
@@ -83,9 +94,14 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindShow:        "SHOW",
 	TokenKindCollections: "COLLECTIONS",
 	TokenKindSearch:      "SEARCH",
+	TokenKindRecommend:   "RECOMMEND",
 	TokenKindSimilar:     "SIMILAR",
 	TokenKindTo:          "TO",
 	TokenKindLimit:       "LIMIT",
+	TokenKindPositive:    "POSITIVE",
+	TokenKindNegative:    "NEGATIVE",
+	TokenKindIds:         "IDS",
+	TokenKindStrategy:    "STRATEGY",
 	TokenKindDelete:      "DELETE",
 	TokenKindFrom:        "FROM",
 	TokenKindWhere:       "WHERE",
@@ -105,6 +121,10 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindMatch:       "MATCH",
 	TokenKindAny:         "ANY",
 	TokenKindPhrase:      "PHRASE",
+	TokenKindOffset:      "OFFSET",
+	TokenKindScore:       "SCORE",
+	TokenKindThreshold:   "THRESHOLD",
+	TokenKindLookup:      "LOOKUP",
 	TokenKindIdentifier:  "IDENTIFIER",
 	TokenKindString:      "STRING",
 	TokenKindInteger:     "INTEGER",

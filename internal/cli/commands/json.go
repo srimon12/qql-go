@@ -52,6 +52,25 @@ type VersionResponse struct {
 	Message string `json:"message"`
 }
 
+type ScriptResponse struct {
+	OK        bool   `json:"ok"`
+	Command   string `json:"command"`
+	Path      string `json:"path"`
+	Succeeded int    `json:"succeeded"`
+	Failed    int    `json:"failed"`
+	Message   string `json:"message"`
+}
+
+type DumpResponse struct {
+	OK         bool   `json:"ok"`
+	Command    string `json:"command"`
+	Collection string `json:"collection"`
+	Path       string `json:"path"`
+	Written    int    `json:"written"`
+	Skipped    int    `json:"skipped"`
+	Message    string `json:"message"`
+}
+
 type SearchHit struct {
 	ID    string  `json:"id"`
 	Score float32 `json:"score"`

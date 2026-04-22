@@ -56,3 +56,30 @@ On Windows:
 ```powershell
 $env:QQL_BIN = "C:\path\to\qql-go.exe"
 ```
+
+## Local mode setup (self-hosted Qdrant + local embeddings)
+
+`qql-go` supports three inference modes:
+
+- `cloud` — Qdrant Cloud inference (default)
+- `local` — local Qdrant + local OpenAI-compatible embedding server
+- `external` — any Qdrant + external OpenAI-compatible embedding endpoint
+
+For local mode, connect with the extra embedding flags:
+
+```powershell
+qql-go connect `
+  --url http://localhost:6334 `
+  --inference-mode local `
+  --embedding-endpoint http://127.0.0.1:1234/v1/embeddings `
+  --embedding-model text-embedding-all-minilm-l6-v2-embedding `
+  --embedding-dimension 384
+```
+
+Requirements for local/external mode:
+
+- `--embedding-endpoint` — an OpenAI-compatible `/v1/embeddings` endpoint
+- `--embedding-model` — the model name to pass in the request
+- `--embedding-dimension` — optional; auto-probed from the endpoint if omitted and reachable
+
+For cloud mode, only `--url` (and `--secret` if needed) are required.
