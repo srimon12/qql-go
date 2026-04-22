@@ -128,6 +128,7 @@ jobs:
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
+          native_archive="qql-go_${version}_linux_amd64.tar.gz"
 
           for archive in dist/*.tar.gz dist/*.zip; do
             [ -f "$archive" ] || continue
@@ -146,8 +147,8 @@ jobs:
               exit 1
             fi
 
-            # Only execute Linux binaries; verify others via strings
-            if [[ "$archive" == *"linux"* ]]; then
+            # Only execute the native Linux binary on this runner.
+            if [[ "$(basename "$archive")" == "$native_archive" ]]; then
               chmod +x "$binary"
               output=$("$binary" --version 2>&1 || "$binary" version 2>&1)
               if echo "$output" | grep -q "$version"; then
