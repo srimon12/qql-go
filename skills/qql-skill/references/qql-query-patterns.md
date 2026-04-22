@@ -2,10 +2,11 @@
 
 Use these patterns as templates. Keep them short and adapt only what matters.
 
-Inference note:
+## Inference note
 
-- In the current Go CLI, text `INSERT` and text `SEARCH ... SIMILAR TO ...` are cloud inference paths.
-- Use a Qdrant Cloud connection for the retrieval patterns below.
+- `cloud` mode (default) uses Qdrant Cloud inference.
+- `local` / `external` mode generates dense and sparse vectors client-side via an OpenAI-compatible embeddings API.
+- Rerank is **cloud-only**.
 
 ## Dense search
 
@@ -34,6 +35,13 @@ WHERE category = 'ml' AND year >= 2024
 ```sql
 SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' LIMIT 10
 USING HYBRID
+```
+
+## Sparse-only search
+
+```sql
+SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' LIMIT 10
+USING SPARSE
 ```
 
 ## Hybrid search with filter
@@ -70,12 +78,28 @@ WITH { hnsw_ef: 256 }
 SEARCH papers SIMILAR TO 'late interaction retrieval' LIMIT 5 RERANK
 ```
 
-## Hybrid plus rerank
+## Hybrid plus rerank (cloud only)
 
 ```sql
 SEARCH docs SIMILAR TO 'cross encoder rerank retrieval' LIMIT 8
 USING HYBRID
 RERANK
+```
+
+## Recommend
+
+```sql
+RECOMMEND FROM articles POSITIVE IDS ('uuid-1', 'uuid-2') LIMIT 5
+```
+
+With negative examples and strategy:
+
+```sql
+RECOMMEND FROM articles
+POSITIVE IDS ('uuid-1', 'uuid-2')
+NEGATIVE IDS ('uuid-3')
+STRATEGY 'average_vector'
+LIMIT 5
 ```
 
 ## Insert
@@ -99,11 +123,31 @@ INSERT INTO COLLECTION notes VALUES {
 } USING HYBRID
 ```
 
+With explicit ID:
+
+```sql
+INSERT INTO COLLECTION notes VALUES {
+  'id': '123e4567-e89b-12d3-a456-426614174000',
+  'text': 'Explicit ID document',
+  'topic': 'retrieval'
+}
+```
+
+## Bulk insert
+
+```sql
+INSERT BULK INTO COLLECTION notes VALUES [
+  {'text': 'First document', 'topic': 'ml'},
+  {'text': 'Second document', 'topic': 'search'}
+] USING HYBRID
+```
+
 ## Collection operations
 
 ```sql
 CREATE COLLECTION notes
 CREATE COLLECTION notes HYBRID
+CREATE COLLECTION notes USING MODEL 'sentence-transformers/all-MiniLM-L6-v2'
 SHOW COLLECTIONS
 DROP COLLECTION old_notes
 ```
@@ -128,28 +172,44 @@ qql-go exec --quiet --json "SHOW COLLECTIONS"
 qql-go explain --quiet --json "SEARCH docs SIMILAR TO 'vector db' LIMIT 5 USING HYBRID"
 qql-go doctor --quiet --json
 qql-go connect --quiet --json --url https://<cluster>.qdrant.io --secret <api-key>
+qql-go execute --quiet --json script.qql
+qql-go dump --quiet --json notes backup.qql
 ```
 
 Use these forms for scripts and agents so output is structured and compact.
 
-## Self-hosted-safe command patterns (no text inference)
+## Self-hosted/local mode setup
+
+Connect with local inference:
+
+```powershell
+qql-go connect `
+  --url http://localhost:6334 `
+  --inference-mode local `
+  --embedding-endpoint http://127.0.0.1:1234/v1/embeddings `
+  --embedding-model text-embedding-all-minilm-l6-v2-embedding `
+  --embedding-dimension 384
+```
+
+Then use all text operations normally:
 
 ```sql
-SHOW COLLECTIONS
-CREATE COLLECTION docs
 CREATE COLLECTION docs HYBRID
-CREATE INDEX ON COLLECTION docs FOR category TYPE keyword
-DELETE FROM docs WHERE category = 'archived'
-DROP COLLECTION docs
+INSERT INTO COLLECTION docs VALUES {'text': 'hello world'} USING HYBRID
+SEARCH docs SIMILAR TO 'hello world' LIMIT 5 USING HYBRID
 ```
 
 ## Intent Mapping
 
 - semantic similarity -> dense
 - exact terms also matter -> `USING HYBRID`
+- keyword-only retrieval -> `USING SPARSE`
 - recall debugging -> `EXACT`
 - query-time recall tuning -> `WITH { hnsw_ef: ... }`
 - filtered recall concern -> `WITH { acorn: true }`
-- right docs, wrong order -> `RERANK`
-- broader retrieval plus better ordering -> `USING HYBRID RERANK`
-- recommend, MMR, feedback, score boosting -> outside current QQL
+- right docs, wrong order -> `RERANK` (cloud only)
+- broader retrieval plus better ordering -> `USING HYBRID RERANK` (cloud only)
+- find similar items by example IDs -> `RECOMMEND`
+- batch ingest -> `INSERT BULK`
+- script round-trip -> `qql-go execute` / `qql-go dump`
+- MMR, feedback, score boosting, discovery -> outside current QQL

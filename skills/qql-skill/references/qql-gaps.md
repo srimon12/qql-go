@@ -4,21 +4,19 @@ Use this file when a request sounds reasonable in Qdrant terms but is still outs
 
 ## Not Supported Yet
 
-- self-hosted/local text inference pipeline for `INSERT` and `SEARCH ... SIMILAR TO ...`
-- self-hosted/local dense+sparse generation for `USING HYBRID` without cloud inference
-- recommend API
+- local/external rerank (`RERANK` is cloud-only)
 - discovery API
 - MMR or diversity controls
 - score boosting
 - relevance feedback
 - multi-stage retrieval beyond the built-in hybrid and rerank paths
 - select by id
-- update or upsert by explicit id
-- batch insert
+- update or upsert by explicit id (you can `INSERT` with explicit `id` to overwrite)
 - scroll or pagination
-- collection diagnostics
+- collection diagnostics beyond `doctor`
 - collection-level HNSW or quantization config
 - on-disk vector or payload toggles
+- `CREATE COLLECTION` with custom vector sizes or distance metrics
 
 ## What To Say
 
@@ -33,9 +31,12 @@ Prefer plain language:
 - Need exact baseline: use `EXACT`
 - Need recall tuning: use `WITH { hnsw_ef: ... }`
 - Need keyword plus semantic retrieval: use `USING HYBRID`
-- Need better ordering: use `RERANK`
+- Need better ordering: use `RERANK` (cloud only)
 - Need filtering: create an index first, then use `WHERE`
-- Need a runnable prototype: stay inside `CREATE`, `CREATE INDEX`, `INSERT`, `SEARCH`, `DELETE`
+- Need a runnable prototype: stay inside `CREATE`, `CREATE INDEX`, `INSERT`, `SEARCH`, `DELETE`, `RECOMMEND`
+- Need batch insert: use `INSERT BULK`
+- Need script round-trip: use `qql-go execute` and `qql-go dump`
+- Need local inference without cloud: use `qql-go connect --inference-mode local`
 
 ## Reminder
 
