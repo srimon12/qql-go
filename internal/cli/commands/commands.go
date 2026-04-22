@@ -288,8 +288,30 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		if n.Strategy != nil && *n.Strategy != "" {
 			plan.WriteString(fmt.Sprintf("Strategy: %s\n", *n.Strategy))
 		}
+		if n.LookupFrom != "" {
+			plan.WriteString(fmt.Sprintf("Lookup from: %s", n.LookupFrom))
+			if n.LookupVector != nil && *n.LookupVector != "" {
+				plan.WriteString(fmt.Sprintf(" (vector: %s)", *n.LookupVector))
+			}
+			plan.WriteString("\n")
+		}
+		if n.Using != nil && *n.Using != "" {
+			plan.WriteString(fmt.Sprintf("Using vector: %s\n", *n.Using))
+		}
+		if n.Offset > 0 {
+			plan.WriteString(fmt.Sprintf("Offset: %d\n", n.Offset))
+		}
+		if n.ScoreThreshold != nil {
+			plan.WriteString(fmt.Sprintf("Score threshold: %.4f\n", *n.ScoreThreshold))
+		}
 		if n.QueryFilter != nil {
 			plan.WriteString(fmt.Sprintf("Filter: %s\n", e.filterToString(n.QueryFilter)))
+		}
+		if n.WithClause != nil && n.WithClause.Exact {
+			plan.WriteString("Search params: EXACT (bypass HNSW)\n")
+		}
+		if n.WithClause != nil && n.WithClause.HnswEf > 0 {
+			plan.WriteString(fmt.Sprintf("Search params: hnsw_ef=%d\n", n.WithClause.HnswEf))
 		}
 		plan.WriteString("Action: Recommend points by example IDs\n")
 	case *ast.DeleteStmt:
@@ -651,17 +673,7 @@ func (e *Executor) doSearch(n *ast.SearchStmt) (*ExecResponse, error) {
 	}, nil
 }
 
-func (e *Executor) doRecommend(n *ast.RecommendStmt) (*ExecResponse, error) {
-	ctx := context.Background()
-
-	exists, err := e.client.CollectionExists(ctx, n.Collection)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check collection: %w", err)
-	}
-	if !exists {
-		return nil, fmt.Errorf("collection '%s' does not exist", n.Collection)
-	}
-
+func buildRecommendRequest(n *ast.RecommendStmt) (*qdrant.QueryPoints, error) {
 	query := qdrant.NewQueryRecommend(&qdrant.RecommendInput{
 		Positive: buildRecommendVectorInputs(n.PositiveIDs),
 		Negative: buildRecommendVectorInputs(n.NegativeIDs),
@@ -678,11 +690,31 @@ func (e *Executor) doRecommend(n *ast.RecommendStmt) (*ExecResponse, error) {
 		})
 	}
 
+	using := denseVectorName
+	if n.Using != nil && *n.Using != "" {
+		using = *n.Using
+	}
+
 	req := &qdrant.QueryPoints{
 		CollectionName: n.Collection,
 		Query:          query,
 		Limit:          qdrant.PtrOf(uint64(n.Limit)),
-		Using:          qdrant.PtrOf(denseVectorName),
+		Using:          qdrant.PtrOf(using),
+		Params:         searchParamsFromWithClause(n.WithClause),
+	}
+	if n.Offset > 0 {
+		req.Offset = qdrant.PtrOf(uint64(n.Offset))
+	}
+	if n.ScoreThreshold != nil {
+		req.ScoreThreshold = qdrant.PtrOf(float32(*n.ScoreThreshold))
+	}
+	if n.LookupFrom != "" {
+		req.LookupFrom = &qdrant.LookupLocation{
+			CollectionName: n.LookupFrom,
+		}
+		if n.LookupVector != nil && *n.LookupVector != "" {
+			req.LookupFrom.VectorName = n.LookupVector
+		}
 	}
 	if n.QueryFilter != nil {
 		filter, err := filters.NewFilterConverter().BuildFilter(n.QueryFilter)
@@ -692,6 +724,25 @@ func (e *Executor) doRecommend(n *ast.RecommendStmt) (*ExecResponse, error) {
 		req.Filter = addExcludedIDsToFilter(filter, append(append([]interface{}{}, n.PositiveIDs...), n.NegativeIDs...))
 	} else {
 		req.Filter = addExcludedIDsToFilter(nil, append(append([]interface{}{}, n.PositiveIDs...), n.NegativeIDs...))
+	}
+
+	return req, nil
+}
+
+func (e *Executor) doRecommend(n *ast.RecommendStmt) (*ExecResponse, error) {
+	ctx := context.Background()
+
+	exists, err := e.client.CollectionExists(ctx, n.Collection)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check collection: %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("collection '%s' does not exist", n.Collection)
+	}
+
+	req, err := buildRecommendRequest(n)
+	if err != nil {
+		return nil, err
 	}
 
 	results, err := e.client.Query(ctx, req)

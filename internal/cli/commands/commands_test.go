@@ -789,6 +789,101 @@ func TestBuildSearchRequestHybridLocalModePropagatesError(t *testing.T) {
 	require.Contains(t, err.Error(), "failed to embed search query")
 }
 
+func TestBuildRecommendRequestDefaults(t *testing.T) {
+	req, err := buildRecommendRequest(&ast.RecommendStmt{
+		Collection:  "docs",
+		PositiveIDs: []interface{}{"a"},
+		Limit:       5,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "docs", req.GetCollectionName())
+	require.Equal(t, uint64(5), req.GetLimit())
+	require.Equal(t, denseVectorName, req.GetUsing())
+	require.Zero(t, req.GetOffset())
+	require.Zero(t, req.GetScoreThreshold())
+	require.Nil(t, req.GetLookupFrom())
+	require.Nil(t, req.GetParams())
+	require.NotNil(t, req.GetQuery().GetRecommend())
+}
+
+func TestBuildRecommendRequestWithAllNewFields(t *testing.T) {
+	req, err := buildRecommendRequest(&ast.RecommendStmt{
+		Collection:     "docs",
+		PositiveIDs:    []interface{}{"a", "b"},
+		NegativeIDs:    []interface{}{"c"},
+		Limit:          5,
+		Strategy:       strPtr("best_score"),
+		Offset:         2,
+		ScoreThreshold: float64Ptr(0.25),
+		WithClause: &ast.SearchWith{
+			Exact:  true,
+			HnswEf: 128,
+		},
+		LookupFrom:   "src",
+		LookupVector: strPtr("dense"),
+		Using:        strPtr("sparse"),
+	})
+	require.NoError(t, err)
+	require.Equal(t, "docs", req.GetCollectionName())
+	require.Equal(t, uint64(5), req.GetLimit())
+	require.Equal(t, uint64(2), req.GetOffset())
+	require.Equal(t, "sparse", req.GetUsing())
+	require.InDelta(t, float32(0.25), req.GetScoreThreshold(), 0.0001)
+	require.NotNil(t, req.GetParams())
+	require.True(t, req.GetParams().GetExact())
+	require.Equal(t, uint64(128), req.GetParams().GetHnswEf())
+	require.NotNil(t, req.GetLookupFrom())
+	require.Equal(t, "src", req.GetLookupFrom().GetCollectionName())
+	require.Equal(t, "dense", req.GetLookupFrom().GetVectorName())
+	require.NotNil(t, req.GetQuery().GetRecommend())
+	require.Equal(t, qdrant.RecommendStrategy_BestScore, req.GetQuery().GetRecommend().GetStrategy())
+}
+
+func TestBuildRecommendRequestWithLookupFromNoVector(t *testing.T) {
+	req, err := buildRecommendRequest(&ast.RecommendStmt{
+		Collection:  "docs",
+		PositiveIDs: []interface{}{"a"},
+		Limit:       5,
+		LookupFrom:  "src",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, req.GetLookupFrom())
+	require.Equal(t, "src", req.GetLookupFrom().GetCollectionName())
+	require.Empty(t, req.GetLookupFrom().GetVectorName())
+}
+
+func TestBuildRecommendRequestUnknownStrategy(t *testing.T) {
+	_, err := buildRecommendRequest(&ast.RecommendStmt{
+		Collection:  "docs",
+		PositiveIDs: []interface{}{"a"},
+		Limit:       5,
+		Strategy:    strPtr("bad_strategy"),
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unknown recommend strategy")
+}
+
+func TestBuildRecommendRequestFilterExcludesIDs(t *testing.T) {
+	req, err := buildRecommendRequest(&ast.RecommendStmt{
+		Collection:  "docs",
+		PositiveIDs: []interface{}{"a"},
+		NegativeIDs: []interface{}{"b"},
+		Limit:       5,
+		QueryFilter: &ast.CompareExpr{Field: "status", Op: "=", Value: "active"},
+	})
+	require.NoError(t, err)
+	filter := req.GetFilter()
+	require.NotNil(t, filter)
+	require.Len(t, filter.GetMust(), 1)
+	require.Len(t, filter.GetMustNot(), 1)
+	require.Equal(t, "active", filter.GetMust()[0].GetField().GetMatch().GetKeyword())
+	require.Len(t, filter.GetMustNot()[0].GetHasId().GetHasId(), 2)
+}
+
+func float64Ptr(f float64) *float64 {
+	return &f
+}
+
 func newEmbeddingServer(t *testing.T, embedding []float32) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
