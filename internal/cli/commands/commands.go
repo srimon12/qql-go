@@ -444,6 +444,7 @@ func (e *Executor) doDropCollection(n *ast.DropCollectionStmt) (*ExecResponse, e
 	if err := e.client.DeleteCollection(ctx, n.Collection); err != nil {
 		return nil, fmt.Errorf("failed to drop collection: %w", err)
 	}
+	e.deleteCorpusStats(n.Collection)
 	return &ExecResponse{
 		OK:        true,
 		Operation: "drop_collection",
@@ -1142,12 +1143,38 @@ func (e *Executor) saveCorpusStats(collection string, stats *sparse.CorpusStats)
 	_ = stats.Save(path)
 }
 
+func (e *Executor) deleteCorpusStats(collection string) {
+	path := e.corpusStatsPath(collection)
+	if path == "" {
+		return
+	}
+	_ = os.Remove(path)
+}
+
 func (e *Executor) resolveDenseVectorSize(ctx context.Context, model *string) (int, error) {
 	if e.usesLocalEmbeddings() {
-		if e == nil || e.config == nil || e.config.EmbeddingDimension <= 0 {
-			return 0, fmt.Errorf("embedding_dimension must be configured for %s inference mode", e.inferenceMode())
+		if e.config != nil && e.config.EmbeddingDimension > 0 {
+			return e.config.EmbeddingDimension, nil
 		}
-		return e.config.EmbeddingDimension, nil
+		// Auto-probe dimension from embedding endpoint when not configured
+		if e.config != nil && e.config.EmbeddingEndpoint != "" && e.config.EmbeddingModel != "" {
+			probeClient, err := embedding.NewClient(embedding.Config{
+				Endpoint:   e.config.EmbeddingEndpoint,
+				Model:      e.config.EmbeddingModel,
+				APIKey:     e.config.EmbeddingAPIKey,
+				Dimension:  1, // ignored by ProbeDimension
+				HTTPClient: nil,
+			})
+			if err != nil {
+				return 0, fmt.Errorf("failed to create probe client: %w", err)
+			}
+			dim, err := probeClient.ProbeDimension(ctx, "probe")
+			if err != nil {
+				return 0, fmt.Errorf("failed to probe embedding dimension (set --embedding-dimension or ensure endpoint is reachable): %w", err)
+			}
+			return dim, nil
+		}
+		return 0, fmt.Errorf("embedding_dimension must be configured for %s inference mode", e.inferenceMode())
 	}
 	if e != nil && e.config != nil && e.config.EmbeddingDimension > 0 {
 		return e.config.EmbeddingDimension, nil
@@ -1576,33 +1603,77 @@ func NewConnectCmd(out *output.Outputter) *cobra.Command {
 			if inferenceMode == "" {
 				inferenceMode = defaultInferenceMode
 			}
-			if (inferenceMode == "local" || inferenceMode == "external") && (embeddingEndpoint == "" || embeddingModel == "" || embeddingDimension <= 0) {
-				return commandError(out, mode, "connect", "", fmt.Errorf("--embedding-endpoint, --embedding-model, and --embedding-dimension are required for %s mode", inferenceMode))
-			}
+		if (inferenceMode == "local" || inferenceMode == "external") && (embeddingEndpoint == "" || embeddingModel == "") {
+			return commandError(out, mode, "connect", "", fmt.Errorf("--embedding-endpoint and --embedding-model are required for %s mode", inferenceMode))
+		}
 
+		// Auto-probe embedding dimension if not provided
+		if (inferenceMode == "local" || inferenceMode == "external") && embeddingDimension <= 0 && embeddingEndpoint != "" && embeddingModel != "" {
 			if !mode.json && !mode.quiet {
-				out.Print(fmt.Sprintf("Connecting to %s...", url))
+				out.Print("Probing embedding dimension from endpoint...")
 			}
+			probeClient, probeErr := embedding.NewClient(embedding.Config{
+				Endpoint:  embeddingEndpoint,
+				Model:     embeddingModel,
+				APIKey:    embeddingKey,
+				Dimension: 1,
+			})
+			if probeErr == nil {
+				dim, probeErr := probeClient.ProbeDimension(context.Background(), "probe")
+				if probeErr == nil {
+					embeddingDimension = dim
+					if !mode.json && !mode.quiet {
+						out.Print(fmt.Sprintf("Auto-detected embedding dimension: %d", dim))
+					}
+				}
+			}
+			if probeErr != nil && !mode.json && !mode.quiet {
+				out.Print(fmt.Sprintf("Warning: could not probe embedding dimension: %v", probeErr))
+			}
+		}
+		if (inferenceMode == "local" || inferenceMode == "external") && embeddingDimension <= 0 {
+			return commandError(out, mode, "connect", "", fmt.Errorf("--embedding-dimension is required (or endpoint must be reachable for auto-probe) for %s mode", inferenceMode))
+		}
 
-			client, err := newClientFromURL(url, secret)
-			if err != nil {
-				return commandError(out, mode, "connect", "", fmt.Errorf("connection failed: %w", err))
-			}
+		if !mode.json && !mode.quiet {
+			out.Print(fmt.Sprintf("Connecting to %s...", url))
+		}
 
-			collections, err := client.ListCollections(context.Background())
-			if err != nil {
-				return commandError(out, mode, "connect", "", fmt.Errorf("connection failed: %w", err))
-			}
+		client, err := newClientFromURL(url, secret)
+		if err != nil {
+			return commandError(out, mode, "connect", "", fmt.Errorf("connection failed: %w", err))
+		}
 
-			cfg := &config.Config{
-				URL:                url,
-				Secret:             secret,
-				InferenceMode:      inferenceMode,
-				EmbeddingEndpoint:  embeddingEndpoint,
-				EmbeddingAPIKey:    embeddingKey,
-				EmbeddingModel:     embeddingModel,
-				EmbeddingDimension: embeddingDimension,
+		collections, err := client.ListCollections(context.Background())
+		if err != nil {
+			return commandError(out, mode, "connect", "", fmt.Errorf("connection failed: %w", err))
+		}
+
+		cfg := &config.Config{
+			URL:                url,
+			Secret:             secret,
+			InferenceMode:      inferenceMode,
+			EmbeddingEndpoint:  embeddingEndpoint,
+			EmbeddingAPIKey:    embeddingKey,
+			EmbeddingModel:     embeddingModel,
+			EmbeddingDimension: embeddingDimension,
+		}
+
+		// Validate embedding endpoint is reachable in local/external mode
+		if (inferenceMode == "local" || inferenceMode == "external") && embeddingEndpoint != "" {
+			testClient, testErr := embedding.NewClient(embedding.Config{
+				Endpoint:  embeddingEndpoint,
+				Model:     embeddingModel,
+				APIKey:    embeddingKey,
+				Dimension: embeddingDimension,
+			})
+			if testErr == nil {
+				_, testErr = testClient.Embed(context.Background(), "test")
 			}
+			if testErr != nil && !mode.json && !mode.quiet {
+				out.Print(fmt.Sprintf("Warning: embedding endpoint test failed: %v", testErr))
+			}
+		}
 
 			if err := config.SaveConfig(cfg); err != nil {
 				return commandError(out, mode, "connect", "", fmt.Errorf("failed to save config: %w", err))
