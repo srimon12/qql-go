@@ -9,8 +9,39 @@ permissions:
   contents: write
 
 jobs:
+  verify-version-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify version sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          file_version="$(cat VERSION | tr -d '[:space:]')"
+          cmd_version="$(grep -oP 'var Version = "\K[^"]+' internal/cli/commands/commands.go)"
+
+          echo "Tag:       v${tag_version}"
+          echo "VERSION:   ${file_version}"
+          echo "commands.go: ${cmd_version}"
+
+          if [ "${tag_version}" != "${file_version}" ]; then
+            echo "::error::VERSION file (${file_version}) does not match tag (v${tag_version})"
+            exit 1
+          fi
+
+          if [ "${tag_version}" != "${cmd_version}" ]; then
+            echo "::error::commands.go Version (${cmd_version}) does not match tag (v${tag_version})"
+            exit 1
+          fi
+
+          echo "Version sync OK"
+
   build-assets:
     runs-on: ubuntu-latest
+    needs: verify-version-sync
     strategy:
       fail-fast: false
       matrix:
@@ -82,9 +113,57 @@ jobs:
           name: ${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/*
 
-  publish-release:
+  verify-binaries:
     runs-on: ubuntu-latest
     needs: build-assets
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Verify binary versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+
+          for archive in dist/*.tar.gz dist/*.zip; do
+            [ -f "$archive" ] || continue
+            echo "Verifying $(basename "$archive")..."
+
+            tmpdir=$(mktemp -d)
+            if [[ "$archive" == *.zip ]]; then
+              unzip -q "$archive" -d "$tmpdir"
+            else
+              tar -xzf "$archive" -C "$tmpdir"
+            fi
+
+            binary=$(find "$tmpdir" -type f -name "qql-go*" | head -1)
+            if [ -z "$binary" ]; then
+              echo "::error::No binary found in $(basename "$archive")"
+              exit 1
+            fi
+
+            chmod +x "$binary"
+            output=$("$binary" --version 2>&1 || "$binary" version 2>&1)
+
+            if echo "$output" | grep -q "$version"; then
+              echo "  OK: $output"
+            else
+              echo "::error::Version mismatch in $(basename "$archive"): expected $version, got $output"
+              exit 1
+            fi
+
+            rm -rf "$tmpdir"
+          done
+
+          echo "All binary versions verified"
+
+  publish-release:
+    runs-on: ubuntu-latest
+    needs: verify-binaries
 
     steps:
       - name: Check out repository

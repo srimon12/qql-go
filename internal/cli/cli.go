@@ -23,6 +23,7 @@ func NewRootCmd(out *output.Outputter) *cobra.Command {
 		Use:           "qql-go",
 		Short:         "QQL — Qdrant Query Language CLI",
 		Long:          `QQL is a query language CLI for Qdrant vector database.`,
+		Version:       commands.Version,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
