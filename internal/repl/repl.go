@@ -20,6 +20,8 @@ const Prompt = "\033[32m\033[1mqql>\033[0m "
 type QueryExecutor interface {
 	Execute(query string) (string, error)
 	Explain(query string) (string, error)
+	ExecuteFile(path string, stopOnError bool) (string, error)
+	DumpCollection(collection, outputPath string) (string, error)
 }
 
 type REPL struct {
@@ -166,6 +168,40 @@ func (r *REPL) handleCommand(cmd string) error {
 		return nil
 	}
 
+	if query, ok := cutCommandPrefix(cmd, "execute"); ok {
+		result, err := r.executor.ExecuteFile(query, false)
+		if err != nil {
+			return fmt.Errorf("execute error: %w", err)
+		}
+		r.outputter.PrintSuccess(result)
+		return nil
+	}
+
+	if query, ok := cutCommandPrefix(cmd, "\\e"); ok {
+		result, err := r.executor.ExecuteFile(query, false)
+		if err != nil {
+			return fmt.Errorf("execute error: %w", err)
+		}
+		r.outputter.PrintSuccess(result)
+		return nil
+	}
+
+	if dumpArgs, ok := cutCommandPrefix(cmd, "dump"); ok {
+		parts := strings.Fields(dumpArgs)
+		if len(parts) == 3 && strings.EqualFold(parts[0], "collection") {
+			parts = parts[1:]
+		}
+		if len(parts) != 2 {
+			return fmt.Errorf("dump error: usage DUMP [COLLECTION] <name> <output.qql>")
+		}
+		result, err := r.executor.DumpCollection(parts[0], parts[1])
+		if err != nil {
+			return fmt.Errorf("dump error: %w", err)
+		}
+		r.outputter.PrintSuccess(result)
+		return nil
+	}
+
 	result, err := r.executor.Execute(cmd)
 	if err != nil {
 		return fmt.Errorf("execution error: %w", err)
@@ -209,6 +245,9 @@ func (r *REPL) printHelp() {
 
   \033[36mhelp\033[0m, \033[36m?\033[0m           Show this help
   \033[36mexplain <query>\033[0m  Show query plan without executing
+  \033[36mexecute <file>\033[0m  Run a .qql script file
+  \033[36m\e <file>\033[0m        Shortcut for execute
+  \033[36mdump <name> <file>\033[0m  Dump a collection to a .qql script file
   \033[36mexit\033[0m, \033[36mquit\033[0m      Exit the shell
 
 \033[1mKeyboard Shortcuts:\033[0m
