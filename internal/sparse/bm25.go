@@ -74,6 +74,8 @@ func (cs *CorpusStats) Save(path string) error {
 }
 
 // LoadCorpusStats reads stats from a JSON file.
+// If the file is missing, returns empty stats. If the file is corrupt
+// or contains invalid data, returns empty stats and the error.
 func LoadCorpusStats(path string) (*CorpusStats, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -84,10 +86,13 @@ func LoadCorpusStats(path string) (*CorpusStats, error) {
 	}
 	var cs CorpusStats
 	if err := json.Unmarshal(data, &cs); err != nil {
-		return nil, fmt.Errorf("failed to decode corpus stats: %w", err)
+		return NewCorpusStats(), fmt.Errorf("corpus stats corrupt, will rebuild: %w", err)
 	}
 	if cs.DF == nil {
 		cs.DF = make(map[string]int)
+	}
+	if cs.N < 0 || cs.AvgDL < 0 {
+		return NewCorpusStats(), fmt.Errorf("corpus stats contain invalid values, will rebuild")
 	}
 	return &cs, nil
 }
