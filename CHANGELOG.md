@@ -17,6 +17,11 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 - **BM25 sparse vector generation** — client-side sparse vectors with Rust-compatible tokenization, length-prefixed FNV hashing, and corpus-level BM25 weighting. Stats are persisted in `~/.qql/corpus/<collection>.json`.
 - **Auto-probing embedding dimension** — `--embedding-dimension` is now optional for local/external mode; the CLI probes the endpoint automatically.
 - **`RECOMMEND`** — recommend similar points by positive (and optional negative) example IDs with configurable strategy (`average_vector`, `best_score`, `sum_scores`).
+- **`RECOMMEND ... OFFSET <n>`** — pagination for recommendation queries.
+- **`RECOMMEND ... SCORE THRESHOLD <f>`** — minimum score filter for recommendations.
+- **`RECOMMEND ... WITH { exact: true, hnsw_ef: <n> }`** — query-time search params for recommend (exact KNN, HNSW tuning).
+- **`RECOMMEND ... LOOKUP FROM <collection> [VECTOR '<name>']`** — cross-collection recommendation, looking up example IDs from a different collection.
+- **`RECOMMEND ... USING '<vector_name>'`** — target a specific named vector (e.g., `sparse`) in the target collection for recommendation.
 - **`INSERT BULK`** — batch insert multiple documents in a single statement.
 - **Explicit insert IDs** — `INSERT` and `INSERT BULK` accept explicit `id` fields (unsigned int or UUID string).
 - **`USING SPARSE`** — sparse-only keyword search without dense vectors.
