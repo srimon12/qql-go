@@ -24,6 +24,14 @@ func TestTokenizeKeywords(t *testing.T) {
 			},
 		},
 		{
+			name:  "BULK",
+			input: "BULK",
+			expected: []Token{
+				{Kind: TokenKindBulk, Value: "BULK", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 4},
+			},
+		},
+		{
 			name:  "INTO",
 			input: "INTO",
 			expected: []Token{
@@ -160,6 +168,14 @@ func TestTokenizeKeywords(t *testing.T) {
 			},
 		},
 		{
+			name:  "RECOMMEND",
+			input: "RECOMMEND",
+			expected: []Token{
+				{Kind: TokenKindRecommend, Value: "RECOMMEND", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 9},
+			},
+		},
+		{
 			name:  "SIMILAR",
 			input: "SIMILAR",
 			expected: []Token{
@@ -181,6 +197,38 @@ func TestTokenizeKeywords(t *testing.T) {
 			expected: []Token{
 				{Kind: TokenKindLimit, Value: "LIMIT", Pos: 0},
 				{Kind: TokenKindEof, Value: "", Pos: 5},
+			},
+		},
+		{
+			name:  "POSITIVE",
+			input: "POSITIVE",
+			expected: []Token{
+				{Kind: TokenKindPositive, Value: "POSITIVE", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 8},
+			},
+		},
+		{
+			name:  "NEGATIVE",
+			input: "NEGATIVE",
+			expected: []Token{
+				{Kind: TokenKindNegative, Value: "NEGATIVE", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 8},
+			},
+		},
+		{
+			name:  "IDS",
+			input: "IDS",
+			expected: []Token{
+				{Kind: TokenKindIds, Value: "IDS", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 3},
+			},
+		},
+		{
+			name:  "STRATEGY",
+			input: "STRATEGY",
+			expected: []Token{
+				{Kind: TokenKindStrategy, Value: "STRATEGY", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 8},
 			},
 		},
 		{

@@ -34,6 +34,15 @@ func TestParseInsert(t *testing.T) {
 			},
 		},
 		{
+			name:  "insert with explicit id",
+			input: `INSERT INTO COLLECTION test VALUES {id: 'point-123', text: 'hello'}`,
+			want: &ast.InsertStmt{
+				Collection: "test",
+				PointID:    "point-123",
+				Values:     map[string]interface{}{"text": "hello"},
+			},
+		},
+		{
 			name:  "insert with model",
 			input: `INSERT INTO COLLECTION test VALUES {"text": "hello"} USING MODEL 'model-name'`,
 			want: &ast.InsertStmt{
@@ -92,6 +101,7 @@ func TestParseInsert(t *testing.T) {
 			require.True(t, ok, "expected InsertStmt")
 			assert.Equal(t, tt.want.Collection, stmt.Collection)
 			assert.Equal(t, tt.want.Values, stmt.Values)
+			assert.Equal(t, tt.want.PointID, stmt.PointID)
 			assert.Equal(t, tt.want.Hybrid, stmt.Hybrid)
 			if tt.want.Model != nil {
 				assert.Equal(t, *tt.want.Model, *stmt.Model)
@@ -124,6 +134,14 @@ func TestParseCreate(t *testing.T) {
 				Hybrid:     true,
 			},
 		},
+		{
+			name:  "create with model",
+			input: "CREATE COLLECTION mycollection USING MODEL 'dense-model'",
+			want: &ast.CreateCollectionStmt{
+				Collection: "mycollection",
+				Model:      strPtr("dense-model"),
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -140,6 +158,68 @@ func TestParseCreate(t *testing.T) {
 			require.True(t, ok, "expected CreateCollectionStmt")
 			assert.Equal(t, tt.want.Collection, stmt.Collection)
 			assert.Equal(t, tt.want.Hybrid, stmt.Hybrid)
+			if tt.want.Model != nil {
+				assert.Equal(t, *tt.want.Model, *stmt.Model)
+			}
+		})
+	}
+}
+
+func TestParseInsertBulk(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  *ast.InsertBulkStmt
+	}{
+		{
+			name:  "simple bulk insert",
+			input: `INSERT BULK INTO COLLECTION test VALUES [{"text": "hello"}, {"text": "world"}]`,
+			want: &ast.InsertBulkStmt{
+				Collection: "test",
+				ValuesList: []map[string]interface{}{
+					{"text": "hello"},
+					{"text": "world"},
+				},
+			},
+		},
+		{
+			name:  "bulk insert with hybrid models",
+			input: `INSERT BULK INTO COLLECTION test VALUES [{"text": "hello"}] USING HYBRID DENSE MODEL 'dense-model' SPARSE MODEL 'sparse-model'`,
+			want: &ast.InsertBulkStmt{
+				Collection: "test",
+				ValuesList: []map[string]interface{}{
+					{"text": "hello"},
+				},
+				Hybrid:      true,
+				Model:       strPtr("dense-model"),
+				SparseModel: strPtr("sparse-model"),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.input)
+			require.NoError(t, err)
+
+			p := NewParser()
+			node, err := p.Parse(tokens)
+			require.NoError(t, err)
+
+			stmt, ok := node.(*ast.InsertBulkStmt)
+			require.True(t, ok, "expected InsertBulkStmt")
+			assert.Equal(t, tt.want.Collection, stmt.Collection)
+			assert.Equal(t, tt.want.ValuesList, stmt.ValuesList)
+			assert.Equal(t, tt.want.Hybrid, stmt.Hybrid)
+			if tt.want.Model != nil {
+				require.NotNil(t, stmt.Model)
+				assert.Equal(t, *tt.want.Model, *stmt.Model)
+			}
+			if tt.want.SparseModel != nil {
+				require.NotNil(t, stmt.SparseModel)
+				assert.Equal(t, *tt.want.SparseModel, *stmt.SparseModel)
+			}
 		})
 	}
 }
@@ -327,6 +407,27 @@ func TestParseSearch(t *testing.T) {
 			},
 		},
 		{
+			name:  "search with sparse",
+			input: "SEARCH mycollection SIMILAR TO 'query text' LIMIT 10 USING SPARSE",
+			want: &ast.SearchStmt{
+				Collection: "mycollection",
+				QueryText:  "query text",
+				Limit:      10,
+				SparseOnly: true,
+			},
+		},
+		{
+			name:  "search with sparse model",
+			input: "SEARCH mycollection SIMILAR TO 'query text' LIMIT 10 USING SPARSE MODEL 'sparse-model'",
+			want: &ast.SearchStmt{
+				Collection:  "mycollection",
+				QueryText:   "query text",
+				Limit:       10,
+				SparseOnly:  true,
+				SparseModel: strPtr("sparse-model"),
+			},
+		},
+		{
 			name:  "search with hybrid",
 			input: "SEARCH mycollection SIMILAR TO 'query text' LIMIT 10 USING HYBRID",
 			want: &ast.SearchStmt{
@@ -425,6 +526,7 @@ func TestParseSearch(t *testing.T) {
 			assert.Equal(t, tt.want.QueryText, stmt.QueryText)
 			assert.Equal(t, tt.want.Limit, stmt.Limit)
 			assert.Equal(t, tt.want.Hybrid, stmt.Hybrid)
+			assert.Equal(t, tt.want.SparseOnly, stmt.SparseOnly)
 			if tt.want.Model != nil {
 				require.NotNil(t, stmt.Model)
 				assert.Equal(t, *tt.want.Model, *stmt.Model)
@@ -450,6 +552,28 @@ func TestParseSearch(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseRecommend(t *testing.T) {
+	input := "RECOMMEND FROM docs POSITIVE IDS ('seed-1', 'seed-2') NEGATIVE IDS ('seed-3') STRATEGY 'average' LIMIT 5 WHERE score > 0"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.RecommendStmt)
+	require.True(t, ok, "expected RecommendStmt")
+	assert.Equal(t, "docs", stmt.Collection)
+	assert.Equal(t, []interface{}{"seed-1", "seed-2"}, stmt.PositiveIDs)
+	assert.Equal(t, []interface{}{"seed-3"}, stmt.NegativeIDs)
+	assert.Equal(t, 5, stmt.Limit)
+	require.NotNil(t, stmt.Strategy)
+	assert.Equal(t, "average", *stmt.Strategy)
+	require.NotNil(t, stmt.QueryFilter)
+	assertFilterExprEqual(t, &ast.CompareExpr{Field: "score", Op: ">", Value: 0}, stmt.QueryFilter)
 }
 
 func TestParseDelete(t *testing.T) {

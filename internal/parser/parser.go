@@ -35,6 +35,8 @@ func (p *Parser) Parse(tokens []lexer.Token) (ast.ASTNode, error) {
 		node, err = p.parseShow()
 	case lexer.TokenKindSearch:
 		node, err = p.parseSearch()
+	case lexer.TokenKindRecommend:
+		node, err = p.parseRecommend()
 	case lexer.TokenKindDelete:
 		node, err = p.parseDelete()
 	default:
@@ -75,8 +77,12 @@ func (p *Parser) expect(kind lexer.TokenKind) (lexer.Token, error) {
 	return p.advance(), nil
 }
 
-func (p *Parser) parseInsert() (*ast.InsertStmt, error) {
+func (p *Parser) parseInsert() (ast.ASTNode, error) {
 	p.advance()
+	if p.peek().Kind == lexer.TokenKindBulk {
+		p.advance()
+		return p.parseInsertBulk()
+	}
 	if _, err := p.expect(lexer.TokenKindInto); err != nil {
 		return nil, err
 	}
@@ -94,13 +100,54 @@ func (p *Parser) parseInsert() (*ast.InsertStmt, error) {
 	if err != nil {
 		return nil, err
 	}
+	pointID, values := extractInsertPointID(values)
 	model, hybrid, sparseModel, err := p.parseEmbeddingOptions()
 	if err != nil {
 		return nil, err
 	}
 	return &ast.InsertStmt{
 		Collection:  collection,
+		PointID:     pointID,
 		Values:      values,
+		Model:       model,
+		Hybrid:      hybrid,
+		SparseModel: sparseModel,
+	}, nil
+}
+
+func (p *Parser) parseInsertBulk() (*ast.InsertBulkStmt, error) {
+	if _, err := p.expect(lexer.TokenKindInto); err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(lexer.TokenKindCollection); err != nil {
+		return nil, err
+	}
+	collection, err := p.parseIdentifier()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(lexer.TokenKindValues); err != nil {
+		return nil, err
+	}
+	rawItems, err := p.parseList()
+	if err != nil {
+		return nil, err
+	}
+	valuesList := make([]map[string]interface{}, 0, len(rawItems))
+	for idx, item := range rawItems {
+		dict, ok := item.(map[string]interface{})
+		if !ok {
+			return nil, errors.NewQQLSyntaxError("INSERT BULK VALUES item at index "+strconv.Itoa(idx)+" must be a dict", p.peek().Pos)
+		}
+		valuesList = append(valuesList, dict)
+	}
+	model, hybrid, sparseModel, err := p.parseEmbeddingOptions()
+	if err != nil {
+		return nil, err
+	}
+	return &ast.InsertBulkStmt{
+		Collection:  collection,
+		ValuesList:  valuesList,
 		Model:       model,
 		Hybrid:      hybrid,
 		SparseModel: sparseModel,
@@ -122,6 +169,7 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 	}
 	hybrid := false
 	rerank := false
+	var model *string
 	if p.peek().Kind == lexer.TokenKindHybrid {
 		p.advance()
 		hybrid = true
@@ -129,8 +177,28 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 			p.advance()
 			rerank = true
 		}
+	} else if p.peek().Kind == lexer.TokenKindUsing {
+		p.advance()
+		if p.peek().Kind == lexer.TokenKindHybrid {
+			p.advance()
+			hybrid = true
+			if p.peek().Kind == lexer.TokenKindDense {
+				p.advance()
+				var err error
+				model, err = p.parseRequiredModelString()
+				if err != nil {
+					return nil, err
+				}
+			}
+		} else {
+			var err error
+			model, err = p.parseRequiredModelString()
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
-	return &ast.CreateCollectionStmt{Collection: collection, Hybrid: hybrid, Rerank: rerank}, nil
+	return &ast.CreateCollectionStmt{Collection: collection, Hybrid: hybrid, Rerank: rerank, Model: model}, nil
 }
 
 func (p *Parser) parseCreateIndex() (*ast.CreateIndexStmt, error) {
@@ -217,7 +285,7 @@ func (p *Parser) parseSearch() (*ast.SearchStmt, error) {
 		return nil, err
 	}
 
-	model, hybrid, sparseModel, err := p.parseEmbeddingOptions()
+	model, hybrid, sparseOnly, sparseModel, err := p.parseSearchEmbeddingOptions()
 	if err != nil {
 		return nil, err
 	}
@@ -274,6 +342,7 @@ func (p *Parser) parseSearch() (*ast.SearchStmt, error) {
 				Limit:       limit,
 				Model:       model,
 				Hybrid:      hybrid,
+				SparseOnly:  sparseOnly,
 				SparseModel: sparseModel,
 				QueryFilter: queryFilter,
 				Rerank:      rerank,
@@ -282,6 +351,73 @@ func (p *Parser) parseSearch() (*ast.SearchStmt, error) {
 			}, nil
 		}
 	}
+}
+
+func (p *Parser) parseRecommend() (*ast.RecommendStmt, error) {
+	p.advance()
+	if _, err := p.expect(lexer.TokenKindFrom); err != nil {
+		return nil, err
+	}
+	collection, err := p.parseIdentifier()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(lexer.TokenKindPositive); err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(lexer.TokenKindIds); err != nil {
+		return nil, err
+	}
+	positiveIDs, err := p.parsePointIDList()
+	if err != nil {
+		return nil, err
+	}
+	var negativeIDs []interface{}
+	if p.peek().Kind == lexer.TokenKindNegative {
+		p.advance()
+		if _, err := p.expect(lexer.TokenKindIds); err != nil {
+			return nil, err
+		}
+		negativeIDs, err = p.parsePointIDList()
+		if err != nil {
+			return nil, err
+		}
+	}
+	var strategy *string
+	if p.peek().Kind == lexer.TokenKindStrategy {
+		p.advance()
+		strategy, err = p.parseStringPtr()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if _, err := p.expect(lexer.TokenKindLimit); err != nil {
+		return nil, err
+	}
+	limitTok, err := p.expect(lexer.TokenKindInteger)
+	if err != nil {
+		return nil, err
+	}
+	limit, err := parseIntToken(limitTok)
+	if err != nil {
+		return nil, err
+	}
+	var queryFilter ast.FilterExpr
+	if p.peek().Kind == lexer.TokenKindWhere {
+		p.advance()
+		queryFilter, err = p.parseFilterExpr()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &ast.RecommendStmt{
+		Collection:  collection,
+		PositiveIDs: positiveIDs,
+		NegativeIDs: negativeIDs,
+		Limit:       limit,
+		Strategy:    strategy,
+		QueryFilter: queryFilter,
+	}, nil
 }
 
 func (p *Parser) parseDelete() (*ast.DeleteStmt, error) {
@@ -575,6 +711,21 @@ func (p *Parser) parseLiteralList() ([]interface{}, error) {
 	return items, nil
 }
 
+func (p *Parser) parsePointIDList() ([]interface{}, error) {
+	values, err := p.parseLiteralList()
+	if err != nil {
+		return nil, err
+	}
+	for _, value := range values {
+		switch value.(type) {
+		case string, int:
+		default:
+			return nil, errors.NewQQLSyntaxError("Point ids must be strings or integers", p.peek().Pos)
+		}
+	}
+	return values, nil
+}
+
 func (p *Parser) parseIdentifier() (string, error) {
 	tok := p.peek()
 	if tok.Kind == lexer.TokenKindIdentifier || tok.Kind == lexer.TokenKindString {
@@ -595,7 +746,7 @@ func (p *Parser) parseDict() (map[string]interface{}, error) {
 	}
 	for {
 		keyTok := p.peek()
-		if keyTok.Kind != lexer.TokenKindString && keyTok.Kind != lexer.TokenKindIdentifier {
+		if keyTok.Kind != lexer.TokenKindString && keyTok.Kind != lexer.TokenKindIdentifier && keyTok.Kind != lexer.TokenKindId {
 			return nil, errors.NewQQLSyntaxError("Expected string key in dict, got '"+keyTok.Value+"'", keyTok.Pos)
 		}
 		p.advance()
@@ -621,6 +772,16 @@ func (p *Parser) parseDict() (map[string]interface{}, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+func extractInsertPointID(values map[string]interface{}) (interface{}, map[string]interface{}) {
+	for key, value := range values {
+		if toLower(key) == "id" {
+			delete(values, key)
+			return value, values
+		}
+	}
+	return nil, values
 }
 
 func (p *Parser) parseList() ([]interface{}, error) {
@@ -808,6 +969,54 @@ func (p *Parser) parseEmbeddingOptions() (*string, bool, *string, error) {
 	}
 
 	p.advance()
+	if p.peek().Kind != lexer.TokenKindHybrid {
+		model, err := p.parseRequiredModelString()
+		return model, false, nil, err
+	}
+
+	p.advance()
+	var model *string
+	var sparseModel *string
+	for p.peek().Kind == lexer.TokenKindDense || p.peek().Kind == lexer.TokenKindSparse {
+		mode := p.advance().Kind
+		currentModel, err := p.parseRequiredModelString()
+		if err != nil {
+			return nil, false, nil, err
+		}
+		if mode == lexer.TokenKindDense {
+			model = currentModel
+		} else {
+			sparseModel = currentModel
+		}
+	}
+
+	return model, true, sparseModel, nil
+}
+
+func (p *Parser) parseSearchEmbeddingOptions() (*string, bool, bool, *string, error) {
+	if p.peek().Kind != lexer.TokenKindUsing {
+		return nil, false, false, nil, nil
+	}
+
+	p.advance()
+	if p.peek().Kind == lexer.TokenKindSparse {
+		p.advance()
+		var sparseModel *string
+		var err error
+		if p.peek().Kind == lexer.TokenKindModel {
+			sparseModel, err = p.parseRequiredModelString()
+			if err != nil {
+				return nil, false, false, nil, err
+			}
+		}
+		return nil, false, true, sparseModel, nil
+	}
+
+	model, hybrid, sparseModel, err := p.parseEmbeddingOptionsAfterUsing()
+	return model, hybrid, false, sparseModel, err
+}
+
+func (p *Parser) parseEmbeddingOptionsAfterUsing() (*string, bool, *string, error) {
 	if p.peek().Kind != lexer.TokenKindHybrid {
 		model, err := p.parseRequiredModelString()
 		return model, false, nil, err

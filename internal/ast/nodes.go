@@ -2,7 +2,16 @@ package ast
 
 type InsertStmt struct {
 	Collection  string
+	PointID     interface{}
 	Values      map[string]interface{}
+	Model       *string
+	Hybrid      bool
+	SparseModel *string
+}
+
+type InsertBulkStmt struct {
+	Collection  string
+	ValuesList  []map[string]interface{}
 	Model       *string
 	Hybrid      bool
 	SparseModel *string
@@ -12,6 +21,7 @@ type CreateCollectionStmt struct {
 	Collection string
 	Hybrid     bool
 	Rerank     bool
+	Model      *string
 }
 
 type DropCollectionStmt struct {
@@ -27,11 +37,21 @@ type SearchStmt struct {
 	Limit       int
 	Model       *string
 	Hybrid      bool
+	SparseOnly  bool
 	SparseModel *string
 	QueryFilter FilterExpr
 	Rerank      bool
 	RerankModel *string
 	WithClause  *SearchWith
+}
+
+type RecommendStmt struct {
+	Collection  string
+	PositiveIDs []interface{}
+	NegativeIDs []interface{}
+	Limit       int
+	Strategy    *string
+	QueryFilter FilterExpr
 }
 
 type DeleteStmt struct {
@@ -52,9 +72,11 @@ type ASTNode interface {
 }
 
 func (InsertStmt) isASTNode()           {}
+func (InsertBulkStmt) isASTNode()       {}
 func (CreateCollectionStmt) isASTNode() {}
 func (DropCollectionStmt) isASTNode()   {}
 func (ShowCollectionsStmt) isASTNode()  {}
 func (SearchStmt) isASTNode()           {}
+func (RecommendStmt) isASTNode()        {}
 func (DeleteStmt) isASTNode()           {}
 func (CreateIndexStmt) isASTNode()      {}

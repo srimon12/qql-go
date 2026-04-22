@@ -6,6 +6,7 @@ import (
 
 var keywords = map[string]TokenKind{
 	"INSERT":      TokenKindInsert,
+	"BULK":        TokenKindBulk,
 	"INTO":        TokenKindInto,
 	"COLLECTION":  TokenKindCollection,
 	"VALUES":      TokenKindValues,
@@ -23,9 +24,14 @@ var keywords = map[string]TokenKind{
 	"SHOW":        TokenKindShow,
 	"COLLECTIONS": TokenKindCollections,
 	"SEARCH":      TokenKindSearch,
+	"RECOMMEND":   TokenKindRecommend,
 	"SIMILAR":     TokenKindSimilar,
 	"TO":          TokenKindTo,
 	"LIMIT":       TokenKindLimit,
+	"POSITIVE":    TokenKindPositive,
+	"NEGATIVE":    TokenKindNegative,
+	"IDS":         TokenKindIds,
+	"STRATEGY":    TokenKindStrategy,
 	"DELETE":      TokenKindDelete,
 	"FROM":        TokenKindFrom,
 	"WHERE":       TokenKindWhere,
