@@ -42,7 +42,7 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE MODEL '<model>'`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE MODEL '<model>'` (cloud only; local uses client-side BM25)
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WHERE <filter>`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef: <n> }`
@@ -80,11 +80,32 @@ All recommend clauses can be combined in order: `POSITIVE IDS`, `NEGATIVE IDS`, 
 ### Script execution
 
 - `qql-go execute <script.qql>` — execute a `.qql` script file
-- `qql-go execute --stop-on-error <script.qql>`
+- `qql-go execute --stop-on-error <script.qql>` — stop on first error
 
 ### Dump
 
 - `qql-go dump <collection> <output.qql>` — dump collection to a `.qql` script
+
+### Utility
+
+- `qql-go doctor` — check connection health and config
+- `qql-go connect --url <url> [--secret <secret>]` — connect to Qdrant
+- `qql-go disconnect` — disconnect and clear saved config
+- `qql-go version` — print version
+- `qql-go repl` — launch interactive shell
+
+### Script File Format
+
+Script files (`.qql`) use **newline-delimited statements WITHOUT semicolons**:
+
+```sql
+-- QQL script example
+CREATE COLLECTION my_collection
+CREATE INDEX ON COLLECTION my_collection FOR category TYPE keyword
+INSERT INTO COLLECTION my_collection VALUES {'text': 'hello world', 'category': 'greeting'}
+SEARCH my_collection SIMILAR TO 'hello' LIMIT 5
+DROP COLLECTION my_collection
+```
 
 ## CLI Output Modes
 
@@ -104,6 +125,11 @@ Structured JSON for automation:
 - `qql-go doctor --quiet --json` (compact JSON)
 - `qql-go connect --json --url <url> [--secret <secret>]`
 - `qql-go connect --quiet --json --url <url> [--secret <secret>]` (compact JSON)
+- `qql-go disconnect --quiet --json`
+- `qql-go version --quiet --json`
+- `qql-go execute --quiet --json <script.qql>`
+- `qql-go execute --stop-on-error --quiet --json <script.qql>`
+- `qql-go dump --quiet --json <collection> <output.qql>`
 
 Text-mode quiet behavior:
 

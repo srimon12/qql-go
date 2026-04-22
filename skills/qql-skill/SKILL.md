@@ -44,7 +44,7 @@ Supported syntax in this repo includes:
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE MODEL '<model>'`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE MODEL '<model>'` (cloud only)
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WHERE <filter>`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef, exact, acorn }`
@@ -62,7 +62,11 @@ Supported syntax in this repo includes:
 - `DELETE FROM <name> WHERE ...`
 - `qql-go explain <statement>`
 - `qql-go execute <script.qql>`
+- `qql-go execute --stop-on-error <script.qql>`
 - `qql-go dump <collection> <output.qql>`
+- `qql-go disconnect`
+- `qql-go version`
+- `qql-go repl` (interactive shell)
 
 ## Inference Modes
 
@@ -97,8 +101,24 @@ Use structured output:
 - `qql-go explain --quiet --json "<query>"`
 - `qql-go doctor --quiet --json`
 - `qql-go connect --quiet --json --url <url> [--secret <secret>]`
+- `qql-go disconnect --quiet --json`
+- `qql-go version --quiet --json`
 - `qql-go execute --quiet --json <script.qql>`
+- `qql-go execute --stop-on-error --quiet --json <script.qql>`
 - `qql-go dump --quiet --json <collection> <output.qql>`
+
+### Script File Format
+
+Script files (`.qql`) use **newline-delimited statements WITHOUT semicolons**:
+
+```sql
+-- Comment
+CREATE COLLECTION my_collection
+SHOW COLLECTIONS
+INSERT INTO COLLECTION my_collection VALUES {'text': 'hello'}
+SEARCH my_collection SIMILAR TO 'hello' LIMIT 5
+DROP COLLECTION my_collection
+```
 
 For human debugging, use the text path (`qql-go exec "..."`, `qql-go explain "..."`, `qql-go doctor`).
 

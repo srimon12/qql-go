@@ -210,11 +210,28 @@ qql-go exec --quiet --json "SHOW COLLECTIONS"
 qql-go explain --quiet --json "SEARCH docs SIMILAR TO 'vector db' LIMIT 5 USING HYBRID"
 qql-go doctor --quiet --json
 qql-go connect --quiet --json --url https://<cluster>.qdrant.io --secret <api-key>
+qql-go disconnect --quiet --json
+qql-go version --quiet --json
 qql-go execute --quiet --json script.qql
+qql-go execute --stop-on-error --quiet --json script.qql
 qql-go dump --quiet --json notes backup.qql
+qql-go repl
 ```
 
 Use these forms for scripts and agents so output is structured and compact.
+
+### Script File Format
+
+Script files (`.qql`) use **newline-delimited statements WITHOUT semicolons**:
+
+```sql
+-- QQL script example
+CREATE COLLECTION my_collection
+CREATE INDEX ON COLLECTION my_collection FOR category TYPE keyword
+INSERT INTO COLLECTION my_collection VALUES {'text': 'hello world', 'category': 'greeting'}
+SEARCH my_collection SIMILAR TO 'hello' LIMIT 5
+DROP COLLECTION my_collection
+```
 
 ## Self-hosted/local mode setup
 
@@ -250,4 +267,5 @@ SEARCH docs SIMILAR TO 'hello world' LIMIT 5 USING HYBRID
 - find similar items by example IDs -> `RECOMMEND`
 - batch ingest -> `INSERT BULK`
 - script round-trip -> `qql-go execute` / `qql-go dump`
+- interactive shell -> `qql-go repl`
 - MMR, feedback, score boosting, discovery -> outside current QQL
