@@ -146,14 +146,24 @@ jobs:
               exit 1
             fi
 
-            chmod +x "$binary"
-            output=$("$binary" --version 2>&1 || "$binary" version 2>&1)
-
-            if echo "$output" | grep -q "$version"; then
-              echo "  OK: $output"
+            # Only execute Linux binaries; verify others via strings
+            if [[ "$archive" == *"linux"* ]]; then
+              chmod +x "$binary"
+              output=$("$binary" --version 2>&1 || "$binary" version 2>&1)
+              if echo "$output" | grep -q "$version"; then
+                echo "  OK: $output"
+              else
+                echo "::error::Version mismatch in $(basename "$archive"): expected $version, got $output"
+                exit 1
+              fi
             else
-              echo "::error::Version mismatch in $(basename "$archive"): expected $version, got $output"
-              exit 1
+              # Cross-platform binary: verify version string is embedded
+              if strings "$binary" 2>/dev/null | grep -q "$version"; then
+                echo "  OK: version $version embedded in $(basename "$archive")"
+              else
+                echo "::error::Version string not found in $(basename "$archive")"
+                exit 1
+              fi
             fi
 
             rm -rf "$tmpdir"
