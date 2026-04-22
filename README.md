@@ -39,7 +39,7 @@ Install on Windows with PowerShell:
 irm https://raw.githubusercontent.com/srimon12/qql-go/main/install.ps1 | iex
 ```
 
-Build from source:
+## Build from source:
 
 ```bash
 go build -o qql-go ./cmd/qql-go
@@ -76,7 +76,7 @@ qql-go connect --url https://<your-cluster>.qdrant.io --secret <your-api-key>
 Or connect to a local/self-hosted Qdrant instance for non-inference operations:
 
 ```bash
-qql-go connect --url http://localhost:6333
+qql-go connect --url http://localhost:6334
 ```
 
 Run a simple query:
