@@ -4,15 +4,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/qdrant/go-client/qdrant"
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/config"
+	"github.com/srimon12/qql-go/internal/lexer"
 	"github.com/srimon12/qql-go/internal/output"
+	"github.com/srimon12/qql-go/internal/parser"
 	"github.com/stretchr/testify/require"
 )
 
@@ -170,6 +174,135 @@ func TestInsertPointIDAndPayloadExtractsIDFromValues(t *testing.T) {
 	require.Equal(t, map[string]interface{}{"text": "hello"}, payload)
 }
 
+func TestBuildQuantizationConfigScalar(t *testing.T) {
+	cfg := buildQuantizationConfig(&ast.QuantizationConfig{
+		Type:      ast.QuantizationTypeScalar,
+		Quantile:  float64Ptr(0.95),
+		AlwaysRAM: true,
+	})
+
+	require.NotNil(t, cfg)
+	scalar := cfg.GetScalar()
+	require.NotNil(t, scalar)
+	require.Equal(t, qdrant.QuantizationType_Int8, scalar.GetType())
+	require.InDelta(t, float32(0.95), scalar.GetQuantile(), 0.0001)
+	require.True(t, scalar.GetAlwaysRam())
+}
+
+func TestBuildQuantizationConfigBinary(t *testing.T) {
+	cfg := buildQuantizationConfig(&ast.QuantizationConfig{
+		Type:      ast.QuantizationTypeBinary,
+		AlwaysRAM: true,
+	})
+
+	require.NotNil(t, cfg)
+	binary := cfg.GetBinary()
+	require.NotNil(t, binary)
+	require.True(t, binary.GetAlwaysRam())
+}
+
+func TestBuildQuantizationConfigProduct(t *testing.T) {
+	cfg := buildQuantizationConfig(&ast.QuantizationConfig{
+		Type: ast.QuantizationTypeProduct,
+	})
+
+	require.NotNil(t, cfg)
+	product := cfg.GetProduct()
+	require.NotNil(t, product)
+	require.Equal(t, qdrant.CompressionRatio_x4, product.GetCompression())
+	require.False(t, product.GetAlwaysRam())
+}
+
+func TestCreateCollectionIncludesQuantizationConfig(t *testing.T) {
+	client := newFakeQdrantClient()
+	exec := NewExecutor(client, &config.Config{})
+
+	resp, err := exec.doCreateCollection(&ast.CreateCollectionStmt{
+		Collection: "docs",
+		Quantization: &ast.QuantizationConfig{
+			Type:      ast.QuantizationTypeScalar,
+			Quantile:  float64Ptr(0.99),
+			AlwaysRAM: true,
+		},
+	})
+	require.NoError(t, err)
+	require.True(t, resp.OK)
+	require.Len(t, client.createRequests, 1)
+	require.Contains(t, resp.Message, "scalar quantization")
+
+	quantization := client.createRequests[0].GetQuantizationConfig()
+	require.NotNil(t, quantization)
+	require.NotNil(t, quantization.GetScalar())
+	require.InDelta(t, float32(0.99), quantization.GetScalar().GetQuantile(), 0.0001)
+	require.True(t, quantization.GetScalar().GetAlwaysRam())
+}
+
+func TestCreateCollectionHybridRerankIncludesBinaryQuantizationConfig(t *testing.T) {
+	client := newFakeQdrantClient()
+	exec := NewExecutor(client, &config.Config{})
+
+	resp, err := exec.doCreateCollection(&ast.CreateCollectionStmt{
+		Collection: "docs",
+		Hybrid:     true,
+		Rerank:     true,
+		Quantization: &ast.QuantizationConfig{
+			Type:      ast.QuantizationTypeBinary,
+			AlwaysRAM: true,
+		},
+	})
+	require.NoError(t, err)
+	require.True(t, resp.OK)
+	require.Len(t, client.createRequests, 1)
+	require.NotNil(t, client.createRequests[0].GetSparseVectorsConfig())
+	require.NotNil(t, client.createRequests[0].GetQuantizationConfig().GetBinary())
+	require.True(t, client.createRequests[0].GetQuantizationConfig().GetBinary().GetAlwaysRam())
+}
+
+func TestInsertAutoCreatesMissingCollection(t *testing.T) {
+	client := newFakeQdrantClient()
+	exec := NewExecutor(client, &config.Config{})
+
+	resp, err := exec.doInsert(&ast.InsertStmt{
+		Collection: "docs",
+		Values:     map[string]interface{}{"text": "hello"},
+	})
+	require.NoError(t, err)
+	require.True(t, resp.OK)
+	require.Equal(t, "insert", resp.Operation)
+	data := resp.Data.(map[string]any)
+	require.True(t, data["created"].(bool))
+	require.Len(t, client.createRequests, 1)
+	require.Len(t, client.upserts, 1)
+	require.False(t, client.createRequests[0].SparseVectorsConfig != nil)
+}
+
+func TestInsertPreservesHybridAutodetectionOnExistingCollection(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				VectorsConfig: qdrant.NewVectorsConfigMap(collectionVectorParams(denseVectorSize, false)),
+				SparseVectorsConfig: qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
+					sparseVectorName: {Modifier: qdrant.Modifier_Idf.Enum()},
+				}),
+			},
+		},
+	}
+
+	exec := NewExecutor(client, &config.Config{})
+	resp, err := exec.doInsert(&ast.InsertStmt{
+		Collection: "docs",
+		Values:     map[string]interface{}{"text": "hello"},
+	})
+	require.NoError(t, err)
+	require.True(t, resp.OK)
+	data := resp.Data.(map[string]any)
+	require.True(t, data["hybrid"].(bool))
+	require.Len(t, client.createRequests, 0)
+	require.Len(t, client.upserts, 1)
+}
+
 func TestBuildDeleteRequestByFieldUsesFilterSelector(t *testing.T) {
 	req, err := buildDeleteRequest(&ast.DeleteStmt{
 		Collection: "demo",
@@ -185,6 +318,16 @@ func TestBuildDeleteRequestByFieldUsesFilterSelector(t *testing.T) {
 	match := filter.GetMust()[0].GetField().GetMatch()
 	require.NotNil(t, match)
 	require.Equal(t, "archived", match.GetKeyword())
+}
+
+func TestParserKeepsInsertHybridAutoDetection(t *testing.T) {
+	tokens, err := (&lexer.Lexer{}).Tokenize("INSERT INTO COLLECTION docs VALUES {'text': 'hello'} USING HYBRID")
+	require.NoError(t, err)
+	node, err := parser.NewParser().Parse(tokens)
+	require.NoError(t, err)
+	insert, ok := node.(*ast.InsertStmt)
+	require.True(t, ok)
+	require.True(t, insert.Hybrid)
 }
 
 func TestBuildDeleteRequestByIDUsesPointSelector(t *testing.T) {
@@ -226,6 +369,16 @@ func TestExecutorExplainDocumentedQueries(t *testing.T) {
 			wants: []string{
 				"Statement: CREATE COLLECTION docs",
 				"Type: HYBRID + RERANK (dense + sparse + ColBERT multivector)",
+			},
+		},
+		{
+			name:  "create with quantization",
+			query: "CREATE COLLECTION docs QUANTIZE SCALAR QUANTILE 0.95 ALWAYS RAM",
+			wants: []string{
+				"Statement: CREATE COLLECTION docs",
+				"Quantization: scalar",
+				"Quantile: 0.9500",
+				"Quantization storage: ALWAYS RAM",
 			},
 		},
 		{
@@ -685,6 +838,64 @@ func TestBuildInsertVectorsLocalModeRejectsRerank(t *testing.T) {
 	_, err := exec.buildInsertVectors(context.Background(), "hello", "dense-model", "sparse-model", true, true, "test_local")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "rerank vectors are not implemented yet")
+}
+
+type fakeQdrantClient struct {
+	mu             sync.Mutex
+	exists         bool
+	info           *qdrant.CollectionInfo
+	createRequests []*qdrant.CreateCollection
+	upserts        []*qdrant.UpsertPoints
+	queryRequests  []*qdrant.QueryPoints
+}
+
+func newFakeQdrantClient() *fakeQdrantClient { return &fakeQdrantClient{} }
+
+func (f *fakeQdrantClient) ListCollections(context.Context) ([]string, error) { return nil, nil }
+func (f *fakeQdrantClient) CollectionExists(context.Context, string) (bool, error) {
+	return f.exists, nil
+}
+func (f *fakeQdrantClient) GetCollectionInfo(context.Context, string) (*qdrant.CollectionInfo, error) {
+	if f.info == nil {
+		return nil, errors.New("missing collection")
+	}
+	return f.info, nil
+}
+func (f *fakeQdrantClient) CreateCollection(_ context.Context, req *qdrant.CreateCollection) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.createRequests = append(f.createRequests, req)
+	f.exists = true
+	f.info = &qdrant.CollectionInfo{
+		Config: &qdrant.CollectionConfig{
+			QuantizationConfig: req.QuantizationConfig,
+			Params: &qdrant.CollectionParams{
+				VectorsConfig:       req.VectorsConfig,
+				SparseVectorsConfig: req.SparseVectorsConfig,
+			},
+		},
+	}
+	return nil
+}
+func (f *fakeQdrantClient) DeleteCollection(context.Context, string) error { return nil }
+func (f *fakeQdrantClient) Upsert(_ context.Context, req *qdrant.UpsertPoints) (*qdrant.UpdateResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.upserts = append(f.upserts, req)
+	return &qdrant.UpdateResult{}, nil
+}
+func (f *fakeQdrantClient) Query(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) {
+	return nil, nil
+}
+func (f *fakeQdrantClient) Delete(context.Context, *qdrant.DeletePoints) (*qdrant.UpdateResult, error) {
+	return &qdrant.UpdateResult{}, nil
+}
+func (f *fakeQdrantClient) CreateFieldIndex(context.Context, *qdrant.CreateFieldIndexCollection) (*qdrant.UpdateResult, error) {
+	return &qdrant.UpdateResult{}, nil
+}
+func (f *fakeQdrantClient) Count(context.Context, *qdrant.CountPoints) (uint64, error) { return 0, nil }
+func (f *fakeQdrantClient) ScrollAndOffset(context.Context, *qdrant.ScrollPoints) ([]*qdrant.RetrievedPoint, *qdrant.PointId, error) {
+	return nil, nil, nil
 }
 
 func TestBuildSearchPrefetchesLocalModeReturnsExplicitQueries(t *testing.T) {

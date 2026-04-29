@@ -128,6 +128,62 @@ func TestTokenizeKeywords(t *testing.T) {
 			},
 		},
 		{
+			name:  "QUANTIZE",
+			input: "QUANTIZE",
+			expected: []Token{
+				{Kind: TokenKindQuantize, Value: "QUANTIZE", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 8},
+			},
+		},
+		{
+			name:  "SCALAR",
+			input: "SCALAR",
+			expected: []Token{
+				{Kind: TokenKindScalar, Value: "SCALAR", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 6},
+			},
+		},
+		{
+			name:  "BINARY",
+			input: "BINARY",
+			expected: []Token{
+				{Kind: TokenKindBinary, Value: "BINARY", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 6},
+			},
+		},
+		{
+			name:  "PRODUCT",
+			input: "PRODUCT",
+			expected: []Token{
+				{Kind: TokenKindProduct, Value: "PRODUCT", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 7},
+			},
+		},
+		{
+			name:  "QUANTILE",
+			input: "QUANTILE",
+			expected: []Token{
+				{Kind: TokenKindQuantile, Value: "QUANTILE", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 8},
+			},
+		},
+		{
+			name:  "ALWAYS",
+			input: "ALWAYS",
+			expected: []Token{
+				{Kind: TokenKindAlways, Value: "ALWAYS", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 6},
+			},
+		},
+		{
+			name:  "RAM",
+			input: "RAM",
+			expected: []Token{
+				{Kind: TokenKindRam, Value: "RAM", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 3},
+			},
+		},
+		{
 			name:  "CREATE",
 			input: "CREATE",
 			expected: []Token{

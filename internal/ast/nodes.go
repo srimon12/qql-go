@@ -18,10 +18,25 @@ type InsertBulkStmt struct {
 }
 
 type CreateCollectionStmt struct {
-	Collection string
-	Hybrid     bool
-	Rerank     bool
-	Model      *string
+	Collection   string
+	Hybrid       bool
+	Rerank       bool
+	Model        *string
+	Quantization *QuantizationConfig
+}
+
+type QuantizationType string
+
+const (
+	QuantizationTypeScalar  QuantizationType = "scalar"
+	QuantizationTypeBinary  QuantizationType = "binary"
+	QuantizationTypeProduct QuantizationType = "product"
+)
+
+type QuantizationConfig struct {
+	Type      QuantizationType
+	Quantile  *float64
+	AlwaysRAM bool
 }
 
 type DropCollectionStmt struct {

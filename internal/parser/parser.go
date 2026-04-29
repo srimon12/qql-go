@@ -170,6 +170,7 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 	hybrid := false
 	rerank := false
 	var model *string
+	var quantization *ast.QuantizationConfig
 	if p.peek().Kind == lexer.TokenKindHybrid {
 		p.advance()
 		hybrid = true
@@ -198,7 +199,86 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 			}
 		}
 	}
-	return &ast.CreateCollectionStmt{Collection: collection, Hybrid: hybrid, Rerank: rerank, Model: model}, nil
+	if p.peek().Kind == lexer.TokenKindQuantize {
+		p.advance()
+		var err error
+		quantization, err = p.parseQuantizeClause()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &ast.CreateCollectionStmt{
+		Collection:   collection,
+		Hybrid:       hybrid,
+		Rerank:       rerank,
+		Model:        model,
+		Quantization: quantization,
+	}, nil
+}
+
+func (p *Parser) parseQuantizeClause() (*ast.QuantizationConfig, error) {
+	tok := p.peek()
+
+	switch tok.Kind {
+	case lexer.TokenKindScalar:
+		p.advance()
+		var quantile *float64
+		alwaysRAM := false
+		if p.peek().Kind == lexer.TokenKindQuantile {
+			p.advance()
+			valueTok := p.peek()
+			value, err := p.parseNumericLiteral()
+			if err != nil {
+				return nil, err
+			}
+			if value < 0 || value > 1 {
+				return nil, errors.NewQQLSyntaxError("QUANTILE must be between 0 and 1 inclusive, got '"+valueTok.Value+"'", valueTok.Pos)
+			}
+			quantile = &value
+		}
+		if p.peek().Kind == lexer.TokenKindAlways {
+			p.advance()
+			if _, err := p.expect(lexer.TokenKindRam); err != nil {
+				return nil, err
+			}
+			alwaysRAM = true
+		}
+		return &ast.QuantizationConfig{
+			Type:      ast.QuantizationTypeScalar,
+			Quantile:  quantile,
+			AlwaysRAM: alwaysRAM,
+		}, nil
+	case lexer.TokenKindBinary:
+		p.advance()
+		alwaysRAM := false
+		if p.peek().Kind == lexer.TokenKindAlways {
+			p.advance()
+			if _, err := p.expect(lexer.TokenKindRam); err != nil {
+				return nil, err
+			}
+			alwaysRAM = true
+		}
+		return &ast.QuantizationConfig{
+			Type:      ast.QuantizationTypeBinary,
+			AlwaysRAM: alwaysRAM,
+		}, nil
+	case lexer.TokenKindProduct:
+		p.advance()
+		alwaysRAM := false
+		if p.peek().Kind == lexer.TokenKindAlways {
+			p.advance()
+			if _, err := p.expect(lexer.TokenKindRam); err != nil {
+				return nil, err
+			}
+			alwaysRAM = true
+		}
+		return &ast.QuantizationConfig{
+			Type:      ast.QuantizationTypeProduct,
+			AlwaysRAM: alwaysRAM,
+		}, nil
+	default:
+		return nil, errors.NewQQLSyntaxError("Expected SCALAR, BINARY, or PRODUCT after QUANTIZE, got '"+tok.Value+"'", tok.Pos)
+	}
 }
 
 func (p *Parser) parseCreateIndex() (*ast.CreateIndexStmt, error) {
@@ -1193,4 +1273,22 @@ func parseFloatToken(tok lexer.Token) (float64, error) {
 		return 0, errors.NewQQLSyntaxError("Invalid float literal '"+tok.Value+"'", tok.Pos)
 	}
 	return value, nil
+}
+
+func (p *Parser) parseNumericLiteral() (float64, error) {
+	tok := p.peek()
+	switch tok.Kind {
+	case lexer.TokenKindInteger:
+		p.advance()
+		value, err := parseIntToken(tok)
+		if err != nil {
+			return 0, err
+		}
+		return float64(value), nil
+	case lexer.TokenKindFloat:
+		p.advance()
+		return parseFloatToken(tok)
+	default:
+		return 0, errors.NewQQLSyntaxError("Expected a number, got '"+tok.Value+"'", tok.Pos)
+	}
 }
