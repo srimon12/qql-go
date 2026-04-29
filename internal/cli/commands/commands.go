@@ -51,11 +51,25 @@ type commandOutputMode struct {
 }
 
 type Executor struct {
-	client *qdrant.Client
+	client qdrantClient
 	config *config.Config
 }
 
-func NewExecutor(client *qdrant.Client, cfg *config.Config) *Executor {
+type qdrantClient interface {
+	ListCollections(context.Context) ([]string, error)
+	CollectionExists(context.Context, string) (bool, error)
+	GetCollectionInfo(context.Context, string) (*qdrant.CollectionInfo, error)
+	CreateCollection(context.Context, *qdrant.CreateCollection) error
+	DeleteCollection(context.Context, string) error
+	Upsert(context.Context, *qdrant.UpsertPoints) (*qdrant.UpdateResult, error)
+	Query(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error)
+	Delete(context.Context, *qdrant.DeletePoints) (*qdrant.UpdateResult, error)
+	CreateFieldIndex(context.Context, *qdrant.CreateFieldIndexCollection) (*qdrant.UpdateResult, error)
+	Count(context.Context, *qdrant.CountPoints) (uint64, error)
+	ScrollAndOffset(context.Context, *qdrant.ScrollPoints) ([]*qdrant.RetrievedPoint, *qdrant.PointId, error)
+}
+
+func NewExecutor(client qdrantClient, cfg *config.Config) *Executor {
 	return &Executor{
 		client: client,
 		config: cfg,
@@ -212,6 +226,15 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		plan.WriteString(fmt.Sprintf("Statement: CREATE COLLECTION %s\n", n.Collection))
 		if n.Model != nil && *n.Model != "" {
 			plan.WriteString(fmt.Sprintf("Model: %s\n", *n.Model))
+		}
+		if n.Quantization != nil {
+			plan.WriteString(fmt.Sprintf("Quantization: %s\n", n.Quantization.Type))
+			if n.Quantization.Quantile != nil {
+				plan.WriteString(fmt.Sprintf("Quantile: %.4f\n", *n.Quantization.Quantile))
+			}
+			if n.Quantization.AlwaysRAM {
+				plan.WriteString("Quantization storage: ALWAYS RAM\n")
+			}
 		}
 		if n.Rerank {
 			plan.WriteString("Type: HYBRID + RERANK (dense + sparse + ColBERT multivector)\n")
@@ -416,6 +439,9 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 		CollectionName: n.Collection,
 		VectorsConfig:  qdrant.NewVectorsConfigMap(collectionVectorParams(denseSize, n.Rerank)),
 	}
+	if n.Quantization != nil {
+		collection.QuantizationConfig = buildQuantizationConfig(n.Quantization)
+	}
 	if n.Hybrid || n.Rerank {
 		collection.SparseVectorsConfig = qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
 			sparseVectorName: {
@@ -437,6 +463,9 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 		} else {
 			message = fmt.Sprintf("Collection '%s' created (hybrid: dense + sparse)", n.Collection)
 		}
+	}
+	if n.Quantization != nil {
+		message = strings.TrimSuffix(message, ")") + fmt.Sprintf(", %s quantization)", n.Quantization.Type)
 	}
 	return &ExecResponse{
 		OK:        true,
@@ -489,6 +518,11 @@ func (e *Executor) doInsert(n *ast.InsertStmt) (*ExecResponse, error) {
 		return nil, fmt.Errorf("'text' field must be a string")
 	}
 
+	created, err := e.ensureCollectionForInsert(ctx, n.Collection, n.Model, n.Hybrid)
+	if err != nil {
+		return nil, err
+	}
+
 	model := e.resolveDenseModel(n.Model)
 	sparseModel := e.resolveSparseModel(n.SparseModel)
 	useHybrid, err := e.shouldUseHybrid(ctx, n.Collection, n.Hybrid)
@@ -531,6 +565,7 @@ func (e *Executor) doInsert(n *ast.InsertStmt) (*ExecResponse, error) {
 		Data: map[string]any{
 			"id":           pointID,
 			"collection":   n.Collection,
+			"created":      created,
 			"hybrid":       useHybrid,
 			"dense_model":  model,
 			"sparse_model": sparseModel,
@@ -547,14 +582,6 @@ func (e *Executor) doInsertBulk(n *ast.InsertBulkStmt) (*ExecResponse, error) {
 
 	model := e.resolveDenseModel(n.Model)
 	sparseModel := e.resolveSparseModel(n.SparseModel)
-	useHybrid, err := e.shouldUseHybrid(ctx, n.Collection, n.Hybrid)
-	if err != nil {
-		return nil, err
-	}
-	includeRerank, err := e.collectionHasRerankVector(ctx, n.Collection)
-	if err != nil {
-		return nil, fmt.Errorf("failed to inspect collection: %w", err)
-	}
 
 	texts := make([]string, 0, len(n.ValuesList))
 	pointIDs := make([]interface{}, 0, len(n.ValuesList))
@@ -575,6 +602,19 @@ func (e *Executor) doInsertBulk(n *ast.InsertBulkStmt) (*ExecResponse, error) {
 		texts = append(texts, text)
 		pointIDs = append(pointIDs, pointID)
 		payloads = append(payloads, payload)
+	}
+
+	created, err := e.ensureCollectionForInsert(ctx, n.Collection, n.Model, n.Hybrid)
+	if err != nil {
+		return nil, err
+	}
+	useHybrid, err := e.shouldUseHybrid(ctx, n.Collection, n.Hybrid)
+	if err != nil {
+		return nil, err
+	}
+	includeRerank, err := e.collectionHasRerankVector(ctx, n.Collection)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect collection: %w", err)
 	}
 
 	vectorsBatch, err := e.buildInsertVectorsBatch(ctx, texts, model, sparseModel, useHybrid, includeRerank, n.Collection)
@@ -606,6 +646,7 @@ func (e *Executor) doInsertBulk(n *ast.InsertBulkStmt) (*ExecResponse, error) {
 		Data: map[string]any{
 			"count":        len(points),
 			"collection":   n.Collection,
+			"created":      created,
 			"hybrid":       useHybrid,
 			"dense_model":  model,
 			"sparse_model": sparseModel,
@@ -866,6 +907,66 @@ func collectionVectorParams(denseSize int, includeRerank bool) map[string]*qdran
 		}
 	}
 	return vectors
+}
+
+func buildQuantizationConfig(cfg *ast.QuantizationConfig) *qdrant.QuantizationConfig {
+	if cfg == nil {
+		return nil
+	}
+
+	switch cfg.Type {
+	case ast.QuantizationTypeScalar:
+		scalar := &qdrant.ScalarQuantization{
+			Type:      qdrant.QuantizationType_Int8,
+			AlwaysRam: qdrant.PtrOf(cfg.AlwaysRAM),
+		}
+		if cfg.Quantile != nil {
+			scalar.Quantile = qdrant.PtrOf(float32(*cfg.Quantile))
+		}
+		return qdrant.NewQuantizationScalar(scalar)
+	case ast.QuantizationTypeBinary:
+		return qdrant.NewQuantizationBinary(&qdrant.BinaryQuantization{
+			AlwaysRam: qdrant.PtrOf(cfg.AlwaysRAM),
+		})
+	case ast.QuantizationTypeProduct:
+		return qdrant.NewQuantizationProduct(&qdrant.ProductQuantization{
+			Compression: qdrant.CompressionRatio_x4,
+			AlwaysRam:   qdrant.PtrOf(cfg.AlwaysRAM),
+		})
+	default:
+		return nil
+	}
+}
+
+func (e *Executor) ensureCollectionForInsert(ctx context.Context, collection string, model *string, requestedHybrid bool) (bool, error) {
+	exists, err := e.client.CollectionExists(ctx, collection)
+	if err != nil {
+		return false, fmt.Errorf("failed to check collection: %w", err)
+	}
+	if exists {
+		return false, nil
+	}
+
+	denseSize, err := e.resolveDenseVectorSize(ctx, model)
+	if err != nil {
+		return false, err
+	}
+	createReq := &qdrant.CreateCollection{
+		CollectionName: collection,
+		VectorsConfig:  qdrant.NewVectorsConfigMap(collectionVectorParams(denseSize, false)),
+	}
+	if requestedHybrid {
+		createReq.SparseVectorsConfig = qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
+			sparseVectorName: {Modifier: qdrant.Modifier_Idf.Enum()},
+		})
+	}
+	if err := e.client.CreateCollection(ctx, createReq); err != nil {
+		return false, fmt.Errorf("failed to create collection: %w", err)
+	}
+	if err := e.waitForCollectionReady(ctx, collection); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (e *Executor) buildInsertVectors(ctx context.Context, text, denseModel, sparseModel string, includeSparse, includeRerank bool, collection string) (map[string]*qdrant.Vector, error) {

@@ -27,6 +27,9 @@ Supported syntax in this repo includes:
 - `CREATE COLLECTION <name> HYBRID RERANK`
 - `CREATE COLLECTION <name> USING MODEL '<model>'`
 - `CREATE COLLECTION <name> USING HYBRID`
+- `CREATE COLLECTION <name> QUANTIZE SCALAR [QUANTILE <0.0-1.0>] [ALWAYS RAM]`
+- `CREATE COLLECTION <name> QUANTIZE BINARY [ALWAYS RAM]`
+- `CREATE COLLECTION <name> QUANTIZE PRODUCT [ALWAYS RAM]`
 - `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE <kind>`
 - `SHOW COLLECTIONS`
 - `DROP COLLECTION <name>`
@@ -206,6 +209,8 @@ Examples of current gaps:
 - pagination or scroll
 - update or upsert by explicit id (you can overwrite with `INSERT` + explicit `id`)
 - collection diagnostics beyond `doctor`
+- collection-level HNSW tuning
+- custom distance metrics or vector sizes in `CREATE COLLECTION`
 
 Use [references/qql-gaps.md](references/qql-gaps.md) for the current boundary.
 

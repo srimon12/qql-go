@@ -14,7 +14,7 @@ Use this file when a request sounds reasonable in Qdrant terms but is still outs
 - update or upsert by explicit id (you can `INSERT` with explicit `id` to overwrite)
 - scroll or pagination
 - collection diagnostics beyond `doctor`
-- collection-level HNSW or quantization config
+- collection-level HNSW config
 - on-disk vector or payload toggles
 - `CREATE COLLECTION` with custom vector sizes or distance metrics
 

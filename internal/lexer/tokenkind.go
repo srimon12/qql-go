@@ -17,6 +17,13 @@ const (
 	TokenKindExact
 	TokenKindWith
 	TokenKindAcorn
+	TokenKindQuantize
+	TokenKindScalar
+	TokenKindBinary
+	TokenKindProduct
+	TokenKindQuantile
+	TokenKindAlways
+	TokenKindRam
 	TokenKindCreate
 	TokenKindDrop
 	TokenKindShow
@@ -89,6 +96,13 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindExact:       "EXACT",
 	TokenKindWith:        "WITH",
 	TokenKindAcorn:       "ACORN",
+	TokenKindQuantize:    "QUANTIZE",
+	TokenKindScalar:      "SCALAR",
+	TokenKindBinary:      "BINARY",
+	TokenKindProduct:     "PRODUCT",
+	TokenKindQuantile:    "QUANTILE",
+	TokenKindAlways:      "ALWAYS",
+	TokenKindRam:         "RAM",
 	TokenKindCreate:      "CREATE",
 	TokenKindDrop:        "DROP",
 	TokenKindShow:        "SHOW",

@@ -13,6 +13,9 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - `CREATE COLLECTION <name> USING MODEL '<dense_model>'`
 - `CREATE COLLECTION <name> USING HYBRID`
 - `CREATE COLLECTION <name> USING HYBRID DENSE MODEL '<model>'`
+- `CREATE COLLECTION <name> QUANTIZE SCALAR [QUANTILE <0.0-1.0>] [ALWAYS RAM]`
+- `CREATE COLLECTION <name> QUANTIZE BINARY [ALWAYS RAM]`
+- `CREATE COLLECTION <name> QUANTIZE PRODUCT [ALWAYS RAM]`
 - `SHOW COLLECTIONS`
 - `DROP COLLECTION <name>`
 
@@ -156,6 +159,16 @@ In local/external mode, sparse vectors are generated client-side using BM25-styl
 ### Sparse-only
 
 Use `USING SPARSE` when the request is purely keyword/BM25 retrieval with no semantic component.
+
+### Collection quantization
+
+Use quantization at create time when memory footprint matters:
+
+- `QUANTIZE SCALAR` — default `int8` path
+- `QUANTIZE SCALAR QUANTILE <0..1>` — explicit scalar calibration
+- `QUANTIZE BINARY` — stronger compression
+- `QUANTIZE PRODUCT` — fixed `x4` product quantization
+- `ALWAYS RAM` — keep quantized vectors pinned in RAM
 
 ### Rerank
 

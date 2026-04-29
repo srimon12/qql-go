@@ -142,6 +142,40 @@ func TestParseCreate(t *testing.T) {
 				Model:      strPtr("dense-model"),
 			},
 		},
+		{
+			name:  "create with scalar quantization",
+			input: "CREATE COLLECTION mycollection QUANTIZE SCALAR",
+			want: &ast.CreateCollectionStmt{
+				Collection: "mycollection",
+				Quantization: &ast.QuantizationConfig{
+					Type: ast.QuantizationTypeScalar,
+				},
+			},
+		},
+		{
+			name:  "create with scalar quantization integer boundary",
+			input: "CREATE COLLECTION mycollection QUANTIZE SCALAR QUANTILE 1",
+			want: &ast.CreateCollectionStmt{
+				Collection: "mycollection",
+				Quantization: &ast.QuantizationConfig{
+					Type:     ast.QuantizationTypeScalar,
+					Quantile: float64Ptr(1.0),
+				},
+			},
+		},
+		{
+			name:  "create with hybrid rerank product quantization",
+			input: "CREATE COLLECTION mycollection HYBRID RERANK QUANTIZE PRODUCT ALWAYS RAM",
+			want: &ast.CreateCollectionStmt{
+				Collection: "mycollection",
+				Hybrid:     true,
+				Rerank:     true,
+				Quantization: &ast.QuantizationConfig{
+					Type:      ast.QuantizationTypeProduct,
+					AlwaysRAM: true,
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -158,9 +192,56 @@ func TestParseCreate(t *testing.T) {
 			require.True(t, ok, "expected CreateCollectionStmt")
 			assert.Equal(t, tt.want.Collection, stmt.Collection)
 			assert.Equal(t, tt.want.Hybrid, stmt.Hybrid)
+			assert.Equal(t, tt.want.Rerank, stmt.Rerank)
 			if tt.want.Model != nil {
 				assert.Equal(t, *tt.want.Model, *stmt.Model)
 			}
+			if tt.want.Quantization != nil {
+				require.NotNil(t, stmt.Quantization)
+				assert.Equal(t, tt.want.Quantization.Type, stmt.Quantization.Type)
+				assert.Equal(t, tt.want.Quantization.AlwaysRAM, stmt.Quantization.AlwaysRAM)
+				if tt.want.Quantization.Quantile != nil {
+					require.NotNil(t, stmt.Quantization.Quantile)
+					assert.InDelta(t, *tt.want.Quantization.Quantile, *stmt.Quantization.Quantile, 0.0001)
+				} else {
+					assert.Nil(t, stmt.Quantization.Quantile)
+				}
+			}
+		})
+	}
+}
+
+func TestParseCreateQuantizeErrors(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "missing quantize type",
+			input: "CREATE COLLECTION docs QUANTIZE",
+		},
+		{
+			name:  "unknown quantize type",
+			input: "CREATE COLLECTION docs QUANTIZE FULL",
+		},
+		{
+			name:  "quantile above one",
+			input: "CREATE COLLECTION docs QUANTIZE SCALAR QUANTILE 1.5",
+		},
+		{
+			name:  "quantile integer above one",
+			input: "CREATE COLLECTION docs QUANTIZE SCALAR QUANTILE 2",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.input)
+			require.NoError(t, err)
+
+			_, err = NewParser().Parse(tokens)
+			require.Error(t, err)
 		})
 	}
 }
@@ -721,10 +802,6 @@ func TestParseRecommend(t *testing.T) {
 			}
 		})
 	}
-}
-
-func float64Ptr(f float64) *float64 {
-	return &f
 }
 
 func TestParseDelete(t *testing.T) {
@@ -1361,6 +1438,10 @@ func TestParseError(t *testing.T) {
 
 func strPtr(s string) *string {
 	return &s
+}
+
+func float64Ptr(f float64) *float64 {
+	return &f
 }
 
 func assertFilterExprEqual(t *testing.T, expected, actual ast.FilterExpr) {

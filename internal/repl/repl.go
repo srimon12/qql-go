@@ -222,6 +222,10 @@ func (r *REPL) printHelp() {
 
   \033[33mCREATE COLLECTION\033[0m <name> [\033[33mHYBRID\033[0m]
 	  Create a new collection. Add HYBRID for dense+sparse named vectors.
+      Optional: \033[33mUSING MODEL\033[0m '<model>'
+      Optional: \033[33mQUANTIZE SCALAR\033[0m [QUANTILE <0.0-1.0>] [ALWAYS RAM]
+      Optional: \033[33mQUANTIZE BINARY\033[0m [ALWAYS RAM]
+      Optional: \033[33mQUANTIZE PRODUCT\033[0m [ALWAYS RAM]
 
   \033[33mDROP COLLECTION\033[0m <name>
       Delete a collection and all its points.
