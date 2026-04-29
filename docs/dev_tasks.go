@@ -4,10 +4,10 @@
 //
 // Usage:
 //
-//	go run developer_guide/dev_tasks.go fmt
-//	go run developer_guide/dev_tasks.go check
-//	go run developer_guide/dev_tasks.go prepare-release --version 0.2.0
-//	go run developer_guide/dev_tasks.go release-validate [--version 0.2.0]
+//	go run docs/dev_tasks.go fmt
+//	go run docs/dev_tasks.go check
+//	go run docs/dev_tasks.go prepare-release --version 0.2.0
+//	go run docs/dev_tasks.go release-validate [--version 0.2.0]
 //
 // This script is intentionally self-contained and uses only the Go standard library.
 // It can be run from the repository root without any external dependencies.
@@ -131,7 +131,7 @@ func cmdCheck() {
 		for _, f := range unformatted {
 			fmt.Printf("    %s\n", f)
 		}
-		fmt.Println("\n  Run: go run developer_guide/dev_tasks.go fmt")
+		fmt.Println("\n  Run: go run docs/dev_tasks.go fmt")
 		os.Exit(1)
 	}
 	fmt.Println("  OK\n")
@@ -412,7 +412,7 @@ func printUsage() {
 	fmt.Println(`Developer automation for qql-go
 
 Usage:
-  go run developer_guide/dev_tasks.go <command> [flags]
+  go run docs/dev_tasks.go <command> [flags]
 
 Commands:
   fmt                     Apply gofmt to all Go files
@@ -423,8 +423,8 @@ Commands:
     --version X.Y.Z       Optional. Defaults to VERSION file.
 
 Examples:
-  go run developer_guide/dev_tasks.go check
-  go run developer_guide/dev_tasks.go prepare-release --version 0.2.0
-  go run developer_guide/dev_tasks.go release-validate
-  go run developer_guide/dev_tasks.go release-validate --version 0.2.0`)
+  go run docs/dev_tasks.go check
+  go run docs/dev_tasks.go prepare-release --version 0.2.0
+  go run docs/dev_tasks.go release-validate
+  go run docs/dev_tasks.go release-validate --version 0.2.0`)
 }

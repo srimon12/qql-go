@@ -18,7 +18,7 @@ The CLI binary reports the version from `commands.go`.
 Run from the repository root:
 
 ```bash
-go run developer_guide/dev_tasks.go prepare-release --version 0.2.0
+go run docs/dev_tasks.go prepare-release --version 0.2.0
 ```
 
 That updates:
@@ -35,7 +35,7 @@ Then replace any scaffold text with the real release notes.
 Run the local quality gate:
 
 ```bash
-go run developer_guide/dev_tasks.go check
+go run docs/dev_tasks.go check
 ```
 
 That runs:
@@ -49,7 +49,7 @@ That runs:
 Run the local release validator:
 
 ```bash
-go run developer_guide/dev_tasks.go release-validate
+go run docs/dev_tasks.go release-validate
 ```
 
 That validator runs the full quality gate, then builds a release binary and checks:

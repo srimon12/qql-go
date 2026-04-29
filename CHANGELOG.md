@@ -8,6 +8,17 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 - No unreleased changes yet.
 
+## [0.1.3] - 2026-04-29
+
+### Added
+
+- **Create-time quantization** — `CREATE COLLECTION` now supports `QUANTIZE SCALAR`, `QUANTIZE BINARY`, and `QUANTIZE PRODUCT`.
+- **Scalar quantile validation** — scalar quantization accepts `QUANTILE` values in the inclusive `0..1` range, including integer boundaries `0` and `1`.
+
+### Changed
+
+- Collection creation docs, syntax references, compatibility notes, and skill references now describe quantization support and insert-time auto-creation behavior accurately.
+
 ## [0.1.2] - 2026-04-22
 
 ### Added

@@ -6,12 +6,13 @@ It is an independent Go port of the original [pavanjava/qql](https://github.com/
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go 1.24+](https://img.shields.io/badge/Go-1.24%2B-00ADD8.svg)](https://go.dev/)
-[![Version](https://img.shields.io/badge/Version-0.1.2-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/Version-0.1.3-blue.svg)](VERSION)
 [![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/srimon12/qql-go/releases)
 
 `qql-go` supports:
 
 - collection management
+- collection quantization
 - payload index creation
 - document insertion
 - dense and hybrid retrieval
@@ -42,7 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | s
 Install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | VERSION=v0.1.2 sh
+curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | VERSION=v0.1.3 sh
 ```
 
 The Unix installer defaults to `~/.local/bin/qql-go`. Override with `INSTALL_DIR=/your/bin/path` when needed.
@@ -104,6 +105,7 @@ Use the CLI directly:
 
 ```bash
 qql-go exec "CREATE COLLECTION docs HYBRID"
+qql-go exec "CREATE COLLECTION docs QUANTIZE SCALAR QUANTILE 0.99"
 qql-go exec "INSERT INTO COLLECTION docs VALUES {'text': 'Qdrant stores vectors', 'topic': 'search'} USING HYBRID"
 qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID"
 qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID RERANK"
@@ -169,17 +171,19 @@ Output contract notes:
 
 Important behavior in the current Go build:
 
-- text `INSERT` and text `SEARCH ... SIMILAR TO ...` are Qdrant Cloud inference paths
-- `USING HYBRID` and `RERANK` depend on Qdrant Cloud inference in this build
-- self-hosted/local Qdrant is currently best for `SHOW`, `CREATE`, `DROP`, `CREATE INDEX`, and `DELETE`
-- collection auto-creation on insert is not supported
+- cloud mode uses Qdrant Cloud inference for text `INSERT` and text `SEARCH ... SIMILAR TO ...`
+- local and external modes generate dense and sparse vectors client-side through an OpenAI-compatible embeddings API
+- `RERANK` is still cloud-only in this build
+- self-hosted/local Qdrant works well for management operations such as `SHOW`, `CREATE`, `DROP`, `CREATE INDEX`, and `DELETE`
+- collections auto-create on insert when missing
 - `text` is required in `INSERT ... VALUES {...}`
 - keys in `VALUES {...}` may be bare identifiers or quoted strings; quote them when they contain spaces or punctuation
 
 Put differently:
 
-- use Qdrant Cloud if you want text insert/search, hybrid, or rerank
-- use local/self-hosted freely for non-inference management operations
+- use Qdrant Cloud if you want the hosted inference path or rerank
+- use local/external mode if you want client-side embeddings against any Qdrant instance
+- use local/self-hosted freely for management operations even without inference
 
 ## Supported Statements
 
@@ -189,6 +193,14 @@ Supported statements:
 CREATE COLLECTION <name>
 CREATE COLLECTION <name> HYBRID
 CREATE COLLECTION <name> HYBRID RERANK
+CREATE COLLECTION <name> USING MODEL '<model>'
+CREATE COLLECTION <name> QUANTIZE SCALAR
+CREATE COLLECTION <name> QUANTIZE SCALAR QUANTILE <0.0-1.0>
+CREATE COLLECTION <name> QUANTIZE SCALAR QUANTILE <0.0-1.0> ALWAYS RAM
+CREATE COLLECTION <name> QUANTIZE BINARY
+CREATE COLLECTION <name> QUANTIZE BINARY ALWAYS RAM
+CREATE COLLECTION <name> QUANTIZE PRODUCT
+CREATE COLLECTION <name> QUANTIZE PRODUCT ALWAYS RAM
 DROP COLLECTION <name>
 SHOW COLLECTIONS
 
@@ -228,6 +240,14 @@ Dense search:
 - use plain `SEARCH`
 - use `USING MODEL '<model>'` when you want to pin the dense model
 - default dense model: `sentence-transformers/all-minilm-l6-v2`
+
+Collection quantization:
+
+- use `QUANTIZE SCALAR` for the default `int8` compression path
+- use `QUANTIZE SCALAR QUANTILE <0..1>` when you want explicit scalar calibration
+- use `QUANTIZE BINARY` for more aggressive compression
+- use `QUANTIZE PRODUCT` for fixed `x4` product quantization
+- add `ALWAYS RAM` when quantized vectors should stay pinned in memory
 
 Hybrid search:
 
@@ -279,7 +299,7 @@ If you filter heavily, create payload indexes first.
 ## Release Notes
 
 - [CHANGELOG.md](CHANGELOG.md) for user-facing changes
-- [docs/releases/0.1.2.md](docs/releases/0.1.2.md) for the current release note
+- [docs/releases/0.1.3.md](docs/releases/0.1.3.md) for the current release note
 
 ## Demo Scripts
 
