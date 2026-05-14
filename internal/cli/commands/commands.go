@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -495,7 +493,6 @@ func (e *Executor) doDropCollection(n *ast.DropCollectionStmt) (*ExecResponse, e
 	if err := e.client.DeleteCollection(ctx, n.Collection); err != nil {
 		return nil, fmt.Errorf("failed to drop collection: %w", err)
 	}
-	e.deleteCorpusStats(n.Collection)
 	return &ExecResponse{
 		OK:        true,
 		Operation: "drop_collection",
@@ -983,11 +980,8 @@ func (e *Executor) buildInsertVectors(ctx context.Context, text, denseModel, spa
 			denseVectorName: qdrant.NewVectorDense(denseVector),
 		}
 		if includeSparse {
-			stats := e.loadCorpusStats(collection)
-			sv := sparse.BuildDocument(text, stats)
+			sv := sparse.Build(text)
 			vectors[sparseVectorName] = qdrant.NewVectorSparse(sv.Indices, sv.Values)
-			stats.Update(sparse.Tokenize(text))
-			e.saveCorpusStats(collection, stats)
 		}
 		if includeRerank {
 			return nil, fmt.Errorf("local/external rerank vectors are not implemented yet")
@@ -1030,31 +1024,16 @@ func (e *Executor) buildInsertVectorsBatch(ctx context.Context, texts []string, 
 			return nil, fmt.Errorf("local/external rerank vectors are not implemented yet")
 		}
 
-		// Build corpus stats from the batch for BM25 weighting
-		var stats *sparse.CorpusStats
-		if includeSparse {
-			stats = e.loadCorpusStats(collection)
-			docTokens := make([][]string, len(texts))
-			for i, text := range texts {
-				docTokens[i] = sparse.Tokenize(text)
-			}
-			stats.UpdateBatch(docTokens)
-		}
-
 		batch := make([]map[string]*qdrant.Vector, 0, len(texts))
 		for idx, text := range texts {
 			vectors := map[string]*qdrant.Vector{
 				denseVectorName: qdrant.NewVectorDense(denseVectors[idx]),
 			}
 			if includeSparse {
-				sv := sparse.BuildDocument(text, stats)
+				sv := sparse.Build(text)
 				vectors[sparseVectorName] = qdrant.NewVectorSparse(sv.Indices, sv.Values)
 			}
 			batch = append(batch, vectors)
-		}
-
-		if includeSparse {
-			e.saveCorpusStats(collection, stats)
 		}
 		return batch, nil
 	}
@@ -1261,46 +1240,6 @@ func (e *Executor) embeddingClient(model string) (*embedding.Client, error) {
 		APIKey:    e.config.EmbeddingAPIKey,
 		Dimension: e.config.EmbeddingDimension,
 	})
-}
-
-func (e *Executor) corpusStatsPath(collection string) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	// Sanitize collection name to prevent directory traversal
-	safe := strings.ReplaceAll(collection, "/", "_")
-	safe = strings.ReplaceAll(safe, "\\", "_")
-	safe = strings.ReplaceAll(safe, "..", "_")
-	return filepath.Join(home, ".qql", "corpus", safe+".json")
-}
-
-func (e *Executor) loadCorpusStats(collection string) *sparse.CorpusStats {
-	path := e.corpusStatsPath(collection)
-	if path == "" {
-		return sparse.NewCorpusStats()
-	}
-	stats, err := sparse.LoadCorpusStats(path)
-	if err != nil {
-		return sparse.NewCorpusStats()
-	}
-	return stats
-}
-
-func (e *Executor) saveCorpusStats(collection string, stats *sparse.CorpusStats) {
-	path := e.corpusStatsPath(collection)
-	if path == "" {
-		return
-	}
-	_ = stats.Save(path)
-}
-
-func (e *Executor) deleteCorpusStats(collection string) {
-	path := e.corpusStatsPath(collection)
-	if path == "" {
-		return
-	}
-	_ = os.Remove(path)
 }
 
 func (e *Executor) resolveDenseVectorSize(ctx context.Context, model *string) (int, error) {
