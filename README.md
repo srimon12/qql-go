@@ -396,23 +396,31 @@ If you filter heavily, create payload indexes first.
 
 - [CHANGELOG.md](CHANGELOG.md) for the latest user-facing changes
 
-## Demo Scripts
+## Examples
 
-The repo includes demos under `skills/qql-skill/scripts` that shell out to the Go binary.
+The repo now ships first-class operational examples under [examples/README.md](examples/README.md).
+
+Use them to showcase the workflows `qql-go` is strongest at:
+
+- collection bootstrap and indexing
+- CI smoke tests
+- retrieval debugging
+- support diagnostics
+- retention cleanup
+- vertical demos such as medical-record search
+
+Run them directly as versioned `.qql` scripts:
 
 ```bash
-uv run python skills/qql-skill/scripts/demo_medical_records.py --execute
-uv run python skills/qql-skill/scripts/demo_kitchen_sink.py --execute
-uv run python skills/qql-skill/scripts/demo_retrieval_modes.py --json
+qql-go execute examples/01-bootstrap-docs.qql
+qql-go execute --quiet --json examples/02-ci-smoke-test.qql
+qql-go execute examples/03-retrieval-debugging.qql
+qql-go execute examples/04-support-diagnostics.qql
+qql-go execute examples/05-retention-cleanup.qql
+qql-go execute examples/06-medical-records.qql
 ```
 
-The helper `skills/qql-skill/scripts/_qql_cli.py` uses:
-
-```text
-qql-go exec --quiet --json ...
-```
-
-so demos consume structured output instead of scraping prose.
+The agent-oriented helper demos still live under `skills/qql-skill/scripts/`, but they are now secondary to the public `examples/` surface.
 
 ## Skills
 
@@ -430,19 +438,6 @@ Install the bundled QQL skill:
 npx skills add srimon12/qql-go --skill qql-skill
 ```
 
-Install from the GitHub URL form:
-
-```bash
-npx skills add https://github.com/srimon12/qql-go --skill qql-skill
-```
-
-Validate the local layout before publishing:
-
-```bash
-npx skills add . --list
-```
-
-More skill authoring notes live in [docs/SKILLS.md](docs/SKILLS.md).
 
 ## Configuration
 

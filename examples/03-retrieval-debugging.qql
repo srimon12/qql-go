@@ -1,0 +1,31 @@
+-- Retrieval debugging: compare dense, hybrid, sparse, exact, and filtered modes.
+CREATE COLLECTION retrieval_debug_docs HYBRID
+CREATE INDEX ON COLLECTION retrieval_debug_docs FOR team TYPE keyword
+CREATE INDEX ON COLLECTION retrieval_debug_docs FOR environment TYPE keyword
+INSERT BULK INTO COLLECTION retrieval_debug_docs VALUES [
+  {
+    'id': 301,
+    'text': 'Production search outage caused by aggressive hnsw_ef reduction during peak traffic.',
+    'team': 'search',
+    'environment': 'prod'
+  },
+  {
+    'id': 302,
+    'text': 'Staging incident where ACORN improved filtered recall for support runbooks.',
+    'team': 'platform',
+    'environment': 'staging'
+  },
+  {
+    'id': 303,
+    'text': 'Memory pressure alert tied to sparse and dense indexing overlap on nightly ingest.',
+    'team': 'infra',
+    'environment': 'prod'
+  }
+] USING HYBRID
+SEARCH retrieval_debug_docs SIMILAR TO 'hnsw recall regression' LIMIT 3
+SEARCH retrieval_debug_docs SIMILAR TO 'hnsw recall regression' LIMIT 3 USING HYBRID
+SEARCH retrieval_debug_docs SIMILAR TO 'hnsw recall regression' LIMIT 3 USING HYBRID FUSION 'dbsf'
+SEARCH retrieval_debug_docs SIMILAR TO 'hnsw recall regression' LIMIT 3 USING SPARSE
+SEARCH retrieval_debug_docs SIMILAR TO 'hnsw recall regression' LIMIT 3 EXACT
+SEARCH retrieval_debug_docs SIMILAR TO 'filtered support runbook recall' LIMIT 3 WHERE team = 'platform'
+SEARCH retrieval_debug_docs SIMILAR TO 'filtered support runbook recall' LIMIT 3 WHERE team = 'platform' WITH { acorn: true }

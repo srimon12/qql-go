@@ -39,6 +39,34 @@ func TestSplitStatements(t *testing.T) {
 	require.Contains(t, statements[2], "RECOMMEND FROM docs")
 }
 
+func TestSplitStatementsSelectAndScroll(t *testing.T) {
+	input := "SHOW COLLECTION docs\nSELECT * FROM docs WHERE id = 'pt-1'\nSCROLL FROM docs WHERE status = 'active' AFTER 'pt-1' LIMIT 10"
+	statements, err := SplitStatements(input)
+	require.NoError(t, err)
+	require.Len(t, statements, 3)
+	require.Equal(t, "SHOW COLLECTION docs", statements[0])
+	require.Equal(t, "SELECT * FROM docs WHERE id = 'pt-1'", statements[1])
+	require.Equal(t, "SCROLL FROM docs WHERE status = 'active' AFTER 'pt-1' LIMIT 10", statements[2])
+}
+
+func TestRunFileWithSelectAndScroll(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sample.qql")
+	content := "SHOW COLLECTION docs\nSELECT * FROM docs WHERE id = 'pt-1'\nSCROLL FROM docs WHERE status = 'active' AFTER 'pt-1' LIMIT 10\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+
+	exec := &stubExecutor{}
+	okCount, failCount, err := RunFile(path, exec, false)
+	require.NoError(t, err)
+	require.Equal(t, 3, okCount)
+	require.Zero(t, failCount)
+	require.Equal(t, []string{
+		"SHOW COLLECTION docs",
+		"SELECT * FROM docs WHERE id = 'pt-1'",
+		"SCROLL FROM docs WHERE status = 'active' AFTER 'pt-1' LIMIT 10",
+	}, exec.queries)
+}
+
 func TestRunFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sample.qql")

@@ -1,0 +1,45 @@
+-- Vertical demo: healthcare retrieval with metadata filters and recommend-by-example.
+CREATE COLLECTION medical_records_demo HYBRID QUANTIZE SCALAR QUANTILE 0.99 ALWAYS RAM
+CREATE INDEX ON COLLECTION medical_records_demo FOR specialty TYPE keyword
+CREATE INDEX ON COLLECTION medical_records_demo FOR priority TYPE keyword
+CREATE INDEX ON COLLECTION medical_records_demo FOR status TYPE keyword
+CREATE INDEX ON COLLECTION medical_records_demo FOR year TYPE integer
+INSERT BULK INTO COLLECTION medical_records_demo VALUES [
+  {
+    'id': 601,
+    'text': 'Patient presents with sudden right-sided weakness and slurred speech. CT brain confirms left MCA infarct. Thrombolysis started in the treatment window.',
+    'specialty': 'neurology',
+    'priority': 'high',
+    'status': 'admitted',
+    'year': 2026
+  },
+  {
+    'id': 602,
+    'text': 'Patient with crushing substernal chest pain radiating to the jaw. Troponin elevated and ECG changes consistent with acute coronary syndrome.',
+    'specialty': 'cardiology',
+    'priority': 'high',
+    'status': 'admitted',
+    'year': 2026
+  },
+  {
+    'id': 603,
+    'text': 'Productive cough, fever, and right lower lobe consolidation on chest imaging. Broad-spectrum antibiotics started.',
+    'specialty': 'pulmonology',
+    'priority': 'medium',
+    'status': 'reviewed',
+    'year': 2025
+  },
+  {
+    'id': 604,
+    'text': 'Recurrent unilateral headache with photophobia and nausea, improved with migraine-directed therapy.',
+    'specialty': 'neurology',
+    'priority': 'low',
+    'status': 'discharged',
+    'year': 2024
+  }
+] USING HYBRID
+SEARCH medical_records_demo SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 USING HYBRID
+SEARCH medical_records_demo SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 USING SPARSE
+SEARCH medical_records_demo SIMILAR TO 'cardiac emergency chest pain' LIMIT 3 USING HYBRID WHERE priority = 'high' AND status = 'admitted'
+RECOMMEND FROM medical_records_demo POSITIVE IDS (601) LIMIT 3
+SHOW COLLECTION medical_records_demo

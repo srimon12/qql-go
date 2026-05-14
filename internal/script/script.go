@@ -102,6 +102,8 @@ func isStatementStarter(kind lexer.TokenKind) bool {
 		lexer.TokenKindDrop,
 		lexer.TokenKindShow,
 		lexer.TokenKindSearch,
+		lexer.TokenKindSelect,
+		lexer.TokenKindScroll,
 		lexer.TokenKindRecommend,
 		lexer.TokenKindDelete:
 		return true

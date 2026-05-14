@@ -1,0 +1,33 @@
+-- Bootstrap a hybrid docs collection with payload indexes and seed data.
+CREATE COLLECTION example_docs HYBRID QUANTIZE TURBO BITS 2 ALWAYS RAM
+CREATE INDEX ON COLLECTION example_docs FOR team TYPE keyword
+CREATE INDEX ON COLLECTION example_docs FOR status TYPE keyword
+CREATE INDEX ON COLLECTION example_docs FOR severity TYPE integer
+CREATE INDEX ON COLLECTION example_docs FOR year TYPE integer
+INSERT BULK INTO COLLECTION example_docs VALUES [
+  {
+    'id': 101,
+    'text': 'Qdrant incident review for hybrid search latency regression after a configuration rollout.',
+    'team': 'search',
+    'status': 'published',
+    'severity': 2,
+    'year': 2026
+  },
+  {
+    'id': 102,
+    'text': 'Runbook for HNSW tuning, ef search validation, and filtered query recall checks.',
+    'team': 'platform',
+    'status': 'published',
+    'severity': 1,
+    'year': 2025
+  },
+  {
+    'id': 103,
+    'text': 'Postmortem covering out of memory alerts during dense vector indexing on a staging cluster.',
+    'team': 'infra',
+    'status': 'draft',
+    'severity': 3,
+    'year': 2026
+  }
+] USING HYBRID
+SHOW COLLECTION example_docs

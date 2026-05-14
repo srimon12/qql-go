@@ -1,0 +1,28 @@
+-- Retention cleanup: inspect archived content, delete it by filter, then verify what remains.
+CREATE COLLECTION retention_demo HYBRID
+CREATE INDEX ON COLLECTION retention_demo FOR status TYPE keyword
+CREATE INDEX ON COLLECTION retention_demo FOR year TYPE integer
+INSERT BULK INTO COLLECTION retention_demo VALUES [
+  {
+    'id': 501,
+    'text': 'Active customer note that should remain after cleanup.',
+    'status': 'active',
+    'year': 2026
+  },
+  {
+    'id': 502,
+    'text': 'Archived retention candidate from an older support cycle.',
+    'status': 'archived',
+    'year': 2023
+  },
+  {
+    'id': 503,
+    'text': 'Another archived note that should be removed by retention cleanup.',
+    'status': 'archived',
+    'year': 2022
+  }
+] USING HYBRID
+SCROLL FROM retention_demo WHERE status = 'archived' LIMIT 10
+DELETE FROM retention_demo WHERE status = 'archived'
+SCROLL FROM retention_demo LIMIT 10
+SHOW COLLECTION retention_demo
