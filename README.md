@@ -1,8 +1,8 @@
-# qql-go - SQL-Like CLI for Qdrant Vector Databases
+# qql-go - A Deterministic CLI for Qdrant Vector Database Operations
 
-`qql-go` is an open-source CLI for [Qdrant](https://qdrant.tech) that gives vector search a SQL-like interface. It is built for humans who want a readable terminal workflow and for agents that need stable JSON output.
+`qql-go` is a single-binary operational CLI for [Qdrant](https://qdrant.tech). It gives humans, scripts, CI pipelines, and agents one deterministic interface to inspect collections, run retrieval workflows, execute versioned `.qql` scripts, and automate vector database operations without writing SDK code.
 
-It is an independent Go port of the original [pavanjava/qql](https://github.com/pavanjava/qql), with a cleaner CLI surface, structured machine output, install scripts, release assets, and agent-oriented usage patterns.
+It is an independent Go implementation of the original [pavanjava/qql](https://github.com/pavanjava/qql), focused on portability, stable machine output, and operational use.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go 1.24+](https://img.shields.io/badge/Go-1.24%2B-00ADD8.svg)](https://go.dev/)
@@ -26,14 +26,47 @@ It is an independent Go port of the original [pavanjava/qql](https://github.com/
 It is designed for both:
 
 - humans using a readable terminal CLI
-- agents and scripts using stable JSON output
+- scripts, CI jobs, and agents using stable JSON output
 
 ## Why qql-go?
 
-- Use it as a **Qdrant CLI** for day-to-day collection and retrieval workflows.
-- Use it as a **Qdrant SQL-like interface** when you want repeatable commands instead of ad-hoc API calls.
-- Use it for **agent automation** when you need structured output that is easy to parse.
-- Use it for **local scripts and demos** when you want a small, explicit command surface.
+- Use it as a **Qdrant operations CLI** for day-to-day collection management, retrieval checks, and diagnostics.
+- Use it when you want **repeatable, auditable commands** instead of ad-hoc SDK snippets.
+- Use it in **CI, shell scripts, and cron jobs** where a single binary is easier than a language runtime plus dependencies.
+- Use it for **agent execution** when you want a constrained command surface and stable `--json` output.
+
+## Why not just use the SDK?
+
+Use the Qdrant SDK to build your application.
+
+Use `qql-go` to operate, inspect, test, and automate Qdrant.
+
+The SDK is the right tool for application code. `qql-go` is the right tool when you want:
+
+- one portable binary
+- a deterministic text/JSON interface
+- versioned `.qql` files in git
+- support and debugging commands people can run exactly as written
+
+## Where it fits
+
+`qql-go` is strongest in workflows like:
+
+- CI smoke tests for search, insert, and collection setup
+- local and remote support/debug sessions
+- reproducible retrieval experiments
+- checked-in `.qql` scripts for seeding, validation, and maintenance
+- agent automation that should execute commands instead of generating SDK boilerplate
+
+## Product boundaries
+
+`qql-go` is not:
+
+- an ORM
+- a replacement for the Qdrant SDK in application code
+- a full SQL database layer over Qdrant
+
+It is a compact, deterministic command interface for Qdrant operations.
 
 ## Installation
 
