@@ -20,7 +20,10 @@ type Client interface {
 	ScrollAndOffset(ctx context.Context, request *qdrant.ScrollPoints) ([]*qdrant.RetrievedPoint, *qdrant.PointId, error)
 }
 
-func Collection(ctx context.Context, client Client, collection, outputPath string) (int, int, error) {
+func Collection(ctx context.Context, client Client, collection, outputPath string, batchSize int) (int, int, error) {
+	if batchSize <= 0 {
+		batchSize = 50
+	}
 	exists, err := client.CollectionExists(ctx, collection)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to check collection: %w", err)

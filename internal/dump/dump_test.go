@@ -79,7 +79,7 @@ func TestCollection(t *testing.T) {
 	}
 
 	outputPath := filepath.Join(t.TempDir(), "dump.qql")
-	written, skipped, err := Collection(context.Background(), client, "docs", outputPath)
+	written, skipped, err := Collection(context.Background(), client, "docs", outputPath, 50)
 	require.NoError(t, err)
 	require.Equal(t, 1, written)
 	require.Equal(t, 1, skipped)

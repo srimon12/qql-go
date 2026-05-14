@@ -43,7 +43,7 @@ const (
 	defaultInferenceMode    = "cloud"
 )
 
-var Version = "0.1.3"
+var Version = "0.1.4"
 
 type commandOutputMode struct {
 	json  bool
@@ -67,6 +67,7 @@ type qdrantClient interface {
 	CreateFieldIndex(context.Context, *qdrant.CreateFieldIndexCollection) (*qdrant.UpdateResult, error)
 	Count(context.Context, *qdrant.CountPoints) (uint64, error)
 	ScrollAndOffset(context.Context, *qdrant.ScrollPoints) ([]*qdrant.RetrievedPoint, *qdrant.PointId, error)
+	Get(context.Context, *qdrant.GetPoints) ([]*qdrant.RetrievedPoint, error)
 }
 
 func NewExecutor(client qdrantClient, cfg *config.Config) *Executor {
@@ -150,8 +151,8 @@ func (e *Executor) ExecuteFile(path string, stopOnError bool) (string, error) {
 	return fmt.Sprintf("Executed script %s (%d succeeded, %d failed)", path, okCount, failCount), nil
 }
 
-func (e *Executor) DumpCollection(collection, outputPath string) (string, error) {
-	written, skipped, err := dump.Collection(context.Background(), e.client, collection, outputPath)
+func (e *Executor) DumpCollection(collection, outputPath string, batchSize int) (string, error) {
+	written, skipped, err := dump.Collection(context.Background(), e.client, collection, outputPath, batchSize)
 	if err != nil {
 		return "", err
 	}
@@ -182,6 +183,10 @@ func (e *Executor) ExecuteResult(query string) (*ExecResponse, error) {
 		return e.doInsert(n)
 	case *ast.InsertBulkStmt:
 		return e.doInsertBulk(n)
+	case *ast.SelectStmt:
+		return e.doSelect(n)
+	case *ast.ScrollStmt:
+		return e.doScroll(n)
 	case *ast.SearchStmt:
 		return e.doSearch(n)
 	case *ast.RecommendStmt:
@@ -232,6 +237,9 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			if n.Quantization.Quantile != nil {
 				plan.WriteString(fmt.Sprintf("Quantile: %.4f\n", *n.Quantization.Quantile))
 			}
+			if n.Quantization.TurboBits != nil {
+				plan.WriteString(fmt.Sprintf("Turbo bits: %g\n", *n.Quantization.TurboBits))
+			}
 			if n.Quantization.AlwaysRAM {
 				plan.WriteString("Quantization storage: ALWAYS RAM\n")
 			}
@@ -273,6 +281,18 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		}
 		plan.WriteString(fmt.Sprintf("Batch size: %d\n", len(n.ValuesList)))
 		plan.WriteString("Action: Insert multiple points with auto-vectorization\n")
+	case *ast.SelectStmt:
+		plan.WriteString(fmt.Sprintf("Statement: SELECT * FROM %s WHERE id = '%v'\n", n.Collection, n.PointID))
+		plan.WriteString("Action: Retrieve a single point by ID\n")
+	case *ast.ScrollStmt:
+		plan.WriteString(fmt.Sprintf("Statement: SCROLL FROM %s LIMIT %d\n", n.Collection, n.Limit))
+		if n.QueryFilter != nil {
+			plan.WriteString(fmt.Sprintf("Filter: %s\n", e.filterToString(n.QueryFilter)))
+		}
+		if n.After != nil {
+			plan.WriteString(fmt.Sprintf("After: %v\n", n.After))
+		}
+		plan.WriteString("Action: Scroll (paginate) through points\n")
 	case *ast.SearchStmt:
 		plan.WriteString(fmt.Sprintf("Statement: SEARCH %s SIMILAR TO '%s' LIMIT %d\n",
 			n.Collection, n.QueryText, n.Limit))
@@ -282,7 +302,11 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		if n.SparseOnly {
 			plan.WriteString("Search: SPARSE\n")
 		} else if n.Hybrid {
-			plan.WriteString("Search: HYBRID (dense + sparse)\n")
+			mode := "HYBRID (dense + sparse)"
+			if n.Fusion != nil && *n.Fusion != "" {
+				mode = fmt.Sprintf("HYBRID (dense + sparse, fusion=%s)", *n.Fusion)
+			}
+			plan.WriteString("Search: " + mode + "\n")
 		} else {
 			plan.WriteString("Search: DENSE\n")
 		}
@@ -655,6 +679,145 @@ func (e *Executor) doInsertBulk(n *ast.InsertBulkStmt) (*ExecResponse, error) {
 	}, nil
 }
 
+func (e *Executor) doSelect(n *ast.SelectStmt) (*ExecResponse, error) {
+	ctx := context.Background()
+	exists, err := e.client.CollectionExists(ctx, n.Collection)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check collection: %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("collection '%s' does not exist", n.Collection)
+	}
+	pointID := newPointID(n.PointID)
+	records, err := e.client.Get(ctx, &qdrant.GetPoints{
+		CollectionName: n.Collection,
+		Ids:            []*qdrant.PointId{pointID},
+		WithPayload:    qdrant.NewWithPayload(true),
+		WithVectors:    qdrant.NewWithVectors(false),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve point: %w", err)
+	}
+	if len(records) == 0 {
+		return &ExecResponse{
+			OK:        true,
+			Operation: "select",
+			Message:   fmt.Sprintf("Point '%v' not found in '%s'", n.PointID, n.Collection),
+			Data: map[string]any{
+				"collection": n.Collection,
+				"point_id":   n.PointID,
+				"found":      false,
+			},
+		}, nil
+	}
+	record := records[0]
+	return &ExecResponse{
+		OK:        true,
+		Operation: "select",
+		Message:   fmt.Sprintf("Retrieved point '%v' from '%s'", n.PointID, n.Collection),
+		Data: map[string]any{
+			"collection": n.Collection,
+			"point_id":   n.PointID,
+			"found":      true,
+			"record": map[string]any{
+				"id":      pointIDString(record.GetId()),
+				"payload": convertRetrievedPayload(record.GetPayload()),
+			},
+		},
+	}, nil
+}
+
+func (e *Executor) doScroll(n *ast.ScrollStmt) (*ExecResponse, error) {
+	ctx := context.Background()
+	exists, err := e.client.CollectionExists(ctx, n.Collection)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check collection: %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("collection '%s' does not exist", n.Collection)
+	}
+
+	req := &qdrant.ScrollPoints{
+		CollectionName: n.Collection,
+		Limit:          qdrant.PtrOf(uint32(n.Limit)),
+		WithPayload:    qdrant.NewWithPayload(true),
+		WithVectors:    qdrant.NewWithVectors(false),
+	}
+	if n.After != nil {
+		req.Offset = newPointID(n.After)
+	}
+	if n.QueryFilter != nil {
+		filter, err := filters.NewFilterConverter().BuildFilter(n.QueryFilter)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build filter: %w", err)
+		}
+		req.Filter = filter
+	}
+
+	records, nextOffset, err := e.client.ScrollAndOffset(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("scroll failed: %w", err)
+	}
+
+	points := make([]map[string]any, 0, len(records))
+	for _, rec := range records {
+		points = append(points, map[string]any{
+			"id":      pointIDString(rec.GetId()),
+			"payload": convertRetrievedPayload(rec.GetPayload()),
+		})
+	}
+
+	var next interface{}
+	if nextOffset != nil {
+		next = pointIDString(nextOffset)
+	}
+
+	return &ExecResponse{
+		OK:        true,
+		Operation: "scroll",
+		Message:   fmt.Sprintf("Scrolled %d point(s) from '%s'", len(points), n.Collection),
+		Data: map[string]any{
+			"count":       len(points),
+			"points":      points,
+			"collection":  n.Collection,
+			"next_offset": next,
+		},
+	}, nil
+}
+
+func convertRetrievedPayload(payload map[string]*qdrant.Value) map[string]interface{} {
+	result := make(map[string]interface{}, len(payload))
+	for key, val := range payload {
+		result[key] = convertValue(val)
+	}
+	return result
+}
+
+func convertValue(val *qdrant.Value) interface{} {
+	switch v := val.GetKind().(type) {
+	case *qdrant.Value_StringValue:
+		return v.StringValue
+	case *qdrant.Value_IntegerValue:
+		return int(v.IntegerValue)
+	case *qdrant.Value_DoubleValue:
+		return v.DoubleValue
+	case *qdrant.Value_BoolValue:
+		return v.BoolValue
+	case *qdrant.Value_NullValue:
+		return nil
+	case *qdrant.Value_ListValue:
+		items := make([]interface{}, 0, len(v.ListValue.GetValues()))
+		for _, item := range v.ListValue.GetValues() {
+			items = append(items, convertValue(item))
+		}
+		return items
+	case *qdrant.Value_StructValue:
+		return convertRetrievedPayload(v.StructValue.GetFields())
+	default:
+		return nil
+	}
+}
+
 func (e *Executor) doSearch(n *ast.SearchStmt) (*ExecResponse, error) {
 	ctx := context.Background()
 
@@ -933,6 +1096,17 @@ func buildQuantizationConfig(cfg *ast.QuantizationConfig) *qdrant.QuantizationCo
 			Compression: qdrant.CompressionRatio_x4,
 			AlwaysRam:   qdrant.PtrOf(cfg.AlwaysRAM),
 		})
+	case ast.QuantizationTypeTurbo:
+		turbo := &qdrant.TurboQuantization{
+			AlwaysRam: qdrant.PtrOf(cfg.AlwaysRAM),
+		}
+		if cfg.TurboBits != nil {
+			bits := turboBitsEnum(*cfg.TurboBits)
+			if bits != nil {
+				turbo.Bits = bits
+			}
+		}
+		return qdrant.NewQuantizationTurbo(turbo)
 	default:
 		return nil
 	}
@@ -1096,16 +1270,43 @@ func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, de
 		if err != nil {
 			return nil, err
 		}
+		fusionMode := qdrant.Fusion_RRF
+		if n.Fusion != nil && *n.Fusion == "dbsf" {
+			fusionMode = qdrant.Fusion_DBSF
+		}
 		return &qdrant.QueryPoints{
 			CollectionName: n.Collection,
 			Prefetch:       prefetch,
-			Query:          qdrant.NewQueryFusion(qdrant.Fusion_RRF),
+			Query:          qdrant.NewQueryFusion(fusionMode),
 			Limit:          qdrant.PtrOf(limit),
 			Params:         params,
 		}, nil
 	}
 
 	if n.SparseOnly {
+		if n.Rerank {
+			if e.usesLocalEmbeddings() {
+				return nil, fmt.Errorf("RERANK is currently only available in cloud inference mode")
+			}
+			if !hasRerankVector {
+				return nil, fmt.Errorf("collection '%s' does not support rerank; create it with HYBRID RERANK", n.Collection)
+			}
+			rerankModel := rerankModelDefault
+			if n.RerankModel != nil && *n.RerankModel != "" {
+				rerankModel = *n.RerankModel
+			}
+			sparsePrefetch := &qdrant.PrefetchQuery{
+				Query:  qdrant.NewQueryDocument(&qdrant.Document{Text: n.QueryText, Model: sparseModel}),
+				Using:  qdrant.PtrOf(sparseVectorName),
+				Limit:  qdrant.PtrOf(limit * rerankPrefetchFactor),
+				Params: params,
+			}
+			if e.usesLocalEmbeddings() {
+				sv := sparse.BuildQuery(n.QueryText)
+				sparsePrefetch.Query = qdrant.NewQuerySparse(sv.Indices, sv.Values)
+			}
+			return buildRerankSearchRequest(n.Collection, n.QueryText, rerankModel, limit, []*qdrant.PrefetchQuery{sparsePrefetch}, params), nil
+		}
 		query := qdrant.NewQueryDocument(&qdrant.Document{
 			Text:  n.QueryText,
 			Model: sparseModel,
@@ -1411,6 +1612,21 @@ func recommendStrategy(value string) (qdrant.RecommendStrategy, bool) {
 		return qdrant.RecommendStrategy_SumScores, true
 	default:
 		return 0, false
+	}
+}
+
+func turboBitsEnum(value float64) *qdrant.TurboQuantBitSize {
+	switch value {
+	case 1.0:
+		return qdrant.TurboQuantBitSize_Bits1.Enum()
+	case 1.5:
+		return qdrant.TurboQuantBitSize_Bits1_5.Enum()
+	case 2.0:
+		return qdrant.TurboQuantBitSize_Bits2.Enum()
+	case 4.0:
+		return qdrant.TurboQuantBitSize_Bits4.Enum()
+	default:
+		return nil
 	}
 }
 
@@ -2070,12 +2286,16 @@ func NewDumpCmd(out *output.Outputter) *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mode := readOutputMode(cmd)
+			batchSize, _ := cmd.Flags().GetInt("batch-size")
+			if batchSize <= 0 {
+				batchSize = 50
+			}
 			cfg, client, err := loadSavedConfigAndClient()
 			if err != nil {
 				return commandError(out, mode, "dump", strings.Join(args, " "), err)
 			}
 			_ = cfg
-			written, skipped, err := dump.Collection(context.Background(), client, args[0], args[1])
+			written, skipped, err := dump.Collection(context.Background(), client, args[0], args[1], batchSize)
 			if err != nil {
 				return commandError(out, mode, "dump", strings.Join(args, " "), err)
 			}
@@ -2095,6 +2315,7 @@ func NewDumpCmd(out *output.Outputter) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().Int("batch-size", 50, "Number of points per INSERT BULK batch in dump output")
 	addOutputFlags(cmd)
 	return cmd
 }

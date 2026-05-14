@@ -897,6 +897,9 @@ func (f *fakeQdrantClient) Count(context.Context, *qdrant.CountPoints) (uint64, 
 func (f *fakeQdrantClient) ScrollAndOffset(context.Context, *qdrant.ScrollPoints) ([]*qdrant.RetrievedPoint, *qdrant.PointId, error) {
 	return nil, nil, nil
 }
+func (f *fakeQdrantClient) Get(context.Context, *qdrant.GetPoints) ([]*qdrant.RetrievedPoint, error) {
+	return nil, nil
+}
 
 func TestBuildSearchPrefetchesLocalModeReturnsExplicitQueries(t *testing.T) {
 	server := newEmbeddingServer(t, []float32{1, 2, 3})
@@ -1106,4 +1109,108 @@ func newEmbeddingServer(t *testing.T, embedding []float32) *httptest.Server {
 			},
 		}))
 	}))
+}
+
+func TestBuildQuantizationConfigTurbo(t *testing.T) {
+	cfg := buildQuantizationConfig(&ast.QuantizationConfig{
+		Type:      ast.QuantizationTypeTurbo,
+		TurboBits: float64Ptr(4.0),
+		AlwaysRAM: true,
+	})
+	require.NotNil(t, cfg)
+	turbo := cfg.GetTurboquant()
+	require.NotNil(t, turbo)
+	require.True(t, turbo.GetAlwaysRam())
+	require.Equal(t, qdrant.TurboQuantBitSize_Bits4, turbo.GetBits())
+}
+
+func TestBuildQuantizationConfigTurboDefaultBits(t *testing.T) {
+	cfg := buildQuantizationConfig(&ast.QuantizationConfig{
+		Type: ast.QuantizationTypeTurbo,
+	})
+	require.NotNil(t, cfg)
+	turbo := cfg.GetTurboquant()
+	require.NotNil(t, turbo)
+	require.Nil(t, turbo.Bits)
+	require.False(t, turbo.GetAlwaysRam())
+}
+
+func TestBuildQuantizationConfigTurboBits1_5(t *testing.T) {
+	cfg := buildQuantizationConfig(&ast.QuantizationConfig{
+		Type:      ast.QuantizationTypeTurbo,
+		TurboBits: float64Ptr(1.5),
+	})
+	require.NotNil(t, cfg)
+	turbo := cfg.GetTurboquant()
+	require.NotNil(t, turbo)
+	require.Equal(t, qdrant.TurboQuantBitSize_Bits1_5, turbo.GetBits())
+}
+
+func TestBuildSearchRequestHybridDBSF(t *testing.T) {
+	exec := NewExecutor(nil, &config.Config{})
+	fusion := "dbsf"
+	req, err := exec.buildSearchRequest(context.Background(), &ast.SearchStmt{
+		Collection: "demo",
+		QueryText:  "vector database",
+		Limit:      5,
+		Hybrid:     true,
+		Fusion:     &fusion,
+	}, "dense-model", "sparse-model", false, 5)
+	require.NoError(t, err)
+
+	require.Equal(t, qdrant.Fusion_DBSF, req.GetQuery().GetFusion())
+}
+
+func TestBuildSearchRequestHybridRRFByDefault(t *testing.T) {
+	exec := NewExecutor(nil, &config.Config{})
+	req, err := exec.buildSearchRequest(context.Background(), &ast.SearchStmt{
+		Collection: "demo",
+		QueryText:  "vector database",
+		Limit:      5,
+		Hybrid:     true,
+	}, "dense-model", "sparse-model", false, 5)
+	require.NoError(t, err)
+
+	require.Equal(t, qdrant.Fusion_RRF, req.GetQuery().GetFusion())
+}
+
+func TestExplainSelectAndScrollQueries(t *testing.T) {
+	exec := NewExecutor(nil, &config.Config{})
+
+	t.Run("select", func(t *testing.T) {
+		plan, err := exec.Explain(`SELECT * FROM docs WHERE id = 'pt-1'`)
+		require.NoError(t, err)
+		require.Contains(t, plan, "Statement: SELECT * FROM docs WHERE id = 'pt-1'")
+		require.Contains(t, plan, "Retrieve a single point by ID")
+	})
+
+	t.Run("scroll basic", func(t *testing.T) {
+		plan, err := exec.Explain(`SCROLL FROM docs LIMIT 10`)
+		require.NoError(t, err)
+		require.Contains(t, plan, "Statement: SCROLL FROM docs LIMIT 10")
+		require.Contains(t, plan, "Scroll (paginate) through points")
+	})
+
+	t.Run("scroll with filter and after", func(t *testing.T) {
+		plan, err := exec.Explain(`SCROLL FROM docs WHERE status = 'active' AFTER 'pt-5' LIMIT 20`)
+		require.NoError(t, err)
+		require.Contains(t, plan, "Filter:")
+		require.Contains(t, plan, "After: pt-5")
+	})
+
+	t.Run("turbo quantization explain", func(t *testing.T) {
+		plan, err := exec.Explain(`CREATE COLLECTION docs QUANTIZE TURBO BITS 2 ALWAYS RAM`)
+		require.NoError(t, err)
+		require.Contains(t, plan, "Quantization: turbo")
+		require.Contains(t, plan, "Turbo bits: 2")
+		require.Contains(t, plan, "Quantization storage: ALWAYS RAM")
+	})
+}
+
+func TestTurboBitsEnum(t *testing.T) {
+	require.Equal(t, qdrant.TurboQuantBitSize_Bits1, *turboBitsEnum(1.0))
+	require.Equal(t, qdrant.TurboQuantBitSize_Bits1_5, *turboBitsEnum(1.5))
+	require.Equal(t, qdrant.TurboQuantBitSize_Bits2, *turboBitsEnum(2.0))
+	require.Equal(t, qdrant.TurboQuantBitSize_Bits4, *turboBitsEnum(4.0))
+	require.Nil(t, turboBitsEnum(3.0))
 }

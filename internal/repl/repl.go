@@ -21,7 +21,7 @@ type QueryExecutor interface {
 	Execute(query string) (string, error)
 	Explain(query string) (string, error)
 	ExecuteFile(path string, stopOnError bool) (string, error)
-	DumpCollection(collection, outputPath string) (string, error)
+	DumpCollection(collection, outputPath string, batchSize int) (string, error)
 }
 
 type REPL struct {
@@ -194,7 +194,7 @@ func (r *REPL) handleCommand(cmd string) error {
 		if len(parts) != 2 {
 			return fmt.Errorf("dump error: usage DUMP [COLLECTION] <name> <output.qql>")
 		}
-		result, err := r.executor.DumpCollection(parts[0], parts[1])
+		result, err := r.executor.DumpCollection(parts[0], parts[1], 50)
 		if err != nil {
 			return fmt.Errorf("dump error: %w", err)
 		}

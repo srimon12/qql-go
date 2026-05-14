@@ -1,7 +1,7 @@
 # QQL / Qdrant Compatibility Matrix
 
 > This document tracks which QQL versions support which Qdrant features, across both Python and Go implementations.
-> Last updated: 2026-04-29
+> Last updated: 2026-05-14
 
 ## Legend
 
@@ -25,7 +25,7 @@
 | Create collection | `create_collection` | ✅ v1.0 | ✅ v0.1 | Go auto-creates on insert; Python supports explicit create and insert-time create paths |
 | Create with custom distance | `distance: DOT / EUCLID / MANHATTAN / COSINE` | ❌ | ❌ | Locked to COSINE |
 | Create with custom HNSW | `hnsw_config` | ❌ | ❌ | |
-| Create with quantization | `quantization_config` | ✅ v1.4 | ✅ unreleased | `QUANTIZE SCALAR|BINARY|PRODUCT` |
+| Create with quantization | `quantization_config` | ✅ v1.4 | ✅ v0.1.3 | `QUANTIZE SCALAR|BINARY|PRODUCT|TURBO` |
 | Create with on-disk payload | `on_disk_payload` | ❌ | ❌ | |
 | Create with sparse vectors | `sparse_vectors_config` | ✅ v1.0 | ✅ v0.1 | Via `HYBRID` |
 | Create with multivectors | `multivector_config` | ❌ | ❌ | |
@@ -41,13 +41,13 @@
 |---|---|---|---|---|
 | Insert single point | `upsert` | ✅ v1.0 | ✅ v0.1 | Requires `text` field |
 | Insert bulk | `upsert` (batch) | ✅ v1.0 | ✅ v0.1 | |
-| Get point by ID | `retrieve` | ❌ | ❌ | Gap |
+| Get point by ID | `retrieve` | ✅ v2.2 | ✅ v0.1.4 | `SELECT` statement |
 | Update payload | `set_payload` | ❌ | ❌ | Gap |
 | Delete point by ID | `delete` | ✅ v1.0 | ✅ v0.1 | |
 | Delete points by filter | `delete` (filter) | ❌ | ✅ v0.1 | Python README claims support but parser only handles `WHERE id = ...` |
 | Delete payload keys | `delete_payload` | ❌ | ❌ | Gap |
 | Count points | `count` | ❌ | ❌ | Gap |
-| Scroll points | `scroll` | ❌ | ❌ | Gap |
+| Scroll points | `scroll` | ✅ v2.2 | ✅ v0.1.4 | `SCROLL` statement |
 
 ### Search
 
@@ -65,7 +65,7 @@
 | MMR diversity | `diversity` param (v1.15+) | ❌ | ❌ | Gap |
 | Score boosting | `rescore` / `formula` | ❌ | ❌ | Gap |
 | Multivector search | `multivector` | ❌ | ❌ | Gap |
-| Rerank (cross-encoder) | `rerank` / Fastembed | ✅ v1.0 (local) | ⚠️ v0.1 (cloud only) | Parity gap |
+| Rerank (cross-encoder) | `rerank` / Fastembed | ✅ v1.0 (local) | ⚠️ v0.1 (cloud only) | Sparse-only rerank added v0.1.4 |
 | Relevance feedback | `feedback` query | ❌ | ❌ | Gap |
 
 ### Recommend
@@ -121,14 +121,14 @@
 | QQL Version | Minimum Qdrant | Recommended Qdrant | Tested Qdrant Versions |
 |---|---|---|---|
 | Python 1.4.0 | 1.13.0 | 1.13.x | 1.13.0 |
-| Go 0.1.2 | 1.13.0 | 1.13.x | 1.13.0 |
+| Go 0.1.4 | 1.13.0 | 1.13.x | 1.13.0 |
 
 ### Language Support
 
 | QQL Version | Python `qql-cli` | Go `qql-go` | Feature Parity |
 |---|---|---|---|
-| Current | 1.4.0 | 0.1.2 | ~85% |
-| Target (Phase 1) | 1.5.0 | 0.2.0 | ~95% |
+| Current | 2.2.0 | 0.1.4 | ~90% |
+| Target (Phase 1) | 2.3.0 | 0.2.0 | ~95% |
 | Target (Phase 2) | 1.6.0 | 0.3.0 | ~98% |
 
 ---

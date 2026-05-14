@@ -46,7 +46,7 @@ func (s *stubExecutor) ExecuteFile(path string, _ bool) (string, error) {
 	return s.executeFileResult, s.executeFileErr
 }
 
-func (s *stubExecutor) DumpCollection(collection, outputPath string) (string, error) {
+func (s *stubExecutor) DumpCollection(collection, outputPath string, batchSize int) (string, error) {
 	s.dumpCollection = collection
 	s.dumpPath = outputPath
 	return s.dumpResult, s.dumpErr

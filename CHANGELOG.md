@@ -8,6 +8,26 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 - No unreleased changes yet.
 
+## [0.1.4] - 2026-05-14
+
+### Added
+
+- **SELECT statement** — `SELECT * FROM <collection> WHERE id = <point_id>` retrieves a single point by ID without vectors.
+- **SCROLL statement** — `SCROLL FROM <collection> [WHERE ...] [AFTER <id>] LIMIT <n>` supports pagination through points with optional filters and cursor offset.
+- **Hybrid FUSION 'dbsf'** — `SEARCH ... USING HYBRID FUSION 'dbsf'` enables DBSF fusion strategy as an alternative to the default RRF.
+- **TURBO quantization** — `CREATE COLLECTION ... QUANTIZE TURBO [BITS <1|1.5|2|4>] [ALWAYS RAM]` supports 1-4 bit turbo quantization with configurable bit depth.
+- **RERANK with sparse-only search** — `SEARCH ... USING SPARSE RERANK` now supports reranking on sparse-only results (cloud mode).
+- **Configurable dump batch size** — `qql-go dump --batch-size <n>` controls the number of points per INSERT BULK batch in dump output.
+
+### Changed
+
+- **Qdrant Go SDK upgraded** from v1.17.0 to v1.18.1 to support TURBO quantization.
+- Collection creation messages now include turbo quantization details.
+
+### Fixed
+
+- RERANK now works with sparse-only (`USING SPARSE RERANK`) searches in cloud inference mode.
+
 ## [0.1.3] - 2026-04-29
 
 ### Added

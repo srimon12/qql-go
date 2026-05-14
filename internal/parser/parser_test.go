@@ -1523,3 +1523,242 @@ func assertFilterExprEqual(t *testing.T, expected, actual ast.FilterExpr) {
 		t.Fatalf("unexpected type %T", expected)
 	}
 }
+
+func TestParseSelect(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    *ast.SelectStmt
+		wantErr bool
+	}{
+		{
+			name:  "select with string id",
+			input: `SELECT * FROM docs WHERE id = 'point-123'`,
+			want: &ast.SelectStmt{
+				Collection: "docs",
+				PointID:    "point-123",
+			},
+		},
+		{
+			name:  "select with integer id",
+			input: `SELECT * FROM docs WHERE id = 42`,
+			want: &ast.SelectStmt{
+				Collection: "docs",
+				PointID:    42,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.input)
+			require.NoError(t, err)
+			p := NewParser()
+			node, err := p.Parse(tokens)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			got, ok := node.(*ast.SelectStmt)
+			require.True(t, ok, "expected SelectStmt, got %T", node)
+			assert.Equal(t, tt.want.Collection, got.Collection)
+			assert.Equal(t, tt.want.PointID, got.PointID)
+		})
+	}
+}
+
+func TestParseScroll(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    *ast.ScrollStmt
+		wantErr bool
+	}{
+		{
+			name:  "basic scroll",
+			input: `SCROLL FROM docs LIMIT 10`,
+			want: &ast.ScrollStmt{
+				Collection: "docs",
+				Limit:      10,
+			},
+		},
+		{
+			name:  "scroll with where",
+			input: `SCROLL FROM docs WHERE status = 'active' LIMIT 5`,
+			want: &ast.ScrollStmt{
+				Collection:  "docs",
+				Limit:       5,
+				QueryFilter: &ast.CompareExpr{Field: "status", Op: "=", Value: "active"},
+			},
+		},
+		{
+			name:  "scroll with after",
+			input: `SCROLL FROM docs AFTER 'point-123' LIMIT 10`,
+			want: &ast.ScrollStmt{
+				Collection: "docs",
+				Limit:      10,
+				After:      "point-123",
+			},
+		},
+		{
+			name:  "scroll with after integer",
+			input: `SCROLL FROM docs AFTER 42 LIMIT 10`,
+			want: &ast.ScrollStmt{
+				Collection: "docs",
+				Limit:      10,
+				After:      42,
+			},
+		},
+		{
+			name:  "scroll with where and after",
+			input: `SCROLL FROM docs WHERE status = 'active' AFTER 'point-50' LIMIT 20`,
+			want: &ast.ScrollStmt{
+				Collection:  "docs",
+				Limit:       20,
+				QueryFilter: &ast.CompareExpr{Field: "status", Op: "=", Value: "active"},
+				After:       "point-50",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.input)
+			require.NoError(t, err)
+			p := NewParser()
+			node, err := p.Parse(tokens)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			got, ok := node.(*ast.ScrollStmt)
+			require.True(t, ok, "expected ScrollStmt, got %T", node)
+			assert.Equal(t, tt.want.Collection, got.Collection)
+			assert.Equal(t, tt.want.Limit, got.Limit)
+			assert.Equal(t, tt.want.After, got.After)
+			if tt.want.QueryFilter != nil {
+				assertFilterExprEqual(t, tt.want.QueryFilter, got.QueryFilter)
+			}
+		})
+	}
+}
+
+func TestParseSearchHybridWithFusion(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		wantFusion *string
+	}{
+		{
+			name:       "rrf fusion",
+			input:      `SEARCH docs SIMILAR TO 'query' LIMIT 5 USING HYBRID FUSION 'rrf'`,
+			wantFusion: strPtr("rrf"),
+		},
+		{
+			name:       "dbsf fusion",
+			input:      `SEARCH docs SIMILAR TO 'query' LIMIT 5 USING HYBRID FUSION 'dbsf'`,
+			wantFusion: strPtr("dbsf"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.input)
+			require.NoError(t, err)
+			p := NewParser()
+			node, err := p.Parse(tokens)
+			require.NoError(t, err)
+			search, ok := node.(*ast.SearchStmt)
+			require.True(t, ok, "expected SearchStmt, got %T", node)
+			assert.True(t, search.Hybrid)
+			if tt.wantFusion != nil {
+				require.NotNil(t, search.Fusion)
+				assert.Equal(t, *tt.wantFusion, *search.Fusion)
+			} else {
+				assert.Nil(t, search.Fusion)
+			}
+		})
+	}
+
+	t.Run("invalid fusion", func(t *testing.T) {
+		l := &lexer.Lexer{}
+		tokens, err := l.Tokenize(`SEARCH docs SIMILAR TO 'query' LIMIT 5 USING HYBRID FUSION 'invalid'`)
+		require.NoError(t, err)
+		_, err = NewParser().Parse(tokens)
+		require.Error(t, err)
+	})
+}
+
+func TestParseCreateCollectionWithTurboQuantization(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantType  ast.QuantizationType
+		wantBits  *float64
+		wantRAM   bool
+	}{
+		{
+			name:     "turbo without bits",
+			input:    `CREATE COLLECTION docs QUANTIZE TURBO`,
+			wantType: ast.QuantizationTypeTurbo,
+		},
+		{
+			name:     "turbo bits 4",
+			input:    `CREATE COLLECTION docs QUANTIZE TURBO BITS 4`,
+			wantType: ast.QuantizationTypeTurbo,
+			wantBits: float64Ptr(4.0),
+		},
+		{
+			name:     "turbo bits 2 always ram",
+			input:    `CREATE COLLECTION docs QUANTIZE TURBO BITS 2 ALWAYS RAM`,
+			wantType: ast.QuantizationTypeTurbo,
+			wantBits: float64Ptr(2.0),
+			wantRAM:  true,
+		},
+		{
+			name:     "turbo bits 1.5",
+			input:    `CREATE COLLECTION docs QUANTIZE TURBO BITS 1.5`,
+			wantType: ast.QuantizationTypeTurbo,
+			wantBits: float64Ptr(1.5),
+		},
+		{
+			name:     "turbo bits 1 always ram",
+			input:    `CREATE COLLECTION docs QUANTIZE TURBO BITS 1 ALWAYS RAM`,
+			wantType: ast.QuantizationTypeTurbo,
+			wantBits: float64Ptr(1.0),
+			wantRAM:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.input)
+			require.NoError(t, err)
+			p := NewParser()
+			node, err := p.Parse(tokens)
+			require.NoError(t, err)
+			create, ok := node.(*ast.CreateCollectionStmt)
+			require.True(t, ok, "expected CreateCollectionStmt, got %T", node)
+			require.NotNil(t, create.Quantization)
+			assert.Equal(t, tt.wantType, create.Quantization.Type)
+			assert.Equal(t, tt.wantRAM, create.Quantization.AlwaysRAM)
+			if tt.wantBits != nil {
+				require.NotNil(t, create.Quantization.TurboBits)
+				assert.InDelta(t, *tt.wantBits, *create.Quantization.TurboBits, 0.0001)
+			} else {
+				assert.Nil(t, create.Quantization.TurboBits)
+			}
+		})
+	}
+
+	t.Run("invalid turbo bits", func(t *testing.T) {
+		l := &lexer.Lexer{}
+		tokens, err := l.Tokenize(`CREATE COLLECTION docs QUANTIZE TURBO BITS 3`)
+		require.NoError(t, err)
+		_, err = NewParser().Parse(tokens)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "BITS must be one of 1, 1.5, 2, or 4")
+	})
+}
