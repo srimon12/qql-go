@@ -27,6 +27,13 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 ### Fixed
 
 - RERANK now works with sparse-only (`USING SPARSE RERANK`) searches in cloud inference mode.
+- Invalid `QUANTIZE TURBO BITS ...` values now fail fast instead of silently falling back to server defaults.
+- Invalid `qql-go dump --batch-size` values now fail fast instead of silently resetting to the default batch size.
+- `SELECT` and `SCROLL` return a simpler payload shape aligned with the upstream QQL response contract.
+
+### Docs
+
+- README, REPL help text, release docs, and bundled skill references now describe `SELECT`, `SCROLL`, `TURBO`, sparse rerank, hybrid fusion defaults, and `--embedding-key` consistently.
 
 ## [0.1.3] - 2026-04-29
 

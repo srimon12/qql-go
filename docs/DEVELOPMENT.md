@@ -206,13 +206,13 @@ Quick reference:
 
 ```bash
 # Prepare release files
-go run developer_guide/dev_tasks.go prepare-release --version 0.2.0
+go run docs/dev_tasks.go prepare-release --version 0.2.0
 
 # Run quality gate
-go run developer_guide/dev_tasks.go check
+go run docs/dev_tasks.go check
 
 # Validate release build
-go run developer_guide/dev_tasks.go release-validate
+go run docs/dev_tasks.go release-validate
 
 # Tag and push
 git tag -a v0.2.0 -m "qql-go v0.2.0"

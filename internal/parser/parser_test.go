@@ -1693,11 +1693,11 @@ func TestParseSearchHybridWithFusion(t *testing.T) {
 
 func TestParseCreateCollectionWithTurboQuantization(t *testing.T) {
 	tests := []struct {
-		name      string
-		input     string
-		wantType  ast.QuantizationType
-		wantBits  *float64
-		wantRAM   bool
+		name     string
+		input    string
+		wantType ast.QuantizationType
+		wantBits *float64
+		wantRAM  bool
 	}{
 		{
 			name:     "turbo without bits",

@@ -431,7 +431,7 @@ Config is stored at:
 - [CONTRIBUTING.md](CONTRIBUTING.md) for contributors
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for maintainers and release workflow details
 - [CHANGELOG.md](CHANGELOG.md) for user-facing changes
-- [docs/releases/0.1.1.md](docs/releases/0.1.1.md) for the current release note
+- [docs/releases/0.1.4.md](docs/releases/0.1.4.md) for the current release note
 
 ## Project Layout
 
