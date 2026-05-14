@@ -21,6 +21,8 @@ const (
 	TokenKindScalar
 	TokenKindBinary
 	TokenKindProduct
+	TokenKindTurbo
+	TokenKindBits
 	TokenKindQuantile
 	TokenKindAlways
 	TokenKindRam
@@ -29,6 +31,11 @@ const (
 	TokenKindShow
 	TokenKindCollections
 	TokenKindSearch
+	TokenKindSelect
+	TokenKindScroll
+	TokenKindStar
+	TokenKindAfter
+	TokenKindFusion
 	TokenKindRecommend
 	TokenKindSimilar
 	TokenKindTo
@@ -100,6 +107,8 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindScalar:      "SCALAR",
 	TokenKindBinary:      "BINARY",
 	TokenKindProduct:     "PRODUCT",
+	TokenKindTurbo:       "TURBO",
+	TokenKindBits:        "BITS",
 	TokenKindQuantile:    "QUANTILE",
 	TokenKindAlways:      "ALWAYS",
 	TokenKindRam:         "RAM",
@@ -108,6 +117,11 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindShow:        "SHOW",
 	TokenKindCollections: "COLLECTIONS",
 	TokenKindSearch:      "SEARCH",
+	TokenKindSelect:      "SELECT",
+	TokenKindScroll:      "SCROLL",
+	TokenKindStar:        "STAR",
+	TokenKindAfter:       "AFTER",
+	TokenKindFusion:      "FUSION",
 	TokenKindRecommend:   "RECOMMEND",
 	TokenKindSimilar:     "SIMILAR",
 	TokenKindTo:          "TO",

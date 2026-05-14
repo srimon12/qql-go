@@ -31,12 +31,14 @@ const (
 	QuantizationTypeScalar  QuantizationType = "scalar"
 	QuantizationTypeBinary  QuantizationType = "binary"
 	QuantizationTypeProduct QuantizationType = "product"
+	QuantizationTypeTurbo   QuantizationType = "turbo"
 )
 
 type QuantizationConfig struct {
 	Type      QuantizationType
 	Quantile  *float64
 	AlwaysRAM bool
+	TurboBits *float64
 }
 
 type DropCollectionStmt struct {
@@ -46,12 +48,25 @@ type DropCollectionStmt struct {
 type ShowCollectionsStmt struct {
 }
 
+type SelectStmt struct {
+	Collection string
+	PointID    interface{}
+}
+
+type ScrollStmt struct {
+	Collection  string
+	Limit       int
+	QueryFilter FilterExpr
+	After       interface{}
+}
+
 type SearchStmt struct {
 	Collection  string
 	QueryText   string
 	Limit       int
 	Model       *string
 	Hybrid      bool
+	Fusion      *string
 	SparseOnly  bool
 	SparseModel *string
 	QueryFilter FilterExpr
@@ -97,6 +112,8 @@ func (InsertBulkStmt) isASTNode()       {}
 func (CreateCollectionStmt) isASTNode() {}
 func (DropCollectionStmt) isASTNode()   {}
 func (ShowCollectionsStmt) isASTNode()  {}
+func (SelectStmt) isASTNode()           {}
+func (ScrollStmt) isASTNode()           {}
 func (SearchStmt) isASTNode()           {}
 func (RecommendStmt) isASTNode()        {}
 func (DeleteStmt) isASTNode()           {}

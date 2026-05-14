@@ -23,6 +23,8 @@ var keywords = map[string]TokenKind{
 	"SCALAR":      TokenKindScalar,
 	"BINARY":      TokenKindBinary,
 	"PRODUCT":     TokenKindProduct,
+	"TURBO":       TokenKindTurbo,
+	"BITS":        TokenKindBits,
 	"QUANTILE":    TokenKindQuantile,
 	"ALWAYS":      TokenKindAlways,
 	"RAM":         TokenKindRam,
@@ -31,6 +33,10 @@ var keywords = map[string]TokenKind{
 	"SHOW":        TokenKindShow,
 	"COLLECTIONS": TokenKindCollections,
 	"SEARCH":      TokenKindSearch,
+	"SELECT":      TokenKindSelect,
+	"SCROLL":      TokenKindScroll,
+	"FUSION":      TokenKindFusion,
+	"AFTER":       TokenKindAfter,
 	"RECOMMEND":   TokenKindRecommend,
 	"SIMILAR":     TokenKindSimilar,
 	"TO":          TokenKindTo,
@@ -100,6 +106,9 @@ func (l *Lexer) Tokenize(query string) ([]Token, error) {
 			i++
 		case ')':
 			tokens = append(tokens, Token{Kind: TokenKindRparen, Value: ")", Pos: i})
+			i++
+		case '*':
+			tokens = append(tokens, Token{Kind: TokenKindStar, Value: "*", Pos: i})
 			i++
 		case ':':
 			tokens = append(tokens, Token{Kind: TokenKindColon, Value: ":", Pos: i})

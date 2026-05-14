@@ -16,6 +16,7 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - `CREATE COLLECTION <name> QUANTIZE SCALAR [QUANTILE <0.0-1.0>] [ALWAYS RAM]`
 - `CREATE COLLECTION <name> QUANTIZE BINARY [ALWAYS RAM]`
 - `CREATE COLLECTION <name> QUANTIZE PRODUCT [ALWAYS RAM]`
+- `CREATE COLLECTION <name> QUANTIZE TURBO [BITS <1|1.5|2|4>] [ALWAYS RAM]`
 - `SHOW COLLECTIONS`
 - `DROP COLLECTION <name>`
 
@@ -43,6 +44,7 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n>`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID FUSION 'rrf|dbsf'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE MODEL '<model>'` (cloud only; local uses client-side BM25)
@@ -54,6 +56,13 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE RERANK`
+- `SELECT * FROM <name> WHERE id = '<uuid>'`
+- `SELECT * FROM <name> WHERE id = <integer>`
+- `SCROLL FROM <name> LIMIT <n>`
+- `SCROLL FROM <name> WHERE <filter> LIMIT <n>`
+- `SCROLL FROM <name> AFTER '<point_id>' LIMIT <n>`
+- `SCROLL FROM <name> WHERE <filter> AFTER <point_id> LIMIT <n>`
 
 ### Recommend
 
@@ -88,6 +97,7 @@ All recommend clauses can be combined in order: `POSITIVE IDS`, `NEGATIVE IDS`, 
 ### Dump
 
 - `qql-go dump <collection> <output.qql>` — dump collection to a `.qql` script
+- `qql-go dump --batch-size <n> <collection> <output.qql>` — dump with an explicit page size
 
 ### Utility
 
@@ -133,6 +143,7 @@ Structured JSON for automation:
 - `qql-go execute --quiet --json <script.qql>`
 - `qql-go execute --stop-on-error --quiet --json <script.qql>`
 - `qql-go dump --quiet --json <collection> <output.qql>`
+- `qql-go dump --quiet --json --batch-size <n> <collection> <output.qql>`
 
 Text-mode quiet behavior:
 
@@ -151,6 +162,8 @@ Default dense model:
 
 Use `USING HYBRID` when both semantic similarity and exact term matching matter.
 
+Default fusion is `RRF`. Use `FUSION 'dbsf'` only when you want to explicitly switch to DBSF.
+
 Default sparse model name (for cloud inference):
 - `qdrant/bm25`
 
@@ -168,6 +181,7 @@ Use quantization at create time when memory footprint matters:
 - `QUANTIZE SCALAR QUANTILE <0..1>` — explicit scalar calibration
 - `QUANTIZE BINARY` — stronger compression
 - `QUANTIZE PRODUCT` — fixed `x4` product quantization
+- `QUANTIZE TURBO [BITS ...]` — stronger compression with configurable bit depth
 - `ALWAYS RAM` — keep quantized vectors pinned in RAM
 
 ### Rerank
@@ -190,6 +204,7 @@ Rerank caveat:
 
 Local/external mode requirements:
 - `--embedding-endpoint` pointing to an OpenAI-compatible `/v1/embeddings` endpoint
+- `--embedding-key` — optional bearer token for hosted embedding providers
 - `--embedding-model` name
 - `--embedding-dimension` — optional; auto-probed from the endpoint if omitted and reachable
 

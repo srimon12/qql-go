@@ -46,7 +46,7 @@ func (s *stubExecutor) ExecuteFile(path string, _ bool) (string, error) {
 	return s.executeFileResult, s.executeFileErr
 }
 
-func (s *stubExecutor) DumpCollection(collection, outputPath string) (string, error) {
+func (s *stubExecutor) DumpCollection(collection, outputPath string, batchSize int) (string, error) {
 	s.dumpCollection = collection
 	s.dumpPath = outputPath
 	return s.dumpResult, s.dumpErr
@@ -99,6 +99,11 @@ func TestHandleCommandBuiltinCommands(t *testing.T) {
 
 	require.Empty(t, stderr)
 	require.Contains(t, stdout, "Available Statements")
+	require.Contains(t, stdout, "SELECT")
+	require.Contains(t, stdout, "SCROLL FROM")
+	require.Contains(t, stdout, "USING SPARSE")
+	require.Contains(t, stdout, "FUSION")
+	require.Contains(t, stdout, "QUANTIZE TURBO")
 	require.Contains(t, stdout, "Bye.")
 	require.Empty(t, exec.executeQuery)
 	require.Empty(t, exec.explainQuery)

@@ -79,7 +79,7 @@ func TestCollection(t *testing.T) {
 	}
 
 	outputPath := filepath.Join(t.TempDir(), "dump.qql")
-	written, skipped, err := Collection(context.Background(), client, "docs", outputPath)
+	written, skipped, err := Collection(context.Background(), client, "docs", outputPath, 50)
 	require.NoError(t, err)
 	require.Equal(t, 1, written)
 	require.Equal(t, 1, skipped)
@@ -91,4 +91,15 @@ func TestCollection(t *testing.T) {
 	require.Contains(t, text, "INSERT BULK INTO COLLECTION docs VALUES [")
 	require.Contains(t, text, "USING HYBRID")
 	require.Contains(t, text, "'id': '123e4567-e89b-12d3-a456-426614174000'")
+}
+
+func TestCollectionRejectsInvalidBatchSize(t *testing.T) {
+	client := &fakeClient{}
+	outputPath := filepath.Join(t.TempDir(), "dump.qql")
+
+	written, skipped, err := Collection(context.Background(), client, "docs", outputPath, 0)
+	require.Error(t, err)
+	require.Zero(t, written)
+	require.Zero(t, skipped)
+	require.Contains(t, err.Error(), "batch size must be greater than 0")
 }
