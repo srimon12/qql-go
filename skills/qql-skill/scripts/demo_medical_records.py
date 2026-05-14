@@ -170,6 +170,10 @@ BASE_STATEMENTS = [
         "show-collections",
         "SHOW COLLECTIONS",
     ),
+    (
+        "show-collection",
+        f"SHOW COLLECTION {COLLECTION}",
+    ),
 ]
 
 

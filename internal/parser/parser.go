@@ -360,12 +360,20 @@ func (p *Parser) parseDrop() (*ast.DropCollectionStmt, error) {
 	return &ast.DropCollectionStmt{Collection: collection}, nil
 }
 
-func (p *Parser) parseShow() (*ast.ShowCollectionsStmt, error) {
+func (p *Parser) parseShow() (ast.ASTNode, error) {
 	p.advance()
-	if _, err := p.expect(lexer.TokenKindCollections); err != nil {
+	if p.peek().Kind == lexer.TokenKindCollections {
+		p.advance()
+		return &ast.ShowCollectionsStmt{}, nil
+	}
+	if _, err := p.expect(lexer.TokenKindCollection); err != nil {
 		return nil, err
 	}
-	return &ast.ShowCollectionsStmt{}, nil
+	collection, err := p.parseIdentifier()
+	if err != nil {
+		return nil, err
+	}
+	return &ast.ShowCollectionStmt{Collection: collection}, nil
 }
 
 func (p *Parser) parseSearch() (*ast.SearchStmt, error) {

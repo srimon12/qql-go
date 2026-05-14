@@ -208,6 +208,7 @@ CREATE COLLECTION notes QUANTIZE SCALAR QUANTILE 0.95 ALWAYS RAM
 CREATE COLLECTION notes HYBRID QUANTIZE BINARY
 CREATE COLLECTION notes HYBRID QUANTIZE TURBO BITS 2 ALWAYS RAM
 SHOW COLLECTIONS
+SHOW COLLECTION notes
 DROP COLLECTION old_notes
 ```
 
@@ -243,6 +244,7 @@ qql-go explain "SEARCH articles SIMILAR TO 'query' LIMIT 5 USING HYBRID WHERE ye
 
 ```powershell
 qql-go exec --quiet --json "SHOW COLLECTIONS"
+qql-go exec --quiet --json "SHOW COLLECTION docs"
 qql-go explain --quiet --json "SEARCH docs SIMILAR TO 'vector db' LIMIT 5 USING HYBRID"
 qql-go doctor --quiet --json
 qql-go connect --quiet --json --url https://<cluster>.qdrant.io --secret <api-key>

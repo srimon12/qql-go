@@ -5,6 +5,11 @@ import argparse
 from _qql_cli import drop_collection_if_exists, execute_json, print_result
 COLLECTION = "qql_skill_demo_kitchen_sink"
 
+STROKE_ID = "123e4567-e89b-12d3-a456-426614174001"
+STEMI_ID = "123e4567-e89b-12d3-a456-426614174002"
+PNEUMONIA_ID = "123e4567-e89b-12d3-a456-426614174003"
+HEADACHE_ID = "123e4567-e89b-12d3-a456-426614174004"
+
 
 BASE_STATEMENTS = [
     # Create collection with HYBRID vectors plus TURBO quantization.
@@ -37,7 +42,7 @@ BASE_STATEMENTS = [
     (
         "insert-stroke",
         f"""INSERT INTO COLLECTION {COLLECTION} VALUES {{
-  'id': 'pt-1001',
+  'id': '{STROKE_ID}',
   'text': 'Patient presents with sudden right-sided weakness and slurred speech. CT confirms left MCA infarct. Thrombolysis initiated within the treatment window.',
   'patient_id': 'PT-1001',
   'specialty': 'neurology',
@@ -51,7 +56,7 @@ BASE_STATEMENTS = [
     (
         "insert-stemi",
         f"""INSERT INTO COLLECTION {COLLECTION} VALUES {{
-  'id': 'pt-1002',
+  'id': '{STEMI_ID}',
   'text': 'Patient with crushing chest pain radiating to the left arm. ECG shows ST elevation and troponin is elevated.',
   'patient_id': 'PT-1002',
   'specialty': 'cardiology',
@@ -65,7 +70,7 @@ BASE_STATEMENTS = [
     (
         "insert-pneumonia",
         f"""INSERT INTO COLLECTION {COLLECTION} VALUES {{
-  'id': 'pt-1003',
+  'id': '{PNEUMONIA_ID}',
   'text': 'Patient has high-grade fever, productive cough, and right lower lobe consolidation on chest X-ray. Started on IV antibiotics.',
   'patient_id': 'PT-1003',
   'specialty': 'pulmonology',
@@ -79,7 +84,7 @@ BASE_STATEMENTS = [
     (
         "insert-headache",
         f"""INSERT INTO COLLECTION {COLLECTION} VALUES {{
-  'id': 'pt-1004',
+  'id': '{HEADACHE_ID}',
   'text': 'Mild tension headache improved with rest and hydration. No focal neurological deficits observed.',
   'patient_id': 'PT-1004',
   'specialty': 'general-medicine',
@@ -145,20 +150,24 @@ BASE_STATEMENTS = [
     ),
     (
         "recommend-stroke",
-        f"RECOMMEND FROM {COLLECTION} POSITIVE IDS ('pt-1001') LIMIT 3",
+        f"RECOMMEND FROM {COLLECTION} POSITIVE IDS ('{STROKE_ID}') LIMIT 3",
     ),
     (
         "select-stemi",
-        f"SELECT * FROM {COLLECTION} WHERE id = 'pt-1002'",
+        f"SELECT * FROM {COLLECTION} WHERE id = '{STEMI_ID}'",
     ),
     (
         "scroll-high-priority",
-        f"SCROLL FROM {COLLECTION} WHERE priority = 'high' AFTER 'pt-1001' LIMIT 2",
+        f"SCROLL FROM {COLLECTION} WHERE priority = 'high' AFTER '{STROKE_ID}' LIMIT 2",
     ),
     # SHOW COLLECTIONS
     (
         "show-collections",
         "SHOW COLLECTIONS",
+    ),
+    (
+        "show-collection",
+        f"SHOW COLLECTION {COLLECTION}",
     ),
 ]
 

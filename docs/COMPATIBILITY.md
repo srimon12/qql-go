@@ -31,7 +31,7 @@
 | Create with multivectors | `multivector_config` | ❌ | ❌ | |
 | Drop collection | `delete_collection` | ✅ v1.0 | ✅ v0.1 | |
 | List collections | `get_collections` | ✅ v1.0 | ✅ v0.1 | `SHOW COLLECTIONS` |
-| Collection info | `get_collection` | ❌ | ❌ | `DESCRIBE` not implemented |
+| Collection info | `get_collection` | ❌ | ✅ | Go supports `SHOW COLLECTION <name>`; Python `DESCRIBE` is not implemented |
 | Collection aliases | `create_alias` / `delete_alias` | ❌ | ❌ | |
 | Collection snapshots | `create_snapshot` | ❌ | ❌ | |
 

@@ -99,6 +99,7 @@ Run a simple query:
 
 ```bash
 qql-go exec "SHOW COLLECTIONS"
+qql-go exec "SHOW COLLECTION docs"
 ```
 
 Explain a query without executing it:
@@ -125,6 +126,7 @@ qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID"
 qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID FUSION 'dbsf'"
 qql-go exec "SEARCH docs SIMILAR TO 'bm25 keyword' LIMIT 5 USING SPARSE"
 qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID RERANK"
+qql-go exec "SHOW COLLECTION docs"
 qql-go exec "SELECT * FROM docs WHERE id = 'pt-1'"
 qql-go exec "SCROLL FROM docs LIMIT 10"
 ```
@@ -166,6 +168,7 @@ Recommended agent examples:
 
 ```bash
 qql-go exec --quiet --json "SHOW COLLECTIONS"
+qql-go exec --quiet --json "SHOW COLLECTION docs"
 qql-go explain --quiet --json "SEARCH docs SIMILAR TO 'vector db' LIMIT 5 USING HYBRID"
 qql-go doctor --quiet --json
 ```
@@ -226,6 +229,7 @@ CREATE COLLECTION <name> QUANTIZE TURBO BITS <1|1.5|2|4>
 CREATE COLLECTION <name> QUANTIZE TURBO BITS <1|1.5|2|4> ALWAYS RAM
 DROP COLLECTION <name>
 SHOW COLLECTIONS
+SHOW COLLECTION <name>
 
 CREATE INDEX ON COLLECTION <name> FOR <field> TYPE keyword
 CREATE INDEX ON COLLECTION <name> FOR <field> TYPE integer
