@@ -22,7 +22,7 @@ type Client interface {
 
 func Collection(ctx context.Context, client Client, collection, outputPath string, batchSize int) (int, int, error) {
 	if batchSize <= 0 {
-		batchSize = 50
+		return 0, 0, fmt.Errorf("batch size must be greater than 0")
 	}
 	exists, err := client.CollectionExists(ctx, collection)
 	if err != nil {

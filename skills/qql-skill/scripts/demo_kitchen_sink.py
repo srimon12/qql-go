@@ -7,10 +7,10 @@ COLLECTION = "qql_skill_demo_kitchen_sink"
 
 
 BASE_STATEMENTS = [
-    # Create collection with HYBRID vectors (dense + sparse).
+    # Create collection with HYBRID vectors plus TURBO quantization.
     (
         "create-hybrid",
-        f"CREATE COLLECTION {COLLECTION} HYBRID",
+        f"CREATE COLLECTION {COLLECTION} HYBRID QUANTIZE TURBO BITS 2 ALWAYS RAM",
     ),
     # Create payload indexes for filtering
     (
@@ -37,6 +37,7 @@ BASE_STATEMENTS = [
     (
         "insert-stroke",
         f"""INSERT INTO COLLECTION {COLLECTION} VALUES {{
+  'id': 'pt-1001',
   'text': 'Patient presents with sudden right-sided weakness and slurred speech. CT confirms left MCA infarct. Thrombolysis initiated within the treatment window.',
   'patient_id': 'PT-1001',
   'specialty': 'neurology',
@@ -50,6 +51,7 @@ BASE_STATEMENTS = [
     (
         "insert-stemi",
         f"""INSERT INTO COLLECTION {COLLECTION} VALUES {{
+  'id': 'pt-1002',
   'text': 'Patient with crushing chest pain radiating to the left arm. ECG shows ST elevation and troponin is elevated.',
   'patient_id': 'PT-1002',
   'specialty': 'cardiology',
@@ -63,6 +65,7 @@ BASE_STATEMENTS = [
     (
         "insert-pneumonia",
         f"""INSERT INTO COLLECTION {COLLECTION} VALUES {{
+  'id': 'pt-1003',
   'text': 'Patient has high-grade fever, productive cough, and right lower lobe consolidation on chest X-ray. Started on IV antibiotics.',
   'patient_id': 'PT-1003',
   'specialty': 'pulmonology',
@@ -76,6 +79,7 @@ BASE_STATEMENTS = [
     (
         "insert-headache",
         f"""INSERT INTO COLLECTION {COLLECTION} VALUES {{
+  'id': 'pt-1004',
   'text': 'Mild tension headache improved with rest and hydration. No focal neurological deficits observed.',
   'patient_id': 'PT-1004',
   'specialty': 'general-medicine',
@@ -96,6 +100,14 @@ BASE_STATEMENTS = [
         "search-hybrid",
         f"SEARCH {COLLECTION} SIMILAR TO 'stroke thrombolysis ICU' LIMIT 3 USING HYBRID",
     ),
+    (
+        "search-hybrid-dbsf",
+        f"SEARCH {COLLECTION} SIMILAR TO 'stroke thrombolysis ICU' LIMIT 3 USING HYBRID FUSION 'dbsf'",
+    ),
+    (
+        "search-sparse",
+        f"SEARCH {COLLECTION} SIMILAR TO 'chest pain radiating arm troponin' LIMIT 3 USING SPARSE",
+    ),
     # HYBRID with WHERE filter (equality)
     (
         "filter-equality",
@@ -104,32 +116,44 @@ BASE_STATEMENTS = [
     # HYBRID with WHERE filter (IN operator)
     (
         "filter-in",
-        f"SEARCH {COLLECTION} SIMILAR TO 'emergency cardiac chest pain' LIMIT 3 WHERE priority IN ('high', 'medium')",
+        f"SEARCH {COLLECTION} SIMILAR TO 'emergency cardiac chest pain' LIMIT 3 USING HYBRID WHERE priority IN ('high', 'medium')",
     ),
     # HYBRID with WHERE filter (BETWEEN range)
     (
         "filter-range",
-        f"SEARCH {COLLECTION} SIMILAR TO 'medical' LIMIT 3 WHERE year BETWEEN 2024 AND 2026",
+        f"SEARCH {COLLECTION} SIMILAR TO 'medical' LIMIT 3 USING HYBRID WHERE year BETWEEN 2024 AND 2026",
     ),
     # HYBRID with multiple filters (AND)
     (
         "filter-and",
-        f"SEARCH {COLLECTION} SIMILAR TO 'cardiac emergency' LIMIT 3 WHERE priority = 'high' AND status = 'admitted'",
+        f"SEARCH {COLLECTION} SIMILAR TO 'cardiac emergency' LIMIT 3 USING HYBRID WHERE priority = 'high' AND status = 'admitted'",
     ),
     # HYBRID with compound filter (OR)
     (
         "filter-or",
-        f"SEARCH {COLLECTION} SIMILAR TO 'brain scan' LIMIT 3 WHERE specialty = 'neurology' OR specialty = 'radiology'",
+        f"SEARCH {COLLECTION} SIMILAR TO 'brain scan' LIMIT 3 USING HYBRID WHERE specialty = 'neurology' OR specialty = 'radiology'",
     ),
     # HYBRID with NOT filter
     (
         "filter-not",
-        f"SEARCH {COLLECTION} SIMILAR TO 'infection' LIMIT 3 WHERE status NOT IN ('draft')",
+        f"SEARCH {COLLECTION} SIMILAR TO 'infection' LIMIT 3 USING HYBRID WHERE status NOT IN ('draft')",
     ),
     # Combined: HYBRID + WHERE + multiple conditions
     (
         "filter-combined",
-        f"SEARCH {COLLECTION} SIMILAR TO 'cardiac chest pain' LIMIT 3 WHERE priority IN ('high', 'medium') AND status = 'admitted' AND year >= 2024",
+        f"SEARCH {COLLECTION} SIMILAR TO 'cardiac chest pain' LIMIT 3 USING HYBRID WHERE priority IN ('high', 'medium') AND status = 'admitted' AND year >= 2024",
+    ),
+    (
+        "recommend-stroke",
+        f"RECOMMEND FROM {COLLECTION} POSITIVE IDS ('pt-1001') LIMIT 3",
+    ),
+    (
+        "select-stemi",
+        f"SELECT * FROM {COLLECTION} WHERE id = 'pt-1002'",
+    ),
+    (
+        "scroll-high-priority",
+        f"SCROLL FROM {COLLECTION} WHERE priority = 'high' AFTER 'pt-1001' LIMIT 2",
     ),
     # SHOW COLLECTIONS
     (
@@ -164,13 +188,20 @@ def main() -> None:
     if args.rerank:
         statements[0] = (
             "create-hybrid",
-            f"CREATE COLLECTION {COLLECTION} HYBRID RERANK",
+            f"CREATE COLLECTION {COLLECTION} HYBRID RERANK QUANTIZE TURBO BITS 2 ALWAYS RAM",
         )
         statements.insert(
             len(statements) - 1,
             (
                 "search-hybrid-rerank",
                 f"SEARCH {COLLECTION} SIMILAR TO 'stroke thrombolysis ICU' LIMIT 3 USING HYBRID RERANK",
+            ),
+        )
+        statements.insert(
+            len(statements) - 1,
+            (
+                "search-sparse-rerank",
+                f"SEARCH {COLLECTION} SIMILAR TO 'chest pain radiating arm troponin' LIMIT 3 USING SPARSE RERANK",
             ),
         )
 

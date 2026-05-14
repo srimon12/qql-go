@@ -6,7 +6,7 @@ It is an independent Go port of the original [pavanjava/qql](https://github.com/
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go 1.24+](https://img.shields.io/badge/Go-1.24%2B-00ADD8.svg)](https://go.dev/)
-[![Version](https://img.shields.io/badge/Version-0.1.3-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/Version-0.1.4-blue.svg)](VERSION)
 [![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/srimon12/qql-go/releases)
 
 `qql-go` supports:
@@ -15,9 +15,12 @@ It is an independent Go port of the original [pavanjava/qql](https://github.com/
 - collection quantization
 - payload index creation
 - document insertion
-- dense and hybrid retrieval
+- point retrieval and scroll pagination
+- dense, sparse, and hybrid retrieval
+- recommend by example IDs
 - rerank retrieval
 - explain plans
+- script execution and collection dump
 - filter-based delete
 
 It is designed for both:
@@ -43,7 +46,7 @@ curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | s
 Install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | VERSION=v0.1.3 sh
+curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | VERSION=v0.1.4 sh
 ```
 
 The Unix installer defaults to `~/.local/bin/qql-go`. Override with `INSTALL_DIR=/your/bin/path` when needed.
@@ -81,6 +84,17 @@ Or connect to a local/self-hosted Qdrant instance for non-inference operations:
 qql-go connect --url http://localhost:6334
 ```
 
+Or connect in external/local inference mode with an OpenAI-compatible embeddings API:
+
+```bash
+qql-go connect \
+  --url http://localhost:6334 \
+  --inference-mode external \
+  --embedding-endpoint https://api.openai.com/v1/embeddings \
+  --embedding-key <embedding-api-key> \
+  --embedding-model text-embedding-3-small
+```
+
 Run a simple query:
 
 ```bash
@@ -105,10 +119,14 @@ Use the CLI directly:
 
 ```bash
 qql-go exec "CREATE COLLECTION docs HYBRID"
-qql-go exec "CREATE COLLECTION docs QUANTIZE SCALAR QUANTILE 0.99"
+qql-go exec "CREATE COLLECTION docs HYBRID QUANTIZE TURBO BITS 2 ALWAYS RAM"
 qql-go exec "INSERT INTO COLLECTION docs VALUES {'text': 'Qdrant stores vectors', 'topic': 'search'} USING HYBRID"
 qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID"
+qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID FUSION 'dbsf'"
+qql-go exec "SEARCH docs SIMILAR TO 'bm25 keyword' LIMIT 5 USING SPARSE"
 qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID RERANK"
+qql-go exec "SELECT * FROM docs WHERE id = 'pt-1'"
+qql-go exec "SCROLL FROM docs LIMIT 10"
 ```
 
 Start the interactive shell:
@@ -173,8 +191,10 @@ Important behavior in the current Go build:
 
 - cloud mode uses Qdrant Cloud inference for text `INSERT` and text `SEARCH ... SIMILAR TO ...`
 - local and external modes generate dense and sparse vectors client-side through an OpenAI-compatible embeddings API
+- use `--embedding-key` when the embedding provider requires bearer auth
 - `RERANK` is still cloud-only in this build
-- self-hosted/local Qdrant works well for management operations such as `SHOW`, `CREATE`, `DROP`, `CREATE INDEX`, and `DELETE`
+- `SELECT`, `SCROLL`, `DELETE`, and `RECOMMEND` operate on stored vectors and work in every inference mode
+- self-hosted/local Qdrant works well for management operations such as `SHOW`, `CREATE`, `DROP`, `CREATE INDEX`, `SELECT`, `SCROLL`, and `DELETE`
 - collections auto-create on insert when missing
 - `text` is required in `INSERT ... VALUES {...}`
 - keys in `VALUES {...}` may be bare identifiers or quoted strings; quote them when they contain spaces or punctuation
@@ -201,6 +221,9 @@ CREATE COLLECTION <name> QUANTIZE BINARY
 CREATE COLLECTION <name> QUANTIZE BINARY ALWAYS RAM
 CREATE COLLECTION <name> QUANTIZE PRODUCT
 CREATE COLLECTION <name> QUANTIZE PRODUCT ALWAYS RAM
+CREATE COLLECTION <name> QUANTIZE TURBO
+CREATE COLLECTION <name> QUANTIZE TURBO BITS <1|1.5|2|4>
+CREATE COLLECTION <name> QUANTIZE TURBO BITS <1|1.5|2|4> ALWAYS RAM
 DROP COLLECTION <name>
 SHOW COLLECTIONS
 
@@ -214,21 +237,45 @@ INSERT INTO COLLECTION <name> VALUES {...} USING MODEL '<model>'
 INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID
 INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'
 INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID SPARSE MODEL '<model>'
+INSERT BULK INTO COLLECTION <name> VALUES [{...}, {...}]
+INSERT BULK INTO COLLECTION <name> VALUES [{...}, {...}] USING HYBRID
 
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n>
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING MODEL '<model>'
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID
+SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID FUSION 'rrf|dbsf'
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'
+SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE
+SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE MODEL '<model>'
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WHERE <filter>
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef: <n>, exact: true|false, acorn: true|false }
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK
+SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE RERANK
+
+SELECT * FROM <name> WHERE id = '<uuid>'
+SELECT * FROM <name> WHERE id = <integer>
+
+SCROLL FROM <name> LIMIT <n>
+SCROLL FROM <name> WHERE <filter> LIMIT <n>
+SCROLL FROM <name> AFTER '<point_id>' LIMIT <n>
+SCROLL FROM <name> WHERE <filter> AFTER <point_id> LIMIT <n>
+
+RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n>
+RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) NEGATIVE IDS (<id>, ...) LIMIT <n>
+RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) STRATEGY '<strategy>' LIMIT <n>
+RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LOOKUP FROM <collection> [VECTOR '<name>'] USING '<vector_name>' LIMIT <n>
 
 DELETE FROM <name> WHERE id = '<uuid>'
 DELETE FROM <name> WHERE id = <integer>
 DELETE FROM <name> WHERE <field> = '<value>'
+
+qql-go execute <script.qql>
+qql-go execute --stop-on-error <script.qql>
+qql-go dump <collection> <output.qql>
+qql-go dump --batch-size <n> <collection> <output.qql>
 
 `qql-go explain <statement>`
 ```
@@ -247,12 +294,24 @@ Collection quantization:
 - use `QUANTIZE SCALAR QUANTILE <0..1>` when you want explicit scalar calibration
 - use `QUANTIZE BINARY` for more aggressive compression
 - use `QUANTIZE PRODUCT` for fixed `x4` product quantization
+- use `QUANTIZE TURBO [BITS <1|1.5|2|4>]` for stronger compression with better recall than binary
 - add `ALWAYS RAM` when quantized vectors should stay pinned in memory
 
 Hybrid search:
 
-- use `USING HYBRID` when exact terms and semantic similarity both matter
+- use `USING HYBRID` when exact terms and semantic similarity both matter; this uses `RRF` by default
+- use `FUSION 'dbsf'` when you want the DBSF hybrid fusion strategy instead of the default RRF
 - default sparse model: `qdrant/bm25`
+
+Sparse-only search:
+
+- use `USING SPARSE` when the request is primarily keyword or BM25 retrieval
+- use `USING SPARSE RERANK` when sparse recall is good but top ordering needs cloud rerank
+
+Point access:
+
+- use `SELECT` when you already know the exact point ID
+- use `SCROLL` when you need pagination or to browse points page by page
 
 Rerank:
 
@@ -298,8 +357,7 @@ If you filter heavily, create payload indexes first.
 
 ## Release Notes
 
-- [CHANGELOG.md](CHANGELOG.md) for user-facing changes
-- [docs/releases/0.1.3.md](docs/releases/0.1.3.md) for the current release note
+- [CHANGELOG.md](CHANGELOG.md) for the latest user-facing changes
 
 ## Demo Scripts
 

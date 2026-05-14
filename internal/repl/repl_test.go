@@ -99,6 +99,11 @@ func TestHandleCommandBuiltinCommands(t *testing.T) {
 
 	require.Empty(t, stderr)
 	require.Contains(t, stdout, "Available Statements")
+	require.Contains(t, stdout, "SELECT")
+	require.Contains(t, stdout, "SCROLL FROM")
+	require.Contains(t, stdout, "USING SPARSE")
+	require.Contains(t, stdout, "FUSION")
+	require.Contains(t, stdout, "QUANTIZE TURBO")
 	require.Contains(t, stdout, "Bye.")
 	require.Empty(t, exec.executeQuery)
 	require.Empty(t, exec.explainQuery)

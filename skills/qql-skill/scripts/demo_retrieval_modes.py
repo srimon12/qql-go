@@ -22,6 +22,24 @@ EXAMPLES = [
         "requires_index": [],
     },
     {
+        "mode": "hybrid-dbsf",
+        "when": "Use when you want hybrid retrieval with DBSF fusion instead of the default RRF.",
+        "query": (
+            "SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' "
+            "LIMIT 10 USING HYBRID FUSION 'dbsf'"
+        ),
+        "requires_index": [],
+    },
+    {
+        "mode": "sparse",
+        "when": "Use when keyword or BM25 retrieval matters more than semantic similarity.",
+        "query": (
+            "SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' "
+            "LIMIT 10 USING SPARSE"
+        ),
+        "requires_index": [],
+    },
+    {
         "mode": "exact",
         "when": "Use when debugging recall and you need an exact KNN baseline.",
         "query": "SEARCH articles SIMILAR TO 'attention mechanism' LIMIT 10 EXACT",
@@ -73,6 +91,30 @@ EXAMPLES = [
         ),
         "requires_index": [],
         "requires_cloud": True,
+    },
+    {
+        "mode": "sparse-rerank",
+        "when": "Use when sparse recall is strong but the top ordering still needs rerank. Requires Qdrant Cloud and a rerank-capable collection.",
+        "query": (
+            "SEARCH docs SIMILAR TO 'cross encoder ms marco minimlm' "
+            "LIMIT 8 USING SPARSE RERANK"
+        ),
+        "requires_index": [],
+        "requires_cloud": True,
+    },
+    {
+        "mode": "select-by-id",
+        "when": "Use when you already know the exact point ID and want the stored payload.",
+        "query": "SELECT * FROM articles WHERE id = 'pt-42'",
+        "requires_index": [],
+    },
+    {
+        "mode": "scroll",
+        "when": "Use when you need to page through a collection or walk filtered points.",
+        "query": (
+            "SCROLL FROM articles WHERE category = 'ml' AFTER 'pt-42' LIMIT 25"
+        ),
+        "requires_index": ["category"],
     },
     {
         "mode": "delete-by-field",

@@ -30,6 +30,7 @@ Supported syntax in this repo includes:
 - `CREATE COLLECTION <name> QUANTIZE SCALAR [QUANTILE <0.0-1.0>] [ALWAYS RAM]`
 - `CREATE COLLECTION <name> QUANTIZE BINARY [ALWAYS RAM]`
 - `CREATE COLLECTION <name> QUANTIZE PRODUCT [ALWAYS RAM]`
+- `CREATE COLLECTION <name> QUANTIZE TURBO [BITS <1|1.5|2|4>] [ALWAYS RAM]`
 - `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE <kind>`
 - `SHOW COLLECTIONS`
 - `DROP COLLECTION <name>`
@@ -45,6 +46,7 @@ Supported syntax in this repo includes:
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n>`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID FUSION 'rrf|dbsf'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE MODEL '<model>'` (cloud only)
@@ -54,6 +56,13 @@ Supported syntax in this repo includes:
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE RERANK`
+- `SELECT * FROM <name> WHERE id = '<uuid>'`
+- `SELECT * FROM <name> WHERE id = <integer>`
+- `SCROLL FROM <name> LIMIT <n>`
+- `SCROLL FROM <name> WHERE <filter> LIMIT <n>`
+- `SCROLL FROM <name> AFTER '<point_id>' LIMIT <n>`
+- `SCROLL FROM <name> WHERE <filter> AFTER <point_id> LIMIT <n>`
 - `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n>`
 - `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) NEGATIVE IDS (<id>, ...) LIMIT <n>`
 - `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) STRATEGY '<strategy>' LIMIT <n>`
@@ -67,6 +76,7 @@ Supported syntax in this repo includes:
 - `qql-go execute <script.qql>`
 - `qql-go execute --stop-on-error <script.qql>`
 - `qql-go dump <collection> <output.qql>`
+- `qql-go dump --batch-size <n> <collection> <output.qql>`
 - `qql-go disconnect`
 - `qql-go version`
 - `qql-go repl` (interactive shell)
@@ -83,7 +93,7 @@ Supported syntax in this repo includes:
 
 ### Local mode
 
-- `qql-go connect --url http://localhost:6334 --inference-mode local --embedding-endpoint <url> --embedding-model <name> [--embedding-dimension <n>]`
+- `qql-go connect --url http://localhost:6334 --inference-mode local --embedding-endpoint <url> [--embedding-key <key>] --embedding-model <name> [--embedding-dimension <n>]`
 - Dense vectors come from an OpenAI-compatible embeddings API (e.g., LM Studio, llamafile).
 - Sparse vectors are generated client-side with BM25-style weighting.
 - Corpus statistics are stored in `~/.qql/corpus/<collection>.json`.
@@ -109,6 +119,7 @@ Use structured output:
 - `qql-go execute --quiet --json <script.qql>`
 - `qql-go execute --stop-on-error --quiet --json <script.qql>`
 - `qql-go dump --quiet --json <collection> <output.qql>`
+- `qql-go dump --quiet --json --batch-size <n> <collection> <output.qql>`
 
 ### Script File Format
 
@@ -141,6 +152,8 @@ Use plain `SEARCH` when the request is mostly semantic and exact keyword matchin
 
 Use `USING HYBRID` when exact terms, model names, acronyms, codes, or domain vocabulary matter alongside semantic similarity.
 
+Hybrid search uses `RRF` by default. Add `FUSION 'dbsf'` only when you want to explicitly switch the fusion strategy.
+
 Works in cloud, local, and external modes.
 
 ### Sparse-only search
@@ -164,6 +177,14 @@ Use `WITH { acorn: true }` only when filtered-query recall is the actual problem
 Use `RERANK` when the right candidates are likely already retrieved but the top ordering is weak.
 
 **Cloud mode only.** In local/external mode, reranking returns an explicit error.
+
+### Point lookup
+
+Use `SELECT` when the user already knows the exact point ID and wants the stored payload back.
+
+### Collection browse
+
+Use `SCROLL` when the user needs pagination, export preparation, or a filtered walk through points.
 
 ### Recommend
 
@@ -206,7 +227,6 @@ Examples of current gaps:
 - MMR or diversity controls
 - score boosting
 - relevance feedback
-- pagination or scroll
 - update or upsert by explicit id (you can overwrite with `INSERT` + explicit `id`)
 - collection diagnostics beyond `doctor`
 - collection-level HNSW tuning

@@ -25,7 +25,7 @@
 | Create collection | `create_collection` | ✅ v1.0 | ✅ v0.1 | Go auto-creates on insert; Python supports explicit create and insert-time create paths |
 | Create with custom distance | `distance: DOT / EUCLID / MANHATTAN / COSINE` | ❌ | ❌ | Locked to COSINE |
 | Create with custom HNSW | `hnsw_config` | ❌ | ❌ | |
-| Create with quantization | `quantization_config` | ✅ v1.4 | ✅ v0.1.3 | `QUANTIZE SCALAR|BINARY|PRODUCT|TURBO` |
+| Create with quantization | `quantization_config` | ✅ v1.4 | ✅ v0.1.4 | `QUANTIZE SCALAR|BINARY|PRODUCT|TURBO` |
 | Create with on-disk payload | `on_disk_payload` | ❌ | ❌ | |
 | Create with sparse vectors | `sparse_vectors_config` | ✅ v1.0 | ✅ v0.1 | Via `HYBRID` |
 | Create with multivectors | `multivector_config` | ❌ | ❌ | |

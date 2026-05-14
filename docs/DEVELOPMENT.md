@@ -81,11 +81,12 @@ go run ./cmd/qql-go connect \
   --url http://localhost:6334 \
   --inference-mode local \
   --embedding-endpoint http://127.0.0.1:1234/v1/embeddings \
+  --embedding-key your-api-key \
   --embedding-model text-embedding-all-minilm-l6-v2-embedding \
   --embedding-dimension 384
 ```
 
-Note: `--embedding-dimension` is optional if the endpoint is reachable (auto-probed).
+Note: `--embedding-key` is optional and should be supplied for hosted embedding providers that require bearer auth. `--embedding-dimension` is optional if the endpoint is reachable (auto-probed).
 
 ### Test and Build
 

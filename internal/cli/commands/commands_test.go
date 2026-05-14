@@ -175,11 +175,12 @@ func TestInsertPointIDAndPayloadExtractsIDFromValues(t *testing.T) {
 }
 
 func TestBuildQuantizationConfigScalar(t *testing.T) {
-	cfg := buildQuantizationConfig(&ast.QuantizationConfig{
+	cfg, err := buildQuantizationConfig(&ast.QuantizationConfig{
 		Type:      ast.QuantizationTypeScalar,
 		Quantile:  float64Ptr(0.95),
 		AlwaysRAM: true,
 	})
+	require.NoError(t, err)
 
 	require.NotNil(t, cfg)
 	scalar := cfg.GetScalar()
@@ -190,10 +191,11 @@ func TestBuildQuantizationConfigScalar(t *testing.T) {
 }
 
 func TestBuildQuantizationConfigBinary(t *testing.T) {
-	cfg := buildQuantizationConfig(&ast.QuantizationConfig{
+	cfg, err := buildQuantizationConfig(&ast.QuantizationConfig{
 		Type:      ast.QuantizationTypeBinary,
 		AlwaysRAM: true,
 	})
+	require.NoError(t, err)
 
 	require.NotNil(t, cfg)
 	binary := cfg.GetBinary()
@@ -202,9 +204,10 @@ func TestBuildQuantizationConfigBinary(t *testing.T) {
 }
 
 func TestBuildQuantizationConfigProduct(t *testing.T) {
-	cfg := buildQuantizationConfig(&ast.QuantizationConfig{
+	cfg, err := buildQuantizationConfig(&ast.QuantizationConfig{
 		Type: ast.QuantizationTypeProduct,
 	})
+	require.NoError(t, err)
 
 	require.NotNil(t, cfg)
 	product := cfg.GetProduct()
@@ -616,6 +619,18 @@ func TestVersionCommandDefaultsToDevWhenVersionBlank(t *testing.T) {
 	require.Equal(t, "dev\n", stdout)
 }
 
+func TestDumpCommandRejectsInvalidBatchSize(t *testing.T) {
+	stdout, stderr, err := captureCommandResult(t, func(out *output.Outputter) error {
+		cmd := NewDumpCmd(out)
+		require.NoError(t, cmd.Flags().Set("batch-size", "0"))
+		return cmd.RunE(cmd, []string{"docs", "backup.qql"})
+	})
+
+	require.Error(t, err)
+	require.Empty(t, stdout)
+	require.Contains(t, stderr, "--batch-size must be greater than 0")
+}
+
 func TestConnectCommandMissingURLReturnsPrintedError(t *testing.T) {
 	stdout, stderr, err := captureCommandResult(t, func(out *output.Outputter) error {
 		cmd := NewConnectCmd(out)
@@ -847,6 +862,9 @@ type fakeQdrantClient struct {
 	createRequests []*qdrant.CreateCollection
 	upserts        []*qdrant.UpsertPoints
 	queryRequests  []*qdrant.QueryPoints
+	scrollRecords  []*qdrant.RetrievedPoint
+	scrollOffset   *qdrant.PointId
+	getRecords     []*qdrant.RetrievedPoint
 }
 
 func newFakeQdrantClient() *fakeQdrantClient { return &fakeQdrantClient{} }
@@ -895,10 +913,10 @@ func (f *fakeQdrantClient) CreateFieldIndex(context.Context, *qdrant.CreateField
 }
 func (f *fakeQdrantClient) Count(context.Context, *qdrant.CountPoints) (uint64, error) { return 0, nil }
 func (f *fakeQdrantClient) ScrollAndOffset(context.Context, *qdrant.ScrollPoints) ([]*qdrant.RetrievedPoint, *qdrant.PointId, error) {
-	return nil, nil, nil
+	return f.scrollRecords, f.scrollOffset, nil
 }
 func (f *fakeQdrantClient) Get(context.Context, *qdrant.GetPoints) ([]*qdrant.RetrievedPoint, error) {
-	return nil, nil
+	return f.getRecords, nil
 }
 
 func TestBuildSearchPrefetchesLocalModeReturnsExplicitQueries(t *testing.T) {
@@ -959,6 +977,25 @@ func TestBuildSearchRequestSparseOnlyLocalMode(t *testing.T) {
 	require.Equal(t, "demo", req.GetCollectionName())
 	require.Equal(t, sparseVectorName, req.GetUsing())
 	require.NotNil(t, req.GetQuery().GetNearest().GetSparse())
+}
+
+func TestBuildSearchRequestSparseOnlyRerankUsesSparsePrefetch(t *testing.T) {
+	exec := NewExecutor(nil, &config.Config{})
+	req, err := exec.buildSearchRequest(context.Background(), &ast.SearchStmt{
+		Collection: "demo",
+		QueryText:  "hello world",
+		Limit:      5,
+		SparseOnly: true,
+		Rerank:     true,
+	}, "dense-model", "sparse-model", true, 5)
+	require.NoError(t, err)
+
+	require.Equal(t, "demo", req.GetCollectionName())
+	require.Equal(t, rerankVectorName, req.GetUsing())
+	require.Len(t, req.GetPrefetch(), 1)
+	require.Equal(t, sparseVectorName, req.GetPrefetch()[0].GetUsing())
+	require.NotNil(t, req.GetPrefetch()[0].GetQuery().GetNearest().GetDocument())
+	require.Equal(t, "sparse-model", req.GetPrefetch()[0].GetQuery().GetNearest().GetDocument().GetModel())
 }
 
 func TestBuildSearchRequestHybridLocalMode(t *testing.T) {
@@ -1094,6 +1131,77 @@ func TestBuildRecommendRequestFilterExcludesIDs(t *testing.T) {
 	require.Len(t, filter.GetMustNot()[0].GetHasId().GetHasId(), 2)
 }
 
+func TestDoSelectReturnsRecordOrNil(t *testing.T) {
+	t.Run("found", func(t *testing.T) {
+		client := newFakeQdrantClient()
+		client.exists = true
+		client.getRecords = []*qdrant.RetrievedPoint{
+			{
+				Id: qdrant.NewIDUUID("pt-1"),
+				Payload: qdrant.NewValueMap(map[string]any{
+					"text":  "hello",
+					"topic": "search",
+				}),
+			},
+		}
+		exec := NewExecutor(client, &config.Config{})
+
+		resp, err := exec.doSelect(&ast.SelectStmt{Collection: "docs", PointID: "pt-1"})
+		require.NoError(t, err)
+		require.True(t, resp.OK)
+		require.Equal(t, map[string]any{
+			"id": "pt-1",
+			"payload": map[string]any{
+				"text":  "hello",
+				"topic": "search",
+			},
+		}, resp.Data)
+	})
+
+	t.Run("missing", func(t *testing.T) {
+		client := newFakeQdrantClient()
+		client.exists = true
+		exec := NewExecutor(client, &config.Config{})
+
+		resp, err := exec.doSelect(&ast.SelectStmt{Collection: "docs", PointID: "pt-404"})
+		require.NoError(t, err)
+		require.True(t, resp.OK)
+		require.Nil(t, resp.Data)
+	})
+}
+
+func TestDoScrollReturnsUpstreamStylePayload(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.scrollRecords = []*qdrant.RetrievedPoint{
+		{
+			Id: qdrant.NewIDNum(7),
+			Payload: qdrant.NewValueMap(map[string]any{
+				"text":  "hello",
+				"topic": "search",
+			}),
+		},
+	}
+	client.scrollOffset = qdrant.NewIDUUID("pt-next")
+	exec := NewExecutor(client, &config.Config{})
+
+	resp, err := exec.doScroll(&ast.ScrollStmt{Collection: "docs", Limit: 5})
+	require.NoError(t, err)
+	require.True(t, resp.OK)
+	require.Equal(t, map[string]any{
+		"points": []map[string]any{
+			{
+				"id": "7",
+				"payload": map[string]any{
+					"text":  "hello",
+					"topic": "search",
+				},
+			},
+		},
+		"next_offset": "pt-next",
+	}, resp.Data)
+}
+
 func float64Ptr(f float64) *float64 {
 	return &f
 }
@@ -1112,11 +1220,12 @@ func newEmbeddingServer(t *testing.T, embedding []float32) *httptest.Server {
 }
 
 func TestBuildQuantizationConfigTurbo(t *testing.T) {
-	cfg := buildQuantizationConfig(&ast.QuantizationConfig{
+	cfg, err := buildQuantizationConfig(&ast.QuantizationConfig{
 		Type:      ast.QuantizationTypeTurbo,
 		TurboBits: float64Ptr(4.0),
 		AlwaysRAM: true,
 	})
+	require.NoError(t, err)
 	require.NotNil(t, cfg)
 	turbo := cfg.GetTurboquant()
 	require.NotNil(t, turbo)
@@ -1125,9 +1234,10 @@ func TestBuildQuantizationConfigTurbo(t *testing.T) {
 }
 
 func TestBuildQuantizationConfigTurboDefaultBits(t *testing.T) {
-	cfg := buildQuantizationConfig(&ast.QuantizationConfig{
+	cfg, err := buildQuantizationConfig(&ast.QuantizationConfig{
 		Type: ast.QuantizationTypeTurbo,
 	})
+	require.NoError(t, err)
 	require.NotNil(t, cfg)
 	turbo := cfg.GetTurboquant()
 	require.NotNil(t, turbo)
@@ -1136,14 +1246,25 @@ func TestBuildQuantizationConfigTurboDefaultBits(t *testing.T) {
 }
 
 func TestBuildQuantizationConfigTurboBits1_5(t *testing.T) {
-	cfg := buildQuantizationConfig(&ast.QuantizationConfig{
+	cfg, err := buildQuantizationConfig(&ast.QuantizationConfig{
 		Type:      ast.QuantizationTypeTurbo,
 		TurboBits: float64Ptr(1.5),
 	})
+	require.NoError(t, err)
 	require.NotNil(t, cfg)
 	turbo := cfg.GetTurboquant()
 	require.NotNil(t, turbo)
 	require.Equal(t, qdrant.TurboQuantBitSize_Bits1_5, turbo.GetBits())
+}
+
+func TestBuildQuantizationConfigTurboRejectsInvalidBits(t *testing.T) {
+	cfg, err := buildQuantizationConfig(&ast.QuantizationConfig{
+		Type:      ast.QuantizationTypeTurbo,
+		TurboBits: float64Ptr(3.0),
+	})
+	require.Error(t, err)
+	require.Nil(t, cfg)
+	require.Contains(t, err.Error(), "unsupported TURBO bit depth")
 }
 
 func TestBuildSearchRequestHybridDBSF(t *testing.T) {

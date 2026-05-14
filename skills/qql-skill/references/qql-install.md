@@ -72,6 +72,7 @@ qql-go connect `
   --url http://localhost:6334 `
   --inference-mode local `
   --embedding-endpoint http://127.0.0.1:1234/v1/embeddings `
+  --embedding-key <embedding-api-key> `
   --embedding-model text-embedding-all-minilm-l6-v2-embedding `
   --embedding-dimension 384
 ```
@@ -79,6 +80,7 @@ qql-go connect `
 Requirements for local/external mode:
 
 - `--embedding-endpoint` — an OpenAI-compatible `/v1/embeddings` endpoint
+- `--embedding-key` — optional bearer token for hosted embedding providers
 - `--embedding-model` — the model name to pass in the request
 - `--embedding-dimension` — optional; auto-probed from the endpoint if omitted and reachable
 

@@ -37,11 +37,28 @@ SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' LIMIT 10
 USING HYBRID
 ```
 
+Default fusion for `USING HYBRID` is `RRF`.
+
+## Hybrid search with DBSF fusion
+
+```sql
+SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' LIMIT 10
+USING HYBRID FUSION 'dbsf'
+```
+
 ## Sparse-only search
 
 ```sql
 SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' LIMIT 10
 USING SPARSE
+```
+
+## Sparse-only search plus rerank (cloud only)
+
+```sql
+SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' LIMIT 10
+USING SPARSE
+RERANK
 ```
 
 ## Hybrid search with filter
@@ -189,8 +206,24 @@ CREATE COLLECTION notes USING MODEL 'sentence-transformers/all-MiniLM-L6-v2'
 CREATE COLLECTION notes QUANTIZE SCALAR
 CREATE COLLECTION notes QUANTIZE SCALAR QUANTILE 0.95 ALWAYS RAM
 CREATE COLLECTION notes HYBRID QUANTIZE BINARY
+CREATE COLLECTION notes HYBRID QUANTIZE TURBO BITS 2 ALWAYS RAM
 SHOW COLLECTIONS
 DROP COLLECTION old_notes
+```
+
+## Select by ID
+
+```sql
+SELECT * FROM notes WHERE id = '123e4567-e89b-12d3-a456-426614174000'
+SELECT * FROM notes WHERE id = 42
+```
+
+## Scroll through points
+
+```sql
+SCROLL FROM notes LIMIT 25
+SCROLL FROM notes WHERE category = 'retrieval' LIMIT 25
+SCROLL FROM notes AFTER '123e4567-e89b-12d3-a456-426614174000' LIMIT 25
 ```
 
 ## Delete
@@ -218,6 +251,7 @@ qql-go version --quiet --json
 qql-go execute --quiet --json script.qql
 qql-go execute --stop-on-error --quiet --json script.qql
 qql-go dump --quiet --json notes backup.qql
+qql-go dump --quiet --json --batch-size 200 notes backup.qql
 qql-go repl
 ```
 
@@ -245,6 +279,7 @@ qql-go connect `
   --url http://localhost:6334 `
   --inference-mode local `
   --embedding-endpoint http://127.0.0.1:1234/v1/embeddings `
+  --embedding-key <embedding-api-key> `
   --embedding-model text-embedding-all-minilm-l6-v2-embedding `
   --embedding-dimension 384
 ```
@@ -261,14 +296,19 @@ SEARCH docs SIMILAR TO 'hello world' LIMIT 5 USING HYBRID
 
 - semantic similarity -> dense
 - exact terms also matter -> `USING HYBRID`
+- hybrid retrieval with default fusion -> `USING HYBRID` (`RRF`)
+- hybrid retrieval with explicit DBSF fusion -> `USING HYBRID FUSION 'dbsf'`
 - keyword-only retrieval -> `USING SPARSE`
 - recall debugging -> `EXACT`
 - query-time recall tuning -> `WITH { hnsw_ef: ... }`
 - filtered recall concern -> `WITH { acorn: true }`
 - right docs, wrong order -> `RERANK` (cloud only)
 - broader retrieval plus better ordering -> `USING HYBRID RERANK` (cloud only)
+- sparse retrieval plus better ordering -> `USING SPARSE RERANK` (cloud only)
+- exact point lookup -> `SELECT`
+- browse points page by page -> `SCROLL`
 - find similar items by example IDs -> `RECOMMEND`
 - batch ingest -> `INSERT BULK`
-- script round-trip -> `qql-go execute` / `qql-go dump`
+- script round-trip -> `qql-go execute` / `qql-go dump [--batch-size N]`
 - interactive shell -> `qql-go repl`
 - MMR, feedback, score boosting, discovery -> outside current QQL

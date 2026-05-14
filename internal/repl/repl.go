@@ -216,16 +216,18 @@ func (r *REPL) printHelp() {
 \033[1mAvailable Statements:\033[0m
 
   \033[33mINSERT INTO\033[0m COLLECTION <name> \033[33mVALUES\033[0m {'text': '...', ...}
-	  Insert a point. 'text' is required and auto-vectorized (cloud inference path).
+	  Insert a point. 'text' is required and auto-vectorized for the active inference mode.
       Optional: \033[33mUSING MODEL\033[0m '<model>'
-	  Optional: \033[33mUSING HYBRID\033[0m [\033[33mDENSE MODEL\033[0m '<model>'] [\033[33mSPARSE MODEL\033[0m '<model>'] (cloud path)
+	  Optional: \033[33mUSING HYBRID\033[0m [\033[33mDENSE MODEL\033[0m '<model>'] [\033[33mSPARSE MODEL\033[0m '<model>']
 
-  \033[33mCREATE COLLECTION\033[0m <name> [\033[33mHYBRID\033[0m]
-	  Create a new collection. Add HYBRID for dense+sparse named vectors.
+  \033[33mCREATE COLLECTION\033[0m <name> [\033[33mHYBRID\033[0m [\033[33mRERANK\033[0m]]
+	  Create a new collection. Add HYBRID for dense+sparse named vectors and RERANK for ColBERT.
       Optional: \033[33mUSING MODEL\033[0m '<model>'
+      Optional: \033[33mUSING HYBRID\033[0m [\033[33mDENSE MODEL\033[0m '<model>']
       Optional: \033[33mQUANTIZE SCALAR\033[0m [QUANTILE <0.0-1.0>] [ALWAYS RAM]
       Optional: \033[33mQUANTIZE BINARY\033[0m [ALWAYS RAM]
       Optional: \033[33mQUANTIZE PRODUCT\033[0m [ALWAYS RAM]
+      Optional: \033[33mQUANTIZE TURBO\033[0m [BITS <1|1.5|2|4>] [ALWAYS RAM]
 
   \033[33mDROP COLLECTION\033[0m <name>
       Delete a collection and all its points.
@@ -234,16 +236,23 @@ func (r *REPL) printHelp() {
       List all collections in the connected Qdrant instance.
 
   \033[33mSEARCH\033[0m <name> \033[33mSIMILAR TO\033[0m '<text>' \033[33mLIMIT\033[0m <n>
-	  Semantic search by vector similarity (text embedding uses cloud inference path).
+	  Semantic search by vector similarity.
       Optional: \033[33mUSING MODEL\033[0m '<model>'
-	  Optional: \033[33mUSING HYBRID\033[0m [\033[33mDENSE MODEL\033[0m '<model>'] [\033[33mSPARSE MODEL\033[0m '<model>'] (cloud path)
+	  Optional: \033[33mUSING HYBRID\033[0m [\033[33mFUSION\033[0m 'rrf|dbsf'] [\033[33mDENSE MODEL\033[0m '<model>'] [\033[33mSPARSE MODEL\033[0m '<model>']
+      Optional: \033[33mUSING SPARSE\033[0m [\033[33mMODEL\033[0m '<model>']
       Optional: \033[33mWHERE\033[0m <filter>
       Optional: \033[33mRERANK\033[0m [\033[33mMODEL\033[0m '<model>']
       Optional: \033[33mEXACT\033[0m
       Optional: \033[33mWITH\033[0m { hnsw_ef: <int>, exact: <bool>, acorn: <bool> }
 
-  \033[33mDELETE FROM\033[0m <name> \033[33mWHERE id =\033[0m '<id>'
-      Delete a point by its ID.
+  \033[33mSELECT\033[0m * \033[33mFROM\033[0m <name> \033[33mWHERE id =\033[0m '<id>|<int>'
+      Retrieve a single point by ID.
+
+  \033[33mSCROLL FROM\033[0m <name> [\033[33mWHERE\033[0m <filter>] [\033[33mAFTER\033[0m '<id>|<int>'] \033[33mLIMIT\033[0m <n>
+      Page through collection points with an optional filter and cursor.
+
+  \033[33mDELETE FROM\033[0m <name> \033[33mWHERE\033[0m id = '<id>' | <field> = '<value>'
+      Delete a point by ID or delete matching points by filter.
 
 \033[1mBuilt-in Commands:\033[0m
 

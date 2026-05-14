@@ -10,9 +10,8 @@ Use this file when a request sounds reasonable in Qdrant terms but is still outs
 - score boosting
 - relevance feedback
 - multi-stage retrieval beyond the built-in hybrid and rerank paths
-- select by id
 - update or upsert by explicit id (you can `INSERT` with explicit `id` to overwrite)
-- scroll or pagination
+- offset-style search pagination
 - collection diagnostics beyond `doctor`
 - collection-level HNSW config
 - on-disk vector or payload toggles
@@ -29,13 +28,16 @@ Prefer plain language:
 ## Practical Fallbacks
 
 - Need exact baseline: use `EXACT`
+- Need a single point by exact ID: use `SELECT * FROM <collection> WHERE id = ...`
+- Need to browse or export points page by page: use `SCROLL FROM <collection> ... LIMIT <n>`
 - Need recall tuning: use `WITH { hnsw_ef: ... }`
 - Need keyword plus semantic retrieval: use `USING HYBRID`
+- Need hybrid DBSF fusion: use `USING HYBRID FUSION 'dbsf'`
 - Need better ordering: use `RERANK` (cloud only)
 - Need filtering: create an index first, then use `WHERE`
 - Need a runnable prototype: stay inside `CREATE`, `CREATE INDEX`, `INSERT`, `SEARCH`, `DELETE`, `RECOMMEND`
 - Need batch insert: use `INSERT BULK`
-- Need script round-trip: use `qql-go execute` and `qql-go dump`
+- Need script round-trip: use `qql-go execute` and `qql-go dump [--batch-size N]`
 - Need local inference without cloud: use `qql-go connect --inference-mode local`
 
 ## Reminder

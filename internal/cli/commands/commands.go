@@ -464,7 +464,10 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 		VectorsConfig:  qdrant.NewVectorsConfigMap(collectionVectorParams(denseSize, n.Rerank)),
 	}
 	if n.Quantization != nil {
-		collection.QuantizationConfig = buildQuantizationConfig(n.Quantization)
+		collection.QuantizationConfig, err = buildQuantizationConfig(n.Quantization)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if n.Hybrid || n.Rerank {
 		collection.SparseVectorsConfig = qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
@@ -703,11 +706,7 @@ func (e *Executor) doSelect(n *ast.SelectStmt) (*ExecResponse, error) {
 			OK:        true,
 			Operation: "select",
 			Message:   fmt.Sprintf("Point '%v' not found in '%s'", n.PointID, n.Collection),
-			Data: map[string]any{
-				"collection": n.Collection,
-				"point_id":   n.PointID,
-				"found":      false,
-			},
+			Data:      nil,
 		}, nil
 	}
 	record := records[0]
@@ -716,13 +715,8 @@ func (e *Executor) doSelect(n *ast.SelectStmt) (*ExecResponse, error) {
 		Operation: "select",
 		Message:   fmt.Sprintf("Retrieved point '%v' from '%s'", n.PointID, n.Collection),
 		Data: map[string]any{
-			"collection": n.Collection,
-			"point_id":   n.PointID,
-			"found":      true,
-			"record": map[string]any{
-				"id":      pointIDString(record.GetId()),
-				"payload": convertRetrievedPayload(record.GetPayload()),
-			},
+			"id":      pointIDString(record.GetId()),
+			"payload": convertRetrievedPayload(record.GetPayload()),
 		},
 	}, nil
 }
@@ -777,9 +771,7 @@ func (e *Executor) doScroll(n *ast.ScrollStmt) (*ExecResponse, error) {
 		Operation: "scroll",
 		Message:   fmt.Sprintf("Scrolled %d point(s) from '%s'", len(points), n.Collection),
 		Data: map[string]any{
-			"count":       len(points),
 			"points":      points,
-			"collection":  n.Collection,
 			"next_offset": next,
 		},
 	}, nil
@@ -1072,9 +1064,9 @@ func collectionVectorParams(denseSize int, includeRerank bool) map[string]*qdran
 	return vectors
 }
 
-func buildQuantizationConfig(cfg *ast.QuantizationConfig) *qdrant.QuantizationConfig {
+func buildQuantizationConfig(cfg *ast.QuantizationConfig) (*qdrant.QuantizationConfig, error) {
 	if cfg == nil {
-		return nil
+		return nil, nil
 	}
 
 	switch cfg.Type {
@@ -1086,29 +1078,30 @@ func buildQuantizationConfig(cfg *ast.QuantizationConfig) *qdrant.QuantizationCo
 		if cfg.Quantile != nil {
 			scalar.Quantile = qdrant.PtrOf(float32(*cfg.Quantile))
 		}
-		return qdrant.NewQuantizationScalar(scalar)
+		return qdrant.NewQuantizationScalar(scalar), nil
 	case ast.QuantizationTypeBinary:
 		return qdrant.NewQuantizationBinary(&qdrant.BinaryQuantization{
 			AlwaysRam: qdrant.PtrOf(cfg.AlwaysRAM),
-		})
+		}), nil
 	case ast.QuantizationTypeProduct:
 		return qdrant.NewQuantizationProduct(&qdrant.ProductQuantization{
 			Compression: qdrant.CompressionRatio_x4,
 			AlwaysRam:   qdrant.PtrOf(cfg.AlwaysRAM),
-		})
+		}), nil
 	case ast.QuantizationTypeTurbo:
 		turbo := &qdrant.TurboQuantization{
 			AlwaysRam: qdrant.PtrOf(cfg.AlwaysRAM),
 		}
 		if cfg.TurboBits != nil {
 			bits := turboBitsEnum(*cfg.TurboBits)
-			if bits != nil {
-				turbo.Bits = bits
+			if bits == nil {
+				return nil, fmt.Errorf("unsupported TURBO bit depth %.4g; expected one of 1, 1.5, 2, or 4", *cfg.TurboBits)
 			}
+			turbo.Bits = bits
 		}
-		return qdrant.NewQuantizationTurbo(turbo)
+		return qdrant.NewQuantizationTurbo(turbo), nil
 	default:
-		return nil
+		return nil, nil
 	}
 }
 
@@ -1247,42 +1240,6 @@ func (e *Executor) buildInsertVectorsBatch(ctx context.Context, texts []string, 
 func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, denseModel, sparseModel string, hasRerankVector bool, limit uint64) (*qdrant.QueryPoints, error) {
 	params := searchParamsFromWithClause(n.WithClause)
 
-	if n.Rerank {
-		if e.usesLocalEmbeddings() {
-			return nil, fmt.Errorf("RERANK is currently only available in cloud inference mode")
-		}
-		if !hasRerankVector {
-			return nil, fmt.Errorf("collection '%s' does not support rerank; create it with HYBRID RERANK", n.Collection)
-		}
-		rerankModel := rerankModelDefault
-		if n.RerankModel != nil && *n.RerankModel != "" {
-			rerankModel = *n.RerankModel
-		}
-		prefetch, err := e.buildSearchPrefetches(ctx, n.QueryText, denseModel, sparseModel, limit, params)
-		if err != nil {
-			return nil, err
-		}
-		return buildRerankSearchRequest(n.Collection, n.QueryText, rerankModel, limit, prefetch, params), nil
-	}
-
-	if n.Hybrid {
-		prefetch, err := e.buildSearchPrefetches(ctx, n.QueryText, denseModel, sparseModel, limit, params)
-		if err != nil {
-			return nil, err
-		}
-		fusionMode := qdrant.Fusion_RRF
-		if n.Fusion != nil && *n.Fusion == "dbsf" {
-			fusionMode = qdrant.Fusion_DBSF
-		}
-		return &qdrant.QueryPoints{
-			CollectionName: n.Collection,
-			Prefetch:       prefetch,
-			Query:          qdrant.NewQueryFusion(fusionMode),
-			Limit:          qdrant.PtrOf(limit),
-			Params:         params,
-		}, nil
-	}
-
 	if n.SparseOnly {
 		if n.Rerank {
 			if e.usesLocalEmbeddings() {
@@ -1319,6 +1276,42 @@ func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, de
 			CollectionName: n.Collection,
 			Query:          query,
 			Using:          qdrant.PtrOf(sparseVectorName),
+			Limit:          qdrant.PtrOf(limit),
+			Params:         params,
+		}, nil
+	}
+
+	if n.Rerank {
+		if e.usesLocalEmbeddings() {
+			return nil, fmt.Errorf("RERANK is currently only available in cloud inference mode")
+		}
+		if !hasRerankVector {
+			return nil, fmt.Errorf("collection '%s' does not support rerank; create it with HYBRID RERANK", n.Collection)
+		}
+		rerankModel := rerankModelDefault
+		if n.RerankModel != nil && *n.RerankModel != "" {
+			rerankModel = *n.RerankModel
+		}
+		prefetch, err := e.buildSearchPrefetches(ctx, n.QueryText, denseModel, sparseModel, limit, params)
+		if err != nil {
+			return nil, err
+		}
+		return buildRerankSearchRequest(n.Collection, n.QueryText, rerankModel, limit, prefetch, params), nil
+	}
+
+	if n.Hybrid {
+		prefetch, err := e.buildSearchPrefetches(ctx, n.QueryText, denseModel, sparseModel, limit, params)
+		if err != nil {
+			return nil, err
+		}
+		fusionMode := qdrant.Fusion_RRF
+		if n.Fusion != nil && *n.Fusion == "dbsf" {
+			fusionMode = qdrant.Fusion_DBSF
+		}
+		return &qdrant.QueryPoints{
+			CollectionName: n.Collection,
+			Prefetch:       prefetch,
+			Query:          qdrant.NewQueryFusion(fusionMode),
 			Limit:          qdrant.PtrOf(limit),
 			Params:         params,
 		}, nil
@@ -2288,7 +2281,7 @@ func NewDumpCmd(out *output.Outputter) *cobra.Command {
 			mode := readOutputMode(cmd)
 			batchSize, _ := cmd.Flags().GetInt("batch-size")
 			if batchSize <= 0 {
-				batchSize = 50
+				return commandError(out, mode, "dump", strings.Join(args, " "), fmt.Errorf("--batch-size must be greater than 0"))
 			}
 			cfg, client, err := loadSavedConfigAndClient()
 			if err != nil {
