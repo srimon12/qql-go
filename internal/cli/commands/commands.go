@@ -453,7 +453,13 @@ func (e *Executor) doShowCollection(n *ast.ShowCollectionStmt) (*ExecResponse, e
 	}
 
 	config := info.GetConfig()
+	if config == nil {
+		return nil, fmt.Errorf("collection '%s' has no configuration", n.Collection)
+	}
 	params := config.GetParams()
+	if params == nil || params.GetVectorsConfig() == nil {
+		return nil, fmt.Errorf("collection '%s' has no vector configuration", n.Collection)
+	}
 
 	data := e.extractCollectionDiagnostics(n.Collection, info, config, params)
 
@@ -491,9 +497,13 @@ func formatCollectionDiagnostics(data map[string]any) string {
 		}
 	}
 
-	fmt.Fprintf(&b, "  Quantization         : %v\n", data["quantization"])
+	quantization := data["quantization"]
+	if quantization == nil {
+		quantization = "none"
+	}
+	fmt.Fprintf(&b, "  Quantization         : %v\n", quantization)
 
-	if hnsw, ok := data["hnsw_config"].(map[string]any); ok {
+	if hnsw, ok := data["hnsw_config"].(map[string]any); ok && len(hnsw) > 0 {
 		fmt.Fprintf(&b, "  HNSW M               : %v\n", hnsw["m"])
 		fmt.Fprintf(&b, "  HNSW ef_construct    : %v\n", hnsw["ef_construct"])
 		if v, ok := hnsw["full_scan_threshold"]; ok && v != nil {
@@ -578,25 +588,31 @@ func (e *Executor) extractCollectionDiagnostics(
 	}
 
 	// Quantization
-	quantization := detectQuantizationType(config.GetQuantizationConfig())
+	var quantization any
+	if qtype := detectQuantizationType(config.GetQuantizationConfig()); qtype != "" {
+		quantization = qtype
+	}
 
 	// HNSW config
 	hnswConfig := config.GetHnswConfig()
-	hnsw := map[string]any{
-		"m":            hnswConfig.GetM(),
-		"ef_construct": hnswConfig.GetEfConstruct(),
-	}
-	if hnswConfig.FullScanThreshold != nil {
-		hnsw["full_scan_threshold"] = hnswConfig.GetFullScanThreshold()
-	}
-	if hnswConfig.MaxIndexingThreads != nil {
-		hnsw["max_indexing_threads"] = hnswConfig.GetMaxIndexingThreads()
-	}
-	if hnswConfig.OnDisk != nil {
-		hnsw["on_disk"] = hnswConfig.GetOnDisk()
-	}
-	if hnswConfig.PayloadM != nil {
-		hnsw["payload_m"] = hnswConfig.GetPayloadM()
+	var hnsw map[string]any
+	if hnswConfig != nil {
+		hnsw = map[string]any{
+			"m":            hnswConfig.GetM(),
+			"ef_construct": hnswConfig.GetEfConstruct(),
+		}
+		if hnswConfig.FullScanThreshold != nil {
+			hnsw["full_scan_threshold"] = hnswConfig.GetFullScanThreshold()
+		}
+		if hnswConfig.MaxIndexingThreads != nil {
+			hnsw["max_indexing_threads"] = hnswConfig.GetMaxIndexingThreads()
+		}
+		if hnswConfig.OnDisk != nil {
+			hnsw["on_disk"] = hnswConfig.GetOnDisk()
+		}
+		if hnswConfig.PayloadM != nil {
+			hnsw["payload_m"] = hnswConfig.GetPayloadM()
+		}
 	}
 
 	// Payload schema / indexes
@@ -643,22 +659,21 @@ func (e *Executor) extractCollectionDiagnostics(
 	}
 }
 
-func detectQuantizationType(qc *qdrant.QuantizationConfig) *string {
+func detectQuantizationType(qc *qdrant.QuantizationConfig) string {
 	if qc == nil {
-		return nil
+		return ""
 	}
 	switch qc.Quantization.(type) {
 	case *qdrant.QuantizationConfig_Scalar:
-		v := "scalar"
-		return &v
+		return "scalar"
 	case *qdrant.QuantizationConfig_Binary:
-		v := "binary"
-		return &v
+		return "binary"
 	case *qdrant.QuantizationConfig_Product:
-		v := "product"
-		return &v
+		return "product"
+	case *qdrant.QuantizationConfig_Turboquant:
+		return "turbo"
 	}
-	return nil
+	return ""
 }
 
 func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecResponse, error) {

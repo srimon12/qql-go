@@ -12,7 +12,6 @@ Use this file when a request sounds reasonable in Qdrant terms but is still outs
 - multi-stage retrieval beyond the built-in hybrid and rerank paths
 - update or upsert by explicit id (you can `INSERT` with explicit `id` to overwrite)
 - offset-style search pagination
-- collection diagnostics beyond `doctor`
 - collection-level HNSW config
 - on-disk vector or payload toggles
 - `CREATE COLLECTION` with custom vector sizes or distance metrics

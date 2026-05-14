@@ -101,6 +101,7 @@ go build ./cmd/qql-go
 go run ./cmd/qql-go version
 go run ./cmd/qql-go doctor
 go run ./cmd/qql-go exec "SHOW COLLECTIONS"
+go run ./cmd/qql-go exec "SHOW COLLECTION docs"
 go run ./cmd/qql-go repl
 ```
 

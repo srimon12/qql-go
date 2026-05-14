@@ -33,6 +33,7 @@ Supported syntax in this repo includes:
 - `CREATE COLLECTION <name> QUANTIZE TURBO [BITS <1|1.5|2|4>] [ALWAYS RAM]`
 - `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE <kind>`
 - `SHOW COLLECTIONS`
+- `SHOW COLLECTION <name>`
 - `DROP COLLECTION <name>`
 - `INSERT INTO COLLECTION <name> VALUES {...}`
 - `INSERT INTO COLLECTION <name> VALUES {...} USING MODEL '<model>'`
@@ -129,6 +130,7 @@ Script files (`.qql`) use **newline-delimited statements WITHOUT semicolons**:
 -- Comment
 CREATE COLLECTION my_collection
 SHOW COLLECTIONS
+SHOW COLLECTION my_collection
 INSERT INTO COLLECTION my_collection VALUES {'text': 'hello'}
 SEARCH my_collection SIMILAR TO 'hello' LIMIT 5
 DROP COLLECTION my_collection
@@ -228,7 +230,6 @@ Examples of current gaps:
 - score boosting
 - relevance feedback
 - update or upsert by explicit id (you can overwrite with `INSERT` + explicit `id`)
-- collection diagnostics beyond `doctor`
 - collection-level HNSW tuning
 - custom distance metrics or vector sizes in `CREATE COLLECTION`
 

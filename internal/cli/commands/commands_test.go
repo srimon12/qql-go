@@ -1341,14 +1341,14 @@ func TestShowCollectionDense(t *testing.T) {
 	client := newFakeQdrantClient()
 	client.exists = true
 	client.info = &qdrant.CollectionInfo{
-		Status:         qdrant.CollectionStatus_Green,
-		SegmentsCount:  3,
-		PointsCount:    qdrant.PtrOf(uint64(100)),
+		Status:              qdrant.CollectionStatus_Green,
+		SegmentsCount:       3,
+		PointsCount:         qdrant.PtrOf(uint64(100)),
 		IndexedVectorsCount: qdrant.PtrOf(uint64(100)),
 		Config: &qdrant.CollectionConfig{
 			Params: &qdrant.CollectionParams{
-				ShardNumber:        1,
-				ReplicationFactor:  qdrant.PtrOf(uint32(1)),
+				ShardNumber:            1,
+				ReplicationFactor:      qdrant.PtrOf(uint32(1)),
 				WriteConsistencyFactor: qdrant.PtrOf(uint32(1)),
 				VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
 					Size:     384,
@@ -1356,8 +1356,8 @@ func TestShowCollectionDense(t *testing.T) {
 				}),
 			},
 			HnswConfig: &qdrant.HnswConfigDiff{
-				M:              qdrant.PtrOf(uint64(16)),
-				EfConstruct:    qdrant.PtrOf(uint64(100)),
+				M:           qdrant.PtrOf(uint64(16)),
+				EfConstruct: qdrant.PtrOf(uint64(100)),
 			},
 		},
 	}
@@ -1398,14 +1398,14 @@ func TestShowCollectionHybrid(t *testing.T) {
 	client := newFakeQdrantClient()
 	client.exists = true
 	client.info = &qdrant.CollectionInfo{
-		Status:         qdrant.CollectionStatus_Green,
-		SegmentsCount:  2,
-		PointsCount:    qdrant.PtrOf(uint64(50)),
+		Status:              qdrant.CollectionStatus_Green,
+		SegmentsCount:       2,
+		PointsCount:         qdrant.PtrOf(uint64(50)),
 		IndexedVectorsCount: qdrant.PtrOf(uint64(50)),
 		Config: &qdrant.CollectionConfig{
 			Params: &qdrant.CollectionParams{
-				ShardNumber:        1,
-				ReplicationFactor:  qdrant.PtrOf(uint32(1)),
+				ShardNumber:            1,
+				ReplicationFactor:      qdrant.PtrOf(uint32(1)),
 				WriteConsistencyFactor: qdrant.PtrOf(uint32(1)),
 				VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
 					"dense": {Size: 768, Distance: qdrant.Distance_Cosine},
@@ -1415,8 +1415,8 @@ func TestShowCollectionHybrid(t *testing.T) {
 				}),
 			},
 			HnswConfig: &qdrant.HnswConfigDiff{
-				M:              qdrant.PtrOf(uint64(16)),
-				EfConstruct:    qdrant.PtrOf(uint64(100)),
+				M:           qdrant.PtrOf(uint64(16)),
+				EfConstruct: qdrant.PtrOf(uint64(100)),
 			},
 		},
 	}
@@ -1442,22 +1442,22 @@ func TestShowCollectionNamedDenseNotHybrid(t *testing.T) {
 	client := newFakeQdrantClient()
 	client.exists = true
 	client.info = &qdrant.CollectionInfo{
-		Status:         qdrant.CollectionStatus_Green,
-		SegmentsCount:  1,
-		PointsCount:    qdrant.PtrOf(uint64(10)),
+		Status:              qdrant.CollectionStatus_Green,
+		SegmentsCount:       1,
+		PointsCount:         qdrant.PtrOf(uint64(10)),
 		IndexedVectorsCount: qdrant.PtrOf(uint64(10)),
 		Config: &qdrant.CollectionConfig{
 			Params: &qdrant.CollectionParams{
-				ShardNumber:        1,
-				ReplicationFactor:  qdrant.PtrOf(uint32(1)),
+				ShardNumber:            1,
+				ReplicationFactor:      qdrant.PtrOf(uint32(1)),
 				WriteConsistencyFactor: qdrant.PtrOf(uint32(1)),
 				VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
 					"dense": {Size: 384, Distance: qdrant.Distance_Cosine},
 				}),
 			},
 			HnswConfig: &qdrant.HnswConfigDiff{
-				M:              qdrant.PtrOf(uint64(16)),
-				EfConstruct:    qdrant.PtrOf(uint64(100)),
+				M:           qdrant.PtrOf(uint64(16)),
+				EfConstruct: qdrant.PtrOf(uint64(100)),
 			},
 		},
 	}
@@ -1477,9 +1477,9 @@ func TestShowCollectionWithPayloadSchema(t *testing.T) {
 	client := newFakeQdrantClient()
 	client.exists = true
 	client.info = &qdrant.CollectionInfo{
-		Status:         qdrant.CollectionStatus_Green,
-		SegmentsCount:  1,
-		PointsCount:    qdrant.PtrOf(uint64(5)),
+		Status:              qdrant.CollectionStatus_Green,
+		SegmentsCount:       1,
+		PointsCount:         qdrant.PtrOf(uint64(5)),
 		IndexedVectorsCount: qdrant.PtrOf(uint64(5)),
 		PayloadSchema: map[string]*qdrant.PayloadSchemaInfo{
 			"category": {DataType: qdrant.PayloadSchemaType_Keyword},
@@ -1487,8 +1487,8 @@ func TestShowCollectionWithPayloadSchema(t *testing.T) {
 		},
 		Config: &qdrant.CollectionConfig{
 			Params: &qdrant.CollectionParams{
-				ShardNumber:        1,
-				ReplicationFactor:  qdrant.PtrOf(uint32(1)),
+				ShardNumber:            1,
+				ReplicationFactor:      qdrant.PtrOf(uint32(1)),
 				WriteConsistencyFactor: qdrant.PtrOf(uint32(1)),
 				VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
 					Size:     384,
@@ -1496,8 +1496,8 @@ func TestShowCollectionWithPayloadSchema(t *testing.T) {
 				}),
 			},
 			HnswConfig: &qdrant.HnswConfigDiff{
-				M:              qdrant.PtrOf(uint64(16)),
-				EfConstruct:    qdrant.PtrOf(uint64(100)),
+				M:           qdrant.PtrOf(uint64(16)),
+				EfConstruct: qdrant.PtrOf(uint64(100)),
 			},
 		},
 	}
@@ -1518,14 +1518,14 @@ func TestShowCollectionHandlesMissingPayloadSchema(t *testing.T) {
 	client := newFakeQdrantClient()
 	client.exists = true
 	client.info = &qdrant.CollectionInfo{
-		Status:         qdrant.CollectionStatus_Green,
-		SegmentsCount:  1,
-		PointsCount:    qdrant.PtrOf(uint64(3)),
+		Status:              qdrant.CollectionStatus_Green,
+		SegmentsCount:       1,
+		PointsCount:         qdrant.PtrOf(uint64(3)),
 		IndexedVectorsCount: qdrant.PtrOf(uint64(3)),
 		Config: &qdrant.CollectionConfig{
 			Params: &qdrant.CollectionParams{
-				ShardNumber:        1,
-				ReplicationFactor:  qdrant.PtrOf(uint32(1)),
+				ShardNumber:            1,
+				ReplicationFactor:      qdrant.PtrOf(uint32(1)),
 				WriteConsistencyFactor: qdrant.PtrOf(uint32(1)),
 				VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
 					Size:     384,
@@ -1533,8 +1533,8 @@ func TestShowCollectionHandlesMissingPayloadSchema(t *testing.T) {
 				}),
 			},
 			HnswConfig: &qdrant.HnswConfigDiff{
-				M:              qdrant.PtrOf(uint64(16)),
-				EfConstruct:    qdrant.PtrOf(uint64(100)),
+				M:           qdrant.PtrOf(uint64(16)),
+				EfConstruct: qdrant.PtrOf(uint64(100)),
 			},
 		},
 	}
@@ -1563,14 +1563,14 @@ func TestShowCollectionWithQuantization(t *testing.T) {
 	client := newFakeQdrantClient()
 	client.exists = true
 	client.info = &qdrant.CollectionInfo{
-		Status:         qdrant.CollectionStatus_Green,
-		SegmentsCount:  1,
-		PointsCount:    qdrant.PtrOf(uint64(200)),
+		Status:              qdrant.CollectionStatus_Green,
+		SegmentsCount:       1,
+		PointsCount:         qdrant.PtrOf(uint64(200)),
 		IndexedVectorsCount: qdrant.PtrOf(uint64(200)),
 		Config: &qdrant.CollectionConfig{
 			Params: &qdrant.CollectionParams{
-				ShardNumber:        1,
-				ReplicationFactor:  qdrant.PtrOf(uint32(1)),
+				ShardNumber:            1,
+				ReplicationFactor:      qdrant.PtrOf(uint32(1)),
 				WriteConsistencyFactor: qdrant.PtrOf(uint32(1)),
 				VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
 					Size:     384,
@@ -1578,8 +1578,8 @@ func TestShowCollectionWithQuantization(t *testing.T) {
 				}),
 			},
 			HnswConfig: &qdrant.HnswConfigDiff{
-				M:              qdrant.PtrOf(uint64(16)),
-				EfConstruct:    qdrant.PtrOf(uint64(100)),
+				M:           qdrant.PtrOf(uint64(16)),
+				EfConstruct: qdrant.PtrOf(uint64(100)),
 			},
 			QuantizationConfig: &qdrant.QuantizationConfig{
 				Quantization: &qdrant.QuantizationConfig_Scalar{
@@ -1596,21 +1596,22 @@ func TestShowCollectionWithQuantization(t *testing.T) {
 	data, ok := resp.Data.(map[string]any)
 	require.True(t, ok)
 
-	assert.Equal(t, "scalar", *data["quantization"].(*string))
+	assert.Equal(t, "scalar", data["quantization"])
+	require.Contains(t, resp.Message, "Quantization         : scalar")
 }
 
 func TestShowCollectionHnswExtraFields(t *testing.T) {
 	client := newFakeQdrantClient()
 	client.exists = true
 	client.info = &qdrant.CollectionInfo{
-		Status:         qdrant.CollectionStatus_Green,
-		SegmentsCount:  1,
-		PointsCount:    qdrant.PtrOf(uint64(30)),
+		Status:              qdrant.CollectionStatus_Green,
+		SegmentsCount:       1,
+		PointsCount:         qdrant.PtrOf(uint64(30)),
 		IndexedVectorsCount: qdrant.PtrOf(uint64(30)),
 		Config: &qdrant.CollectionConfig{
 			Params: &qdrant.CollectionParams{
-				ShardNumber:        1,
-				ReplicationFactor:  qdrant.PtrOf(uint32(2)),
+				ShardNumber:            1,
+				ReplicationFactor:      qdrant.PtrOf(uint32(2)),
 				WriteConsistencyFactor: qdrant.PtrOf(uint32(2)),
 				VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
 					Size:     384,
@@ -1642,6 +1643,88 @@ func TestShowCollectionHnswExtraFields(t *testing.T) {
 	assert.Equal(t, uint64(8), hnsw["max_indexing_threads"])
 	assert.Equal(t, true, hnsw["on_disk"])
 	assert.Equal(t, uint64(16), hnsw["payload_m"])
+}
+
+func TestShowCollectionWithTurboQuantization(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Status:              qdrant.CollectionStatus_Green,
+		SegmentsCount:       1,
+		PointsCount:         qdrant.PtrOf(uint64(25)),
+		IndexedVectorsCount: qdrant.PtrOf(uint64(25)),
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				ShardNumber:            1,
+				ReplicationFactor:      qdrant.PtrOf(uint32(1)),
+				WriteConsistencyFactor: qdrant.PtrOf(uint32(1)),
+				VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
+					Size:     384,
+					Distance: qdrant.Distance_Cosine,
+				}),
+			},
+			QuantizationConfig: qdrant.NewQuantizationTurbo(&qdrant.TurboQuantization{}),
+		},
+	}
+
+	exec := NewExecutor(client, &config.Config{})
+	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "turbo_quantized"})
+	require.NoError(t, err)
+
+	data, ok := resp.Data.(map[string]any)
+	require.True(t, ok)
+
+	assert.Equal(t, "turbo", data["quantization"])
+	require.Contains(t, resp.Message, "Quantization         : turbo")
+}
+
+func TestShowCollectionWithoutHnswConfigDoesNotPanic(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Status:              qdrant.CollectionStatus_Green,
+		SegmentsCount:       1,
+		PointsCount:         qdrant.PtrOf(uint64(7)),
+		IndexedVectorsCount: qdrant.PtrOf(uint64(7)),
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				ShardNumber:            1,
+				ReplicationFactor:      qdrant.PtrOf(uint32(1)),
+				WriteConsistencyFactor: qdrant.PtrOf(uint32(1)),
+				VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
+					Size:     384,
+					Distance: qdrant.Distance_Cosine,
+				}),
+			},
+		},
+	}
+
+	exec := NewExecutor(client, &config.Config{})
+	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "no_hnsw"})
+	require.NoError(t, err)
+	require.True(t, resp.OK)
+
+	data, ok := resp.Data.(map[string]any)
+	require.True(t, ok)
+	assert.Nil(t, data["hnsw_config"])
+	require.NotContains(t, resp.Message, "HNSW M")
+}
+
+func TestShowCollectionWithoutVectorConfigReturnsError(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Status:        qdrant.CollectionStatus_Green,
+		SegmentsCount: 1,
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{},
+		},
+	}
+
+	exec := NewExecutor(client, &config.Config{})
+	_, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "broken"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "has no vector configuration")
 }
 
 func TestExplainShowCollection(t *testing.T) {
