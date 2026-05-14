@@ -17,6 +17,7 @@ import (
 	"github.com/srimon12/qql-go/internal/lexer"
 	"github.com/srimon12/qql-go/internal/output"
 	"github.com/srimon12/qql-go/internal/parser"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1334,4 +1335,319 @@ func TestTurboBitsEnum(t *testing.T) {
 	require.Equal(t, qdrant.TurboQuantBitSize_Bits2, *turboBitsEnum(2.0))
 	require.Equal(t, qdrant.TurboQuantBitSize_Bits4, *turboBitsEnum(4.0))
 	require.Nil(t, turboBitsEnum(3.0))
+}
+
+func TestShowCollectionDense(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Status:         qdrant.CollectionStatus_Green,
+		SegmentsCount:  3,
+		PointsCount:    qdrant.PtrOf(uint64(100)),
+		IndexedVectorsCount: qdrant.PtrOf(uint64(100)),
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				ShardNumber:        1,
+				ReplicationFactor:  qdrant.PtrOf(uint32(1)),
+				WriteConsistencyFactor: qdrant.PtrOf(uint32(1)),
+				VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
+					Size:     384,
+					Distance: qdrant.Distance_Cosine,
+				}),
+			},
+			HnswConfig: &qdrant.HnswConfigDiff{
+				M:              qdrant.PtrOf(uint64(16)),
+				EfConstruct:    qdrant.PtrOf(uint64(100)),
+			},
+		},
+	}
+
+	exec := NewExecutor(client, &config.Config{})
+	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "docs"})
+	require.NoError(t, err)
+	require.True(t, resp.OK)
+	require.Equal(t, "show_collection", resp.Operation)
+
+	data, ok := resp.Data.(map[string]any)
+	require.True(t, ok)
+
+	assert.Equal(t, "docs", data["name"])
+	assert.Equal(t, "Green", data["status"])
+	assert.Equal(t, uint64(100), data["points_count"])
+	assert.Equal(t, uint64(100), data["indexed_vectors_count"])
+	assert.Equal(t, "dense", data["topology"])
+	assert.Nil(t, data["sparse_vectors"])
+	assert.Nil(t, data["quantization"])
+	assert.Nil(t, data["payload_schema"])
+
+	vectors := data["vectors"].(map[string]map[string]any)
+	assert.Equal(t, uint64(384), vectors[""]["size"])
+	assert.Equal(t, "Cosine", vectors[""]["distance"])
+
+	hnsw := data["hnsw_config"].(map[string]any)
+	assert.Equal(t, uint64(16), hnsw["m"])
+	assert.Equal(t, uint64(100), hnsw["ef_construct"])
+
+	sharding := data["sharding"].(map[string]any)
+	assert.Equal(t, uint32(1), sharding["shard_number"])
+	assert.Equal(t, uint32(1), sharding["replication_factor"])
+	assert.Equal(t, uint32(1), sharding["write_consistency_factor"])
+}
+
+func TestShowCollectionHybrid(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Status:         qdrant.CollectionStatus_Green,
+		SegmentsCount:  2,
+		PointsCount:    qdrant.PtrOf(uint64(50)),
+		IndexedVectorsCount: qdrant.PtrOf(uint64(50)),
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				ShardNumber:        1,
+				ReplicationFactor:  qdrant.PtrOf(uint32(1)),
+				WriteConsistencyFactor: qdrant.PtrOf(uint32(1)),
+				VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
+					"dense": {Size: 768, Distance: qdrant.Distance_Cosine},
+				}),
+				SparseVectorsConfig: qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
+					"sparse": {Modifier: qdrant.Modifier_Idf.Enum()},
+				}),
+			},
+			HnswConfig: &qdrant.HnswConfigDiff{
+				M:              qdrant.PtrOf(uint64(16)),
+				EfConstruct:    qdrant.PtrOf(uint64(100)),
+			},
+		},
+	}
+
+	exec := NewExecutor(client, &config.Config{})
+	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "hybrid_docs"})
+	require.NoError(t, err)
+	require.True(t, resp.OK)
+
+	data, ok := resp.Data.(map[string]any)
+	require.True(t, ok)
+
+	assert.Equal(t, "hybrid", data["topology"])
+
+	vectors := data["vectors"].(map[string]map[string]any)
+	assert.Equal(t, uint64(768), vectors["dense"]["size"])
+
+	sparseVectors := data["sparse_vectors"].(map[string]map[string]any)
+	assert.Equal(t, "Idf", sparseVectors["sparse"]["modifier"])
+}
+
+func TestShowCollectionNamedDenseNotHybrid(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Status:         qdrant.CollectionStatus_Green,
+		SegmentsCount:  1,
+		PointsCount:    qdrant.PtrOf(uint64(10)),
+		IndexedVectorsCount: qdrant.PtrOf(uint64(10)),
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				ShardNumber:        1,
+				ReplicationFactor:  qdrant.PtrOf(uint32(1)),
+				WriteConsistencyFactor: qdrant.PtrOf(uint32(1)),
+				VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
+					"dense": {Size: 384, Distance: qdrant.Distance_Cosine},
+				}),
+			},
+			HnswConfig: &qdrant.HnswConfigDiff{
+				M:              qdrant.PtrOf(uint64(16)),
+				EfConstruct:    qdrant.PtrOf(uint64(100)),
+			},
+		},
+	}
+
+	exec := NewExecutor(client, &config.Config{})
+	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "dense_only"})
+	require.NoError(t, err)
+
+	data, ok := resp.Data.(map[string]any)
+	require.True(t, ok)
+
+	assert.Equal(t, "dense", data["topology"])
+	assert.Nil(t, data["sparse_vectors"])
+}
+
+func TestShowCollectionWithPayloadSchema(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Status:         qdrant.CollectionStatus_Green,
+		SegmentsCount:  1,
+		PointsCount:    qdrant.PtrOf(uint64(5)),
+		IndexedVectorsCount: qdrant.PtrOf(uint64(5)),
+		PayloadSchema: map[string]*qdrant.PayloadSchemaInfo{
+			"category": {DataType: qdrant.PayloadSchemaType_Keyword},
+			"year":     {DataType: qdrant.PayloadSchemaType_Integer},
+		},
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				ShardNumber:        1,
+				ReplicationFactor:  qdrant.PtrOf(uint32(1)),
+				WriteConsistencyFactor: qdrant.PtrOf(uint32(1)),
+				VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
+					Size:     384,
+					Distance: qdrant.Distance_Cosine,
+				}),
+			},
+			HnswConfig: &qdrant.HnswConfigDiff{
+				M:              qdrant.PtrOf(uint64(16)),
+				EfConstruct:    qdrant.PtrOf(uint64(100)),
+			},
+		},
+	}
+
+	exec := NewExecutor(client, &config.Config{})
+	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "indexed"})
+	require.NoError(t, err)
+
+	data, ok := resp.Data.(map[string]any)
+	require.True(t, ok)
+
+	payloadSchema := data["payload_schema"].(map[string]string)
+	assert.Equal(t, "Keyword", payloadSchema["category"])
+	assert.Equal(t, "Integer", payloadSchema["year"])
+}
+
+func TestShowCollectionHandlesMissingPayloadSchema(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Status:         qdrant.CollectionStatus_Green,
+		SegmentsCount:  1,
+		PointsCount:    qdrant.PtrOf(uint64(3)),
+		IndexedVectorsCount: qdrant.PtrOf(uint64(3)),
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				ShardNumber:        1,
+				ReplicationFactor:  qdrant.PtrOf(uint32(1)),
+				WriteConsistencyFactor: qdrant.PtrOf(uint32(1)),
+				VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
+					Size:     384,
+					Distance: qdrant.Distance_Cosine,
+				}),
+			},
+			HnswConfig: &qdrant.HnswConfigDiff{
+				M:              qdrant.PtrOf(uint64(16)),
+				EfConstruct:    qdrant.PtrOf(uint64(100)),
+			},
+		},
+	}
+
+	exec := NewExecutor(client, &config.Config{})
+	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "no_schema"})
+	require.NoError(t, err)
+
+	data, ok := resp.Data.(map[string]any)
+	require.True(t, ok)
+
+	assert.Nil(t, data["payload_schema"])
+}
+
+func TestShowCollectionNonexistentRaises(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = false
+
+	exec := NewExecutor(client, &config.Config{})
+	_, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "missing"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "does not exist")
+}
+
+func TestShowCollectionWithQuantization(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Status:         qdrant.CollectionStatus_Green,
+		SegmentsCount:  1,
+		PointsCount:    qdrant.PtrOf(uint64(200)),
+		IndexedVectorsCount: qdrant.PtrOf(uint64(200)),
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				ShardNumber:        1,
+				ReplicationFactor:  qdrant.PtrOf(uint32(1)),
+				WriteConsistencyFactor: qdrant.PtrOf(uint32(1)),
+				VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
+					Size:     384,
+					Distance: qdrant.Distance_Cosine,
+				}),
+			},
+			HnswConfig: &qdrant.HnswConfigDiff{
+				M:              qdrant.PtrOf(uint64(16)),
+				EfConstruct:    qdrant.PtrOf(uint64(100)),
+			},
+			QuantizationConfig: &qdrant.QuantizationConfig{
+				Quantization: &qdrant.QuantizationConfig_Scalar{
+					Scalar: &qdrant.ScalarQuantization{},
+				},
+			},
+		},
+	}
+
+	exec := NewExecutor(client, &config.Config{})
+	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "quantized"})
+	require.NoError(t, err)
+
+	data, ok := resp.Data.(map[string]any)
+	require.True(t, ok)
+
+	assert.Equal(t, "scalar", *data["quantization"].(*string))
+}
+
+func TestShowCollectionHnswExtraFields(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Status:         qdrant.CollectionStatus_Green,
+		SegmentsCount:  1,
+		PointsCount:    qdrant.PtrOf(uint64(30)),
+		IndexedVectorsCount: qdrant.PtrOf(uint64(30)),
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				ShardNumber:        1,
+				ReplicationFactor:  qdrant.PtrOf(uint32(2)),
+				WriteConsistencyFactor: qdrant.PtrOf(uint32(2)),
+				VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
+					Size:     384,
+					Distance: qdrant.Distance_Cosine,
+				}),
+			},
+			HnswConfig: &qdrant.HnswConfigDiff{
+				M:                  qdrant.PtrOf(uint64(32)),
+				EfConstruct:        qdrant.PtrOf(uint64(200)),
+				FullScanThreshold:  qdrant.PtrOf(uint64(10000)),
+				MaxIndexingThreads: qdrant.PtrOf(uint64(8)),
+				OnDisk:             qdrant.PtrOf(true),
+				PayloadM:           qdrant.PtrOf(uint64(16)),
+			},
+		},
+	}
+
+	exec := NewExecutor(client, &config.Config{})
+	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "hnsw_conf"})
+	require.NoError(t, err)
+
+	data, ok := resp.Data.(map[string]any)
+	require.True(t, ok)
+
+	hnsw := data["hnsw_config"].(map[string]any)
+	assert.Equal(t, uint64(32), hnsw["m"])
+	assert.Equal(t, uint64(200), hnsw["ef_construct"])
+	assert.Equal(t, uint64(10000), hnsw["full_scan_threshold"])
+	assert.Equal(t, uint64(8), hnsw["max_indexing_threads"])
+	assert.Equal(t, true, hnsw["on_disk"])
+	assert.Equal(t, uint64(16), hnsw["payload_m"])
+}
+
+func TestExplainShowCollection(t *testing.T) {
+	exec := NewExecutor(nil, &config.Config{})
+	plan, err := exec.Explain("SHOW COLLECTION docs")
+	require.NoError(t, err)
+	require.Contains(t, plan, "Statement: SHOW COLLECTION docs")
+	require.Contains(t, plan, "Inspect collection diagnostics")
 }

@@ -48,6 +48,10 @@ type DropCollectionStmt struct {
 type ShowCollectionsStmt struct {
 }
 
+type ShowCollectionStmt struct {
+	Collection string
+}
+
 type SelectStmt struct {
 	Collection string
 	PointID    interface{}
@@ -112,6 +116,7 @@ func (InsertBulkStmt) isASTNode()       {}
 func (CreateCollectionStmt) isASTNode() {}
 func (DropCollectionStmt) isASTNode()   {}
 func (ShowCollectionsStmt) isASTNode()  {}
+func (ShowCollectionStmt) isASTNode()  {}
 func (SelectStmt) isASTNode()           {}
 func (ScrollStmt) isASTNode()           {}
 func (SearchStmt) isASTNode()           {}

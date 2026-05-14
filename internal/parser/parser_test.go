@@ -411,6 +411,51 @@ func TestParseShow(t *testing.T) {
 	assert.True(t, ok, "expected ShowCollectionsStmt")
 }
 
+func TestParseShowCollection(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{
+			name:  "simple",
+			input: "SHOW COLLECTION docs",
+			want:  "docs",
+		},
+		{
+			name:  "case insensitive",
+			input: "show collection MY_COL",
+			want:  "MY_COL",
+		},
+		{
+			name:    "error without collection name",
+			input:   "SHOW COLLECTION",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.input)
+			require.NoError(t, err)
+
+			p := NewParser()
+			node, err := p.Parse(tokens)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			stmt, ok := node.(*ast.ShowCollectionStmt)
+			assert.True(t, ok, "expected ShowCollectionStmt")
+			assert.Equal(t, tt.want, stmt.Collection)
+		})
+	}
+}
+
 func TestParseSearch(t *testing.T) {
 	tests := []struct {
 		name    string

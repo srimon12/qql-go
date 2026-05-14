@@ -173,6 +173,8 @@ func (e *Executor) ExecuteResult(query string) (*ExecResponse, error) {
 	switch n := node.(type) {
 	case *ast.ShowCollectionsStmt:
 		return e.doShowCollections()
+	case *ast.ShowCollectionStmt:
+		return e.doShowCollection(n)
 	case *ast.CreateCollectionStmt:
 		return e.doCreateCollection(n)
 	case *ast.DropCollectionStmt:
@@ -225,6 +227,9 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 	case *ast.ShowCollectionsStmt:
 		plan.WriteString("Statement: SHOW COLLECTIONS\n")
 		plan.WriteString("Action: List all collections\n")
+	case *ast.ShowCollectionStmt:
+		plan.WriteString(fmt.Sprintf("Statement: SHOW COLLECTION %s\n", n.Collection))
+		plan.WriteString("Action: Inspect collection diagnostics\n")
 	case *ast.CreateCollectionStmt:
 		plan.WriteString(fmt.Sprintf("Statement: CREATE COLLECTION %s\n", n.Collection))
 		if n.Model != nil && *n.Model != "" {
@@ -429,6 +434,231 @@ func (e *Executor) doShowCollections() (*ExecResponse, error) {
 			"collections": names,
 		},
 	}, nil
+}
+
+func (e *Executor) doShowCollection(n *ast.ShowCollectionStmt) (*ExecResponse, error) {
+	ctx := context.Background()
+
+	exists, err := e.client.CollectionExists(ctx, n.Collection)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check collection: %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("collection '%s' does not exist", n.Collection)
+	}
+
+	info, err := e.client.GetCollectionInfo(ctx, n.Collection)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get collection info: %w", err)
+	}
+
+	config := info.GetConfig()
+	params := config.GetParams()
+
+	data := e.extractCollectionDiagnostics(n.Collection, info, config, params)
+
+	return &ExecResponse{
+		OK:        true,
+		Operation: "show_collection",
+		Message:   formatCollectionDiagnostics(data),
+		Data:      data,
+	}, nil
+}
+
+func formatCollectionDiagnostics(data map[string]any) string {
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "Collection: %v\n", data["name"])
+	fmt.Fprintf(&b, "  Status               : %v\n", data["status"])
+	fmt.Fprintf(&b, "  Points               : %v\n", data["points_count"])
+	fmt.Fprintf(&b, "  Indexed vectors      : %v\n", data["indexed_vectors_count"])
+	fmt.Fprintf(&b, "  Segments             : %v\n", data["segments_count"])
+	fmt.Fprintf(&b, "  Topology             : %v\n", data["topology"])
+
+	if vectors, ok := data["vectors"].(map[string]map[string]any); ok {
+		for vname, vconf := range vectors {
+			label := fmt.Sprintf("  Vector '%s'", vname)
+			if vname == "" {
+				label = "  Vector"
+			}
+			fmt.Fprintf(&b, "%s        : %v dims, %v distance\n", label, vconf["size"], vconf["distance"])
+		}
+	}
+
+	if sparseVectors, ok := data["sparse_vectors"].(map[string]map[string]any); ok && len(sparseVectors) > 0 {
+		for sname, sconf := range sparseVectors {
+			fmt.Fprintf(&b, "  Sparse '%s'          : modifier=%v\n", sname, sconf["modifier"])
+		}
+	}
+
+	fmt.Fprintf(&b, "  Quantization         : %v\n", data["quantization"])
+
+	if hnsw, ok := data["hnsw_config"].(map[string]any); ok {
+		fmt.Fprintf(&b, "  HNSW M               : %v\n", hnsw["m"])
+		fmt.Fprintf(&b, "  HNSW ef_construct    : %v\n", hnsw["ef_construct"])
+		if v, ok := hnsw["full_scan_threshold"]; ok && v != nil {
+			fmt.Fprintf(&b, "  HNSW full_scan_thres : %v\n", v)
+		}
+		if v, ok := hnsw["max_indexing_threads"]; ok && v != nil {
+			fmt.Fprintf(&b, "  HNSW max_idx_threads : %v\n", v)
+		}
+		if v, ok := hnsw["on_disk"]; ok && v != nil {
+			fmt.Fprintf(&b, "  HNSW on_disk         : %v\n", v)
+		}
+		if v, ok := hnsw["payload_m"]; ok && v != nil {
+			fmt.Fprintf(&b, "  HNSW payload_m       : %v\n", v)
+		}
+	}
+
+	if schema, ok := data["payload_schema"].(map[string]string); ok && len(schema) > 0 {
+		b.WriteString("  Payload indexes:\n")
+		for field, dtype := range schema {
+			fmt.Fprintf(&b, "    %s: %s\n", field, dtype)
+		}
+	} else {
+		b.WriteString("  Payload indexes      : none\n")
+	}
+
+	if sh, ok := data["sharding"].(map[string]any); ok {
+		fmt.Fprintf(&b, "  Shards               : %v\n", sh["shard_number"])
+		fmt.Fprintf(&b, "  Replicas             : %v\n", sh["replication_factor"])
+		fmt.Fprintf(&b, "  Write consistency    : %v\n", sh["write_consistency_factor"])
+	}
+
+	return b.String()
+}
+
+func (e *Executor) extractCollectionDiagnostics(
+	collectionName string,
+	info *qdrant.CollectionInfo,
+	config *qdrant.CollectionConfig,
+	params *qdrant.CollectionParams,
+) map[string]any {
+	// Vector topology
+	vectorsConfig := params.GetVectorsConfig()
+	sparseVectorsConfig := params.GetSparseVectorsConfig()
+
+	vectorDetails := make(map[string]map[string]any)
+	if vectorsConfig != nil {
+		if paramsMap := vectorsConfig.GetParamsMap(); paramsMap != nil {
+			for vname, vconfig := range paramsMap.GetMap() {
+				vectorDetails[vname] = map[string]any{
+					"size":     vconfig.Size,
+					"distance": vconfig.Distance.String(),
+				}
+			}
+		} else if singleParams := vectorsConfig.GetParams(); singleParams != nil {
+			vectorDetails[""] = map[string]any{
+				"size":     singleParams.Size,
+				"distance": singleParams.Distance.String(),
+			}
+		}
+	}
+
+	topology := "dense"
+	if sparseVectorsConfig != nil && len(sparseVectorsConfig.GetMap()) > 0 {
+		topology = "hybrid"
+	}
+
+	// Sparse vector config
+	sparseVectors := make(map[string]map[string]any)
+	if sparseVectorsConfig != nil {
+		for sname, sconfig := range sparseVectorsConfig.GetMap() {
+			modifier := "none"
+			if sconfig.Modifier != nil {
+				modifier = sconfig.Modifier.String()
+			}
+			sparseVectors[sname] = map[string]any{
+				"modifier": modifier,
+			}
+		}
+	}
+	if len(sparseVectors) == 0 {
+		sparseVectors = nil
+	}
+
+	// Quantization
+	quantization := detectQuantizationType(config.GetQuantizationConfig())
+
+	// HNSW config
+	hnswConfig := config.GetHnswConfig()
+	hnsw := map[string]any{
+		"m":            hnswConfig.GetM(),
+		"ef_construct": hnswConfig.GetEfConstruct(),
+	}
+	if hnswConfig.FullScanThreshold != nil {
+		hnsw["full_scan_threshold"] = hnswConfig.GetFullScanThreshold()
+	}
+	if hnswConfig.MaxIndexingThreads != nil {
+		hnsw["max_indexing_threads"] = hnswConfig.GetMaxIndexingThreads()
+	}
+	if hnswConfig.OnDisk != nil {
+		hnsw["on_disk"] = hnswConfig.GetOnDisk()
+	}
+	if hnswConfig.PayloadM != nil {
+		hnsw["payload_m"] = hnswConfig.GetPayloadM()
+	}
+
+	// Payload schema / indexes
+	payloadIndexes := make(map[string]string)
+	for fieldName, idxInfo := range info.PayloadSchema {
+		payloadIndexes[fieldName] = idxInfo.DataType.String()
+	}
+	if len(payloadIndexes) == 0 {
+		payloadIndexes = nil
+	}
+
+	// Sharding / replication
+	replicationFactor := params.GetReplicationFactor()
+	writeConsistencyFactor := params.GetWriteConsistencyFactor()
+
+	sharding := map[string]any{
+		"shard_number":             params.ShardNumber,
+		"replication_factor":       replicationFactor,
+		"write_consistency_factor": writeConsistencyFactor,
+	}
+
+	var pointsCountVal any
+	var indexedVectorsCountVal any
+	if info.PointsCount != nil {
+		pointsCountVal = *info.PointsCount
+	}
+	if info.IndexedVectorsCount != nil {
+		indexedVectorsCountVal = *info.IndexedVectorsCount
+	}
+
+	return map[string]any{
+		"name":                  collectionName,
+		"status":                info.Status.String(),
+		"points_count":          pointsCountVal,
+		"indexed_vectors_count": indexedVectorsCountVal,
+		"segments_count":        info.SegmentsCount,
+		"topology":              topology,
+		"vectors":               vectorDetails,
+		"sparse_vectors":        sparseVectors,
+		"quantization":          quantization,
+		"hnsw_config":           hnsw,
+		"payload_schema":        payloadIndexes,
+		"sharding":              sharding,
+	}
+}
+
+func detectQuantizationType(qc *qdrant.QuantizationConfig) *string {
+	if qc == nil {
+		return nil
+	}
+	switch qc.Quantization.(type) {
+	case *qdrant.QuantizationConfig_Scalar:
+		v := "scalar"
+		return &v
+	case *qdrant.QuantizationConfig_Binary:
+		v := "binary"
+		return &v
+	case *qdrant.QuantizationConfig_Product:
+		v := "product"
+		return &v
+	}
+	return nil
 }
 
 func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecResponse, error) {
