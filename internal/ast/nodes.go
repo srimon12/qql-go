@@ -81,6 +81,12 @@ type SearchStmt struct {
 	GroupSize   int
 }
 
+type QuantizationSearchWith struct {
+	Ignore       *bool
+	Rescore      *bool
+	Oversampling *float64
+}
+
 type RecommendStmt struct {
 	Collection     string
 	PositiveIDs    []interface{}

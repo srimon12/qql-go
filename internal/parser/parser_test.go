@@ -523,6 +523,33 @@ func TestParseSearch(t *testing.T) {
 			},
 		},
 		{
+			name:  "search with indexed_only and quantization params",
+			input: "SEARCH mycollection SIMILAR TO 'query text' LIMIT 10 WITH {indexed_only: true, quantization: {ignore: true, rescore: false, oversampling: 2}}",
+			want: &ast.SearchStmt{
+				Collection: "mycollection",
+				QueryText:  "query text",
+				Limit:      10,
+				WithClause: &ast.SearchWith{
+					IndexedOnly: true,
+					Quantization: &ast.QuantizationSearchWith{
+						Ignore:       boolPtr(true),
+						Rescore:      boolPtr(false),
+						Oversampling: float64Ptr(2),
+					},
+				},
+			},
+		},
+		{
+			name:  "search with boolean filter literal",
+			input: "SEARCH mycollection SIMILAR TO 'query text' LIMIT 10 WHERE active = true",
+			want: &ast.SearchStmt{
+				Collection:  "mycollection",
+				QueryText:   "query text",
+				Limit:       10,
+				QueryFilter: &ast.CompareExpr{Field: "active", Op: "=", Value: true},
+			},
+		},
+		{
 			name:  "search with model",
 			input: "SEARCH mycollection SIMILAR TO 'query text' LIMIT 10 USING MODEL 'my-model'",
 			want: &ast.SearchStmt{
@@ -700,6 +727,8 @@ func TestParseSearch(t *testing.T) {
 				assert.Equal(t, tt.want.WithClause.HnswEf, stmt.WithClause.HnswEf)
 				assert.Equal(t, tt.want.WithClause.Exact, stmt.WithClause.Exact)
 				assert.Equal(t, tt.want.WithClause.Acorn, stmt.WithClause.Acorn)
+				assert.Equal(t, tt.want.WithClause.IndexedOnly, stmt.WithClause.IndexedOnly)
+				assert.Equal(t, tt.want.WithClause.Quantization, stmt.WithClause.Quantization)
 			}
 			if tt.want.QueryFilter != nil {
 				require.NotNil(t, stmt.QueryFilter)
@@ -766,12 +795,19 @@ func TestParseRecommend(t *testing.T) {
 		},
 		{
 			name:  "recommend with with clause",
-			input: "RECOMMEND FROM docs POSITIVE IDS ('a') LIMIT 10 WITH {exact: true, hnsw_ef: 128}",
+			input: "RECOMMEND FROM docs POSITIVE IDS ('a') LIMIT 10 WITH {exact: true, hnsw_ef: 128, indexed_only: true, quantization: {rescore: true}}",
 			want: &ast.RecommendStmt{
 				Collection:  "docs",
 				PositiveIDs: []interface{}{"a"},
 				Limit:       10,
-				WithClause:  &ast.SearchWith{Exact: true, HnswEf: 128},
+				WithClause: &ast.SearchWith{
+					Exact:       true,
+					HnswEf:      128,
+					IndexedOnly: true,
+					Quantization: &ast.QuantizationSearchWith{
+						Rescore: boolPtr(true),
+					},
+				},
 			},
 		},
 		{
@@ -867,6 +903,8 @@ func TestParseRecommend(t *testing.T) {
 				assert.Equal(t, tt.want.WithClause.HnswEf, stmt.WithClause.HnswEf)
 				assert.Equal(t, tt.want.WithClause.Exact, stmt.WithClause.Exact)
 				assert.Equal(t, tt.want.WithClause.Acorn, stmt.WithClause.Acorn)
+				assert.Equal(t, tt.want.WithClause.IndexedOnly, stmt.WithClause.IndexedOnly)
+				assert.Equal(t, tt.want.WithClause.Quantization, stmt.WithClause.Quantization)
 			}
 			assert.Equal(t, tt.want.LookupFrom, stmt.LookupFrom)
 			if tt.want.LookupVector != nil {
@@ -1593,6 +1631,10 @@ func strPtr(s string) *string {
 
 func float64Ptr(f float64) *float64 {
 	return &f
+}
+
+func boolPtr(b bool) *bool {
+	return &b
 }
 
 func assertFilterExprEqual(t *testing.T, expected, actual ast.FilterExpr) {

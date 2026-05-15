@@ -126,9 +126,15 @@ func TestBuildSearchRequestAppliesWithClauseAndSparseOverride(t *testing.T) {
 		Hybrid:      true,
 		SparseModel: &sparseModel,
 		WithClause: &ast.SearchWith{
-			HnswEf: 128,
-			Exact:  true,
-			Acorn:  true,
+			HnswEf:      128,
+			Exact:       true,
+			Acorn:       true,
+			IndexedOnly: true,
+			Quantization: &ast.QuantizationSearchWith{
+				Ignore:       boolPtr(true),
+				Rescore:      boolPtr(false),
+				Oversampling: float64Ptr(2.5),
+			},
 		},
 	}, "dense-model", sparseModel, false, 5)
 	require.NoError(t, err)
@@ -140,6 +146,11 @@ func TestBuildSearchRequestAppliesWithClauseAndSparseOverride(t *testing.T) {
 	require.True(t, req.GetParams().GetExact())
 	require.NotNil(t, req.GetParams().GetAcorn())
 	require.True(t, req.GetParams().GetAcorn().GetEnable())
+	require.True(t, req.GetParams().GetIndexedOnly())
+	require.NotNil(t, req.GetParams().GetQuantization())
+	require.True(t, req.GetParams().GetQuantization().GetIgnore())
+	require.False(t, req.GetParams().GetQuantization().GetRescore())
+	require.InDelta(t, 2.5, req.GetParams().GetQuantization().GetOversampling(), 0.0001)
 
 	prefetch := req.GetPrefetch()
 	require.Len(t, prefetch, 2)
@@ -1346,8 +1357,24 @@ func TestDoScrollReturnsUpstreamStylePayload(t *testing.T) {
 	}, resp.Data)
 }
 
+func TestDoScrollPreservesNumericNextOffsetType(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.scrollOffset = qdrant.NewIDNum(42)
+	exec := NewExecutor(client, &config.Config{})
+
+	resp, err := exec.doScroll(&ast.ScrollStmt{Collection: "docs", Limit: 5})
+	require.NoError(t, err)
+	require.True(t, resp.OK)
+	require.Equal(t, uint64(42), resp.Data.(map[string]any)["next_offset"])
+}
+
 func float64Ptr(f float64) *float64 {
 	return &f
+}
+
+func boolPtr(b bool) *bool {
+	return &b
 }
 
 func newEmbeddingServer(t *testing.T, embedding []float32) *httptest.Server {

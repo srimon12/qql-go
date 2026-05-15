@@ -313,7 +313,8 @@ SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE MODEL '<model>'
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WHERE <filter>
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef: <n>, exact: true|false, acorn: true|false }
+SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef: <n>, exact: true|false, acorn: true|false, indexed_only: true|false }
+SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { quantization: { ignore: true|false, rescore: true|false, oversampling: <n> } }
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK
@@ -389,6 +390,8 @@ Search-time tuning:
 - `WITH { hnsw_ef: <n> }`
 - `WITH { exact: true|false }`
 - `WITH { acorn: true|false }`
+- `WITH { indexed_only: true|false }`
+- `WITH { quantization: { ignore, rescore, oversampling } }`
 
 ## Filter Syntax
 
@@ -397,6 +400,7 @@ Supported predicates:
 - `=` `!=` `>` `>=` `<` `<=`
 - `BETWEEN ... AND ...`
 - `IN (...)` `NOT IN (...)`
+- boolean literals: `true`, `false`
 - `IS NULL` `IS NOT NULL`
 - `IS EMPTY` `IS NOT EMPTY`
 - `MATCH` `MATCH ANY` `MATCH PHRASE`

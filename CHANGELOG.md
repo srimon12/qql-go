@@ -6,7 +6,15 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 ## [Unreleased]
 
-- No unreleased changes yet.
+### Added
+
+- `WITH` now exposes `indexed_only` plus quantization search params (`ignore`, `rescore`, `oversampling`) for `SEARCH` and `RECOMMEND`.
+
+### Fixed
+
+- Filter predicates and `IN`/`NOT IN` lists now accept boolean literals such as `true` and `false`.
+- `SCROLL` now preserves numeric `next_offset` values instead of coercing every cursor to a string.
+- Bundled retrieval examples now keep index-setup steps explicit without relying on unsupported semicolon-separated CLI statements.
 
 ## [0.1.5] - 2026-05-15
 

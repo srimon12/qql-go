@@ -57,6 +57,8 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef: <n> }`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { exact: true|false }`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { acorn: true|false }`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { indexed_only: true|false }`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { quantization: { ignore: true|false, rescore: true|false, oversampling: <n> } }`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK`
@@ -236,6 +238,8 @@ Supported params:
 - `WITH { hnsw_ef: 128 }`
 - `WITH { exact: true }`
 - `WITH { acorn: true }`
+- `WITH { indexed_only: true }`
+- `WITH { quantization: { ignore: true, oversampling: 2 } }`
 
 Use them for:
 

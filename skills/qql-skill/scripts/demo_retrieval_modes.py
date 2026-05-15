@@ -10,6 +10,7 @@ EXAMPLES = [
         "mode": "dense",
         "when": "Use when semantic similarity matters more than exact term matching.",
         "query": "SEARCH articles SIMILAR TO 'vector database performance tuning' LIMIT 5",
+        "setup": [],
         "requires_index": [],
     },
     {
@@ -19,6 +20,7 @@ EXAMPLES = [
             "SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' "
             "LIMIT 10 USING HYBRID"
         ),
+        "setup": [],
         "requires_index": [],
     },
     {
@@ -28,6 +30,7 @@ EXAMPLES = [
             "SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' "
             "LIMIT 10 USING HYBRID FUSION 'dbsf'"
         ),
+        "setup": [],
         "requires_index": [],
     },
     {
@@ -37,12 +40,14 @@ EXAMPLES = [
             "SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' "
             "LIMIT 10 USING SPARSE"
         ),
+        "setup": [],
         "requires_index": [],
     },
     {
         "mode": "exact",
         "when": "Use when debugging recall and you need an exact KNN baseline.",
         "query": "SEARCH articles SIMILAR TO 'attention mechanism' LIMIT 10 EXACT",
+        "setup": [],
         "requires_index": [],
     },
     {
@@ -52,13 +57,16 @@ EXAMPLES = [
             "SEARCH articles SIMILAR TO 'transformer inference' "
             "LIMIT 10 WITH { hnsw_ef: 256 }"
         ),
+        "setup": [],
         "requires_index": [],
     },
     {
         "mode": "with-filter",
         "when": "Use when metadata constraints should narrow the search. Requires CREATE INDEX first.",
+        "setup": [
+            "CREATE INDEX ON COLLECTION articles FOR category TYPE keyword",
+        ],
         "query": (
-            "CREATE INDEX ON COLLECTION articles FOR category TYPE keyword;\n"
             "SEARCH articles SIMILAR TO 'transformer inference' "
             "LIMIT 10 WHERE category = 'ml'"
         ),
@@ -71,6 +79,9 @@ EXAMPLES = [
             "SEARCH incidents SIMILAR TO 'retrieval recall regression' "
             "LIMIT 10 WHERE team = 'search' WITH { acorn: true }"
         ),
+        "setup": [
+            "CREATE INDEX ON COLLECTION incidents FOR team TYPE keyword",
+        ],
         "requires_index": ["team"],
     },
     {
@@ -80,6 +91,9 @@ EXAMPLES = [
             "SEARCH incidents SIMILAR TO 'retrieval recall regression' "
             "LIMIT 5 GROUP BY team GROUP_SIZE 2"
         ),
+        "setup": [
+            "CREATE INDEX ON COLLECTION incidents FOR team TYPE keyword",
+        ],
         "requires_index": ["team"],
     },
     {
@@ -90,6 +104,9 @@ EXAMPLES = [
             "LIMIT 4 USING HYBRID WITH { hnsw_ef: 128, acorn: true } "
             "GROUP BY team GROUP_SIZE 2"
         ),
+        "setup": [
+            "CREATE INDEX ON COLLECTION incidents FOR team TYPE keyword",
+        ],
         "requires_index": ["team"],
     },
     {
@@ -98,6 +115,7 @@ EXAMPLES = [
         "query": (
             "SEARCH papers SIMILAR TO 'late interaction retrieval' LIMIT 5 RERANK"
         ),
+        "setup": [],
         "requires_index": [],
         "requires_cloud": True,
     },
@@ -108,6 +126,7 @@ EXAMPLES = [
             "SEARCH docs SIMILAR TO 'cross encoder ms marco minimlm' "
             "LIMIT 8 USING HYBRID RERANK"
         ),
+        "setup": [],
         "requires_index": [],
         "requires_cloud": True,
     },
@@ -118,6 +137,7 @@ EXAMPLES = [
             "SEARCH docs SIMILAR TO 'cross encoder ms marco minimlm' "
             "LIMIT 8 USING SPARSE RERANK"
         ),
+        "setup": [],
         "requires_index": [],
         "requires_cloud": True,
     },
@@ -125,6 +145,7 @@ EXAMPLES = [
         "mode": "select-by-id",
         "when": "Use when you already know the exact point ID and want the stored payload.",
         "query": "SELECT * FROM articles WHERE id = 'pt-42'",
+        "setup": [],
         "requires_index": [],
     },
     {
@@ -133,12 +154,18 @@ EXAMPLES = [
         "query": (
             "SCROLL FROM articles WHERE category = 'ml' AFTER 'pt-42' LIMIT 25"
         ),
+        "setup": [
+            "CREATE INDEX ON COLLECTION articles FOR category TYPE keyword",
+        ],
         "requires_index": ["category"],
     },
     {
         "mode": "delete-by-field",
         "when": "Delete points by field value instead of ID.",
         "query": ("DELETE FROM articles WHERE category = 'archived'"),
+        "setup": [
+            "CREATE INDEX ON COLLECTION articles FOR category TYPE keyword",
+        ],
         "requires_index": ["category"],
     },
     {
@@ -148,12 +175,16 @@ EXAMPLES = [
             "UPDATE articles SET PAYLOAD WHERE category = 'draft' "
             "{'status': 'published'}"
         ),
+        "setup": [
+            "CREATE INDEX ON COLLECTION articles FOR category TYPE keyword",
+        ],
         "requires_index": ["category"],
     },
     {
         "mode": "update-vector",
         "when": "Replace the stored dense vector for one exact point ID.",
         "query": "UPDATE articles SET VECTOR WHERE id = 42 [0.1, 0.2, 0.3]",
+        "setup": [],
         "requires_index": [],
     },
 ]
@@ -177,6 +208,8 @@ def main() -> None:
     for example in EXAMPLES:
         print(f"[{example['mode']}]")
         print(example["when"])
+        for setup_stmt in example.get("setup", []):
+            print(f"  Setup: {setup_stmt}")
         if example.get("requires_index"):
             print(f"  Note: Requires index on {example['requires_index']}")
         if example.get("requires_cloud"):

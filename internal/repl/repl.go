@@ -243,7 +243,7 @@ func (r *REPL) printHelp() {
       Optional: \033[33mWHERE\033[0m <filter>
       Optional: \033[33mRERANK\033[0m [\033[33mMODEL\033[0m '<model>']
       Optional: \033[33mEXACT\033[0m
-      Optional: \033[33mWITH\033[0m { hnsw_ef: <int>, exact: <bool>, acorn: <bool> }
+      Optional: \033[33mWITH\033[0m { hnsw_ef: <int>, exact: <bool>, acorn: <bool>, indexed_only: <bool>, quantization: { ignore: <bool>, rescore: <bool>, oversampling: <n> } }
 
   \033[33mSELECT\033[0m * \033[33mFROM\033[0m <name> \033[33mWHERE id =\033[0m '<id>|<int>'
       Retrieve a single point by ID.

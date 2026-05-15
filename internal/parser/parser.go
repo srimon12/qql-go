@@ -1077,8 +1077,17 @@ func (p *Parser) parseLiteral() (interface{}, error) {
 	case lexer.TokenKindFloat:
 		p.advance()
 		return parseFloatToken(tok)
+	case lexer.TokenKindIdentifier:
+		p.advance()
+		upper := toUpper(tok.Value)
+		if upper == "TRUE" {
+			return true, nil
+		}
+		if upper == "FALSE" {
+			return false, nil
+		}
 	}
-	return nil, errors.NewQQLSyntaxError("Expected a literal value (string, integer, or float), got '"+tok.Value+"'", tok.Pos)
+	return nil, errors.NewQQLSyntaxError("Expected a literal value (string, integer, float, or boolean), got '"+tok.Value+"'", tok.Pos)
 }
 
 func (p *Parser) parseNumber() (interface{}, error) {
@@ -1282,6 +1291,8 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 	hnswEf := 0
 	exact := false
 	acorn := false
+	indexedOnly := false
+	var quantization *ast.QuantizationSearchWith
 	var err error
 	for p.peek().Kind != lexer.TokenKindRbrace {
 		keyTok := p.peek()
@@ -1313,8 +1324,18 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 			if err != nil {
 				return nil, err
 			}
+		case "indexed_only":
+			indexedOnly, err = p.parseBool()
+			if err != nil {
+				return nil, err
+			}
+		case "quantization":
+			quantization, err = p.parseQuantizationSearchWith()
+			if err != nil {
+				return nil, err
+			}
 		default:
-			return nil, errors.NewQQLSyntaxError("Unknown WITH parameter '"+key+"'. Expected: hnsw_ef, exact, acorn", keyTok.Pos)
+			return nil, errors.NewQQLSyntaxError("Unknown WITH parameter '"+key+"'. Expected: hnsw_ef, exact, acorn, indexed_only, quantization", keyTok.Pos)
 		}
 		if p.peek().Kind == lexer.TokenKindComma {
 			p.advance()
@@ -1328,7 +1349,86 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 	if _, err := p.expect(lexer.TokenKindRbrace); err != nil {
 		return nil, err
 	}
-	return &ast.SearchWith{HnswEf: hnswEf, Exact: exact, Acorn: acorn}, nil
+	return &ast.SearchWith{
+		HnswEf:       hnswEf,
+		Exact:        exact,
+		Acorn:        acorn,
+		IndexedOnly:  indexedOnly,
+		Quantization: quantization,
+	}, nil
+}
+
+func (p *Parser) parseQuantizationSearchWith() (*ast.QuantizationSearchWith, error) {
+	if _, err := p.expect(lexer.TokenKindLbrace); err != nil {
+		return nil, err
+	}
+
+	var ignore *bool
+	var rescore *bool
+	var oversampling *float64
+
+	for p.peek().Kind != lexer.TokenKindRbrace {
+		keyTok := p.peek()
+		if keyTok.Kind != lexer.TokenKindIdentifier {
+			return nil, errors.NewQQLSyntaxError("Expected a quantization parameter name, got '"+keyTok.Value+"'", keyTok.Pos)
+		}
+		p.advance()
+		key := toLower(keyTok.Value)
+		if _, err := p.expect(lexer.TokenKindColon); err != nil {
+			return nil, err
+		}
+
+		switch key {
+		case "ignore":
+			value, err := p.parseBool()
+			if err != nil {
+				return nil, err
+			}
+			ignore = &value
+		case "rescore":
+			value, err := p.parseBool()
+			if err != nil {
+				return nil, err
+			}
+			rescore = &value
+		case "oversampling":
+			value, err := p.parseNumber()
+			if err != nil {
+				return nil, err
+			}
+			switch typed := value.(type) {
+			case int:
+				v := float64(typed)
+				oversampling = &v
+			case float64:
+				v := typed
+				oversampling = &v
+			default:
+				return nil, errors.NewQQLSyntaxError("oversampling must be numeric", keyTok.Pos)
+			}
+		default:
+			return nil, errors.NewQQLSyntaxError("Unknown quantization parameter '"+key+"'. Expected: ignore, rescore, oversampling", keyTok.Pos)
+		}
+
+		if p.peek().Kind == lexer.TokenKindComma {
+			p.advance()
+			if p.peek().Kind == lexer.TokenKindRbrace {
+				break
+			}
+		} else {
+			break
+		}
+	}
+
+	if _, err := p.expect(lexer.TokenKindRbrace); err != nil {
+		return nil, err
+	}
+
+	return &ast.QuantizationSearchWith{
+		Ignore:       ignore,
+		Rescore:      rescore,
+		Oversampling: oversampling,
+	}, nil
 }
 
 func (p *Parser) parseBool() (bool, error) {
@@ -1524,6 +1624,12 @@ func mergeSearchWith(dst **ast.SearchWith, src *ast.SearchWith) {
 	}
 	if src.Acorn {
 		current.Acorn = true
+	}
+	if src.IndexedOnly {
+		current.IndexedOnly = true
+	}
+	if src.Quantization != nil {
+		current.Quantization = src.Quantization
 	}
 }
 
