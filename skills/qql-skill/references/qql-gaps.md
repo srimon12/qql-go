@@ -6,13 +6,12 @@ Use this file when a request sounds reasonable in Qdrant terms but is still outs
 
 - local/external rerank (`RERANK` is cloud-only)
 - discovery API
-- MMR or diversity controls
 - score boosting
 - relevance feedback
 - multi-stage retrieval beyond the built-in hybrid and rerank paths
 - offset-style search pagination
-- collection-level HNSW config
-- on-disk vector or payload toggles
+- MMR for `USING HYBRID`, `USING SPARSE`, or `RECOMMEND`
+- custom vector on-disk toggles
 - `CREATE COLLECTION` with custom vector sizes or distance metrics
 
 ## What To Say

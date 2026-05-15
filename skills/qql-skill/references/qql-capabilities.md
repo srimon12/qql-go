@@ -17,6 +17,7 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - `CREATE COLLECTION <name> QUANTIZE BINARY [ALWAYS RAM]`
 - `CREATE COLLECTION <name> QUANTIZE PRODUCT [ALWAYS RAM]`
 - `CREATE COLLECTION <name> QUANTIZE TURBO [BITS <1|1.5|2|4>] [ALWAYS RAM]`
+- `CREATE COLLECTION <name> HNSW { payload_m: <n> }`
 - `SHOW COLLECTION <name>`
 - `SHOW COLLECTIONS`
 - `DROP COLLECTION <name>`
@@ -27,6 +28,10 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE integer`
 - `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE float`
 - `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE bool`
+- `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE uuid`
+- `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE keyword WITH { is_tenant: true|false, on_disk: true|false, enable_hnsw: true|false }`
+- `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE uuid WITH { is_tenant: true|false, on_disk: true|false, enable_hnsw: true|false }`
+- `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE text WITH { tokenizer: 'word|whitespace|prefix|multilingual', min_token_len: <n>, max_token_len: <n>, lowercase: true|false, ascii_folding: true|false, phrase_matching: true|false, stopwords: ['english', ...]|['custom', ...], on_disk: true|false, enable_hnsw: true|false }`
 
 ### Insert
 
@@ -59,6 +64,7 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { acorn: true|false }`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { indexed_only: true|false }`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { quantization: { ignore: true|false, rescore: true|false, oversampling: <n> } }`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK`
@@ -240,12 +246,14 @@ Supported params:
 - `WITH { acorn: true }`
 - `WITH { indexed_only: true }`
 - `WITH { quantization: { ignore: true, oversampling: 2 } }`
+- `WITH { mmr_diversity: 0.5, mmr_candidates: 50 }`
 
 Use them for:
 
 - exact recall baselines
 - query-time recall tuning
 - filtered-query experiments
+- semantic diversity in dense search results
 
 ## Filters
 
@@ -280,4 +288,5 @@ Supported logical composition:
 - Use payload indexes before relying on `WHERE`.
 - Rerank is **cloud-only**.
 - Hybrid collections use named vectors: `dense` and `sparse`.
+- MMR currently supports dense `SEARCH` and dense grouped `SEARCH` only.
 - Stay inside the implemented syntax. Do not invent clauses because Qdrant supports them in principle.

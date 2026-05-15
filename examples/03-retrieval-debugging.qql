@@ -23,6 +23,7 @@ INSERT BULK INTO COLLECTION retrieval_debug_docs VALUES [
   }
 ] USING HYBRID
 SEARCH retrieval_debug_docs SIMILAR TO 'hnsw recall regression' LIMIT 3
+SEARCH retrieval_debug_docs SIMILAR TO 'hnsw recall regression' LIMIT 3 WITH { mmr_diversity: 0.5, mmr_candidates: 20 }
 SEARCH retrieval_debug_docs SIMILAR TO 'hnsw recall regression' LIMIT 3 USING HYBRID
 SEARCH retrieval_debug_docs SIMILAR TO 'hnsw recall regression' LIMIT 3 USING HYBRID FUSION 'dbsf'
 SEARCH retrieval_debug_docs SIMILAR TO 'hnsw recall regression' LIMIT 3 USING SPARSE

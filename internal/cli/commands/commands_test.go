@@ -151,6 +151,7 @@ func TestBuildSearchRequestAppliesWithClauseAndSparseOverride(t *testing.T) {
 	require.True(t, req.GetParams().GetQuantization().GetIgnore())
 	require.False(t, req.GetParams().GetQuantization().GetRescore())
 	require.InDelta(t, 2.5, req.GetParams().GetQuantization().GetOversampling(), 0.0001)
+	require.NotNil(t, req.GetQuery().GetFusion())
 
 	prefetch := req.GetPrefetch()
 	require.Len(t, prefetch, 2)
@@ -158,6 +159,25 @@ func TestBuildSearchRequestAppliesWithClauseAndSparseOverride(t *testing.T) {
 	require.Equal(t, "dense-model", prefetch[1].GetQuery().GetNearest().GetDocument().GetModel())
 	require.NotNil(t, prefetch[0].GetParams())
 	require.Equal(t, uint64(128), prefetch[0].GetParams().GetHnswEf())
+}
+
+func TestBuildSearchRequestDenseMMR(t *testing.T) {
+	exec := NewExecutor(nil, &config.Config{})
+	req, err := exec.buildSearchRequest(context.Background(), &ast.SearchStmt{
+		Collection: "demo",
+		QueryText:  "vector database",
+		Limit:      5,
+		WithClause: &ast.SearchWith{
+			MmrDiversity:  float64Ptr(0.5),
+			MmrCandidates: intPtr(50),
+		},
+	}, "dense-model", "custom-sparse", false, 5)
+	require.NoError(t, err)
+	require.NotNil(t, req.GetQuery().GetNearestWithMmr())
+	require.InDelta(t, 0.5, req.GetQuery().GetNearestWithMmr().GetMmr().GetDiversity(), 0.0001)
+	require.Equal(t, uint32(50), req.GetQuery().GetNearestWithMmr().GetMmr().GetCandidatesLimit())
+	require.NotNil(t, req.GetQuery().GetNearestWithMmr().GetNearest().GetDocument())
+	require.Equal(t, "dense-model", req.GetQuery().GetNearestWithMmr().GetNearest().GetDocument().GetModel())
 }
 
 func TestBuildGroupSearchRequestCarriesHybridPrefetchParamsAndCustomModels(t *testing.T) {
@@ -309,6 +329,109 @@ func TestCreateCollectionHybridRerankIncludesBinaryQuantizationConfig(t *testing
 	require.NotNil(t, client.createRequests[0].GetSparseVectorsConfig())
 	require.NotNil(t, client.createRequests[0].GetQuantizationConfig().GetBinary())
 	require.True(t, client.createRequests[0].GetQuantizationConfig().GetBinary().GetAlwaysRam())
+}
+
+func TestCreateCollectionIncludesPayloadM(t *testing.T) {
+	client := newFakeQdrantClient()
+	exec := NewExecutor(client, &config.Config{})
+
+	resp, err := exec.doCreateCollection(&ast.CreateCollectionStmt{
+		Collection: "docs",
+		PayloadM:   uint64Ptr(24),
+	})
+	require.NoError(t, err)
+	require.True(t, resp.OK)
+	require.Len(t, client.createRequests, 1)
+	require.NotNil(t, client.createRequests[0].GetHnswConfig())
+	require.Equal(t, uint64(24), client.createRequests[0].GetHnswConfig().GetPayloadM())
+}
+
+func TestDoCreateIndexSupportsKeywordOptions(t *testing.T) {
+	client := newFakeQdrantClient()
+	exec := NewExecutor(client, &config.Config{})
+
+	resp, err := exec.doCreateIndex(&ast.CreateIndexStmt{
+		Collection: "docs",
+		Field:      "tenant_id",
+		FieldType:  "keyword",
+		Options: map[string]interface{}{
+			"is_tenant":   true,
+			"on_disk":     true,
+			"enable_hnsw": false,
+		},
+	})
+	require.NoError(t, err)
+	require.True(t, resp.OK)
+	require.Len(t, client.fieldIndexRequests, 1)
+	params := client.fieldIndexRequests[0].GetFieldIndexParams().GetKeywordIndexParams()
+	require.NotNil(t, params)
+	require.True(t, params.GetIsTenant())
+	require.True(t, params.GetOnDisk())
+	require.False(t, params.GetEnableHnsw())
+}
+
+func TestDoCreateIndexSupportsTextOptions(t *testing.T) {
+	client := newFakeQdrantClient()
+	exec := NewExecutor(client, &config.Config{})
+
+	resp, err := exec.doCreateIndex(&ast.CreateIndexStmt{
+		Collection: "docs",
+		Field:      "title",
+		FieldType:  "text",
+		Options: map[string]interface{}{
+			"tokenizer":       "word",
+			"min_token_len":   2,
+			"max_token_len":   20,
+			"lowercase":       true,
+			"phrase_matching": true,
+		},
+	})
+	require.NoError(t, err)
+	require.True(t, resp.OK)
+	require.Len(t, client.fieldIndexRequests, 1)
+	params := client.fieldIndexRequests[0].GetFieldIndexParams().GetTextIndexParams()
+	require.NotNil(t, params)
+	require.Equal(t, qdrant.TokenizerType_Word, params.GetTokenizer())
+	require.Equal(t, uint64(2), params.GetMinTokenLen())
+	require.Equal(t, uint64(20), params.GetMaxTokenLen())
+	require.True(t, params.GetLowercase())
+	require.True(t, params.GetPhraseMatching())
+}
+
+func TestDoCreateIndexSupportsUUIDOptions(t *testing.T) {
+	client := newFakeQdrantClient()
+	exec := NewExecutor(client, &config.Config{})
+
+	resp, err := exec.doCreateIndex(&ast.CreateIndexStmt{
+		Collection: "docs",
+		Field:      "doc_id",
+		FieldType:  "uuid",
+		Options: map[string]interface{}{
+			"on_disk": true,
+		},
+	})
+	require.NoError(t, err)
+	require.True(t, resp.OK)
+	require.Len(t, client.fieldIndexRequests, 1)
+	params := client.fieldIndexRequests[0].GetFieldIndexParams().GetUuidIndexParams()
+	require.NotNil(t, params)
+	require.True(t, params.GetOnDisk())
+}
+
+func TestDoCreateIndexRejectsUnknownOption(t *testing.T) {
+	client := newFakeQdrantClient()
+	exec := NewExecutor(client, &config.Config{})
+
+	_, err := exec.doCreateIndex(&ast.CreateIndexStmt{
+		Collection: "docs",
+		Field:      "tenant_id",
+		FieldType:  "keyword",
+		Options: map[string]interface{}{
+			"tokenizer": "word",
+		},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Unknown CREATE INDEX option")
 }
 
 func TestInsertAutoCreatesMissingCollection(t *testing.T) {
@@ -906,19 +1029,20 @@ func TestBuildInsertVectorsLocalModeRejectsRerank(t *testing.T) {
 }
 
 type fakeQdrantClient struct {
-	mu             sync.Mutex
-	exists         bool
-	info           *qdrant.CollectionInfo
-	createRequests []*qdrant.CreateCollection
-	upserts        []*qdrant.UpsertPoints
-	queryRequests  []*qdrant.QueryPoints
-	groupRequests  []*qdrant.QueryPointGroups
-	groupResults   []*qdrant.PointGroup
-	updateVectors  []*qdrant.UpdatePointVectors
-	setPayloads    []*qdrant.SetPayloadPoints
-	scrollRecords  []*qdrant.RetrievedPoint
-	scrollOffset   *qdrant.PointId
-	getRecords     []*qdrant.RetrievedPoint
+	mu                 sync.Mutex
+	exists             bool
+	info               *qdrant.CollectionInfo
+	createRequests     []*qdrant.CreateCollection
+	fieldIndexRequests []*qdrant.CreateFieldIndexCollection
+	upserts            []*qdrant.UpsertPoints
+	queryRequests      []*qdrant.QueryPoints
+	groupRequests      []*qdrant.QueryPointGroups
+	groupResults       []*qdrant.PointGroup
+	updateVectors      []*qdrant.UpdatePointVectors
+	setPayloads        []*qdrant.SetPayloadPoints
+	scrollRecords      []*qdrant.RetrievedPoint
+	scrollOffset       *qdrant.PointId
+	getRecords         []*qdrant.RetrievedPoint
 }
 
 func newFakeQdrantClient() *fakeQdrantClient { return &fakeQdrantClient{} }
@@ -983,7 +1107,10 @@ func (f *fakeQdrantClient) SetPayload(_ context.Context, req *qdrant.SetPayloadP
 	f.setPayloads = append(f.setPayloads, req)
 	return &qdrant.UpdateResult{}, nil
 }
-func (f *fakeQdrantClient) CreateFieldIndex(context.Context, *qdrant.CreateFieldIndexCollection) (*qdrant.UpdateResult, error) {
+func (f *fakeQdrantClient) CreateFieldIndex(_ context.Context, req *qdrant.CreateFieldIndexCollection) (*qdrant.UpdateResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.fieldIndexRequests = append(f.fieldIndexRequests, req)
 	return &qdrant.UpdateResult{}, nil
 }
 func (f *fakeQdrantClient) Count(context.Context, *qdrant.CountPoints) (uint64, error) { return 0, nil }
@@ -1037,6 +1164,63 @@ func TestDoSearchUsesQueryGroupsForGroupedSearch(t *testing.T) {
 	require.Equal(t, uint64(2), client.groupRequests[0].GetGroupSize())
 	require.Equal(t, uint64(128), client.groupRequests[0].GetPrefetch()[0].GetParams().GetHnswEf())
 	require.Contains(t, resp.Message, "Found 1 group(s)")
+}
+
+func TestDoSearchRejectsMMRWithHybrid(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				VectorsConfig: qdrant.NewVectorsConfigMap(collectionVectorParams(denseVectorSize, false)),
+			},
+		},
+	}
+	exec := NewExecutor(client, &config.Config{})
+
+	_, err := exec.doSearch(&ast.SearchStmt{
+		Collection: "docs",
+		QueryText:  "vector database",
+		Limit:      5,
+		Hybrid:     true,
+		WithClause: &ast.SearchWith{MmrDiversity: float64Ptr(0.5)},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "MMR is not supported with USING HYBRID yet")
+}
+
+func TestDoSearchRejectsMMRWithSparse(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				VectorsConfig: qdrant.NewVectorsConfigMap(collectionVectorParams(denseVectorSize, false)),
+			},
+		},
+	}
+	exec := NewExecutor(client, &config.Config{})
+
+	_, err := exec.doSearch(&ast.SearchStmt{
+		Collection: "docs",
+		QueryText:  "vector database",
+		Limit:      5,
+		SparseOnly: true,
+		WithClause: &ast.SearchWith{MmrDiversity: float64Ptr(0.5)},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "MMR is not supported with USING SPARSE yet")
+}
+
+func TestBuildRecommendRequestRejectsMMR(t *testing.T) {
+	_, err := buildRecommendRequest(&ast.RecommendStmt{
+		Collection:  "docs",
+		PositiveIDs: []interface{}{"a"},
+		Limit:       5,
+		WithClause:  &ast.SearchWith{MmrDiversity: float64Ptr(0.5)},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "MMR is supported only for SEARCH statements")
 }
 
 func TestBuildUpdateVectorRequestUsesNamedDenseVectorForHybridCollections(t *testing.T) {
@@ -1377,6 +1561,14 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
+func intPtr(v int) *int {
+	return &v
+}
+
+func uint64Ptr(v uint64) *uint64 {
+	return &v
+}
+
 func newEmbeddingServer(t *testing.T, embedding []float32) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1652,8 +1844,14 @@ func TestShowCollectionWithPayloadSchema(t *testing.T) {
 		PointsCount:         qdrant.PtrOf(uint64(5)),
 		IndexedVectorsCount: qdrant.PtrOf(uint64(5)),
 		PayloadSchema: map[string]*qdrant.PayloadSchemaInfo{
-			"category": {DataType: qdrant.PayloadSchemaType_Keyword},
-			"year":     {DataType: qdrant.PayloadSchemaType_Integer},
+			"category": {
+				DataType: qdrant.PayloadSchemaType_Keyword,
+				Params: qdrant.NewPayloadIndexParamsKeyword(&qdrant.KeywordIndexParams{
+					IsTenant: qdrant.PtrOf(true),
+					OnDisk:   qdrant.PtrOf(true),
+				}),
+			},
+			"year": {DataType: qdrant.PayloadSchemaType_Integer},
 		},
 		Config: &qdrant.CollectionConfig{
 			Params: &qdrant.CollectionParams{
@@ -1679,9 +1877,12 @@ func TestShowCollectionWithPayloadSchema(t *testing.T) {
 	data, ok := resp.Data.(map[string]any)
 	require.True(t, ok)
 
-	payloadSchema := data["payload_schema"].(map[string]string)
-	assert.Equal(t, "Keyword", payloadSchema["category"])
-	assert.Equal(t, "Integer", payloadSchema["year"])
+	payloadSchema := data["payload_schema"].(map[string]any)
+	category := payloadSchema["category"].(map[string]any)
+	assert.Equal(t, "keyword", category["type"])
+	assert.Equal(t, map[string]any{"is_tenant": true, "on_disk": true}, category["params"])
+	year := payloadSchema["year"].(map[string]any)
+	assert.Equal(t, "integer", year["type"])
 }
 
 func TestShowCollectionHandlesMissingPayloadSchema(t *testing.T) {

@@ -28,6 +28,7 @@ var keywords = map[string]TokenKind{
 	"QUANTILE":    TokenKindQuantile,
 	"ALWAYS":      TokenKindAlways,
 	"RAM":         TokenKindRam,
+	"HNSW":        TokenKindHnsw,
 	"CREATE":      TokenKindCreate,
 	"DROP":        TokenKindDrop,
 	"SHOW":        TokenKindShow,

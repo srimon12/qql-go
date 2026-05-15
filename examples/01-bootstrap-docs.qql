@@ -1,14 +1,18 @@
--- Bootstrap a hybrid docs collection with payload indexes and seed data.
-CREATE COLLECTION example_docs HYBRID QUANTIZE TURBO BITS 2 ALWAYS RAM
+-- Bootstrap a hybrid docs collection with payload-aware HNSW, richer payload indexes, and seed data.
+CREATE COLLECTION example_docs HYBRID HNSW { payload_m: 16 } QUANTIZE TURBO BITS 2 ALWAYS RAM
 CREATE INDEX ON COLLECTION example_docs FOR team TYPE keyword
 CREATE INDEX ON COLLECTION example_docs FOR status TYPE keyword
 CREATE INDEX ON COLLECTION example_docs FOR severity TYPE integer
 CREATE INDEX ON COLLECTION example_docs FOR year TYPE integer
+CREATE INDEX ON COLLECTION example_docs FOR tenant_id TYPE keyword WITH { is_tenant: true, on_disk: true }
+CREATE INDEX ON COLLECTION example_docs FOR title TYPE text WITH { tokenizer: 'word', min_token_len: 2, lowercase: true }
 INSERT BULK INTO COLLECTION example_docs VALUES [
   {
     'id': 101,
     'text': 'Qdrant incident review for hybrid search latency regression after a configuration rollout.',
+    'title': 'Hybrid search latency regression review',
     'team': 'search',
+    'tenant_id': 'tenant-a',
     'status': 'published',
     'severity': 2,
     'year': 2026
@@ -16,7 +20,9 @@ INSERT BULK INTO COLLECTION example_docs VALUES [
   {
     'id': 102,
     'text': 'Runbook for HNSW tuning, ef search validation, and filtered query recall checks.',
+    'title': 'HNSW tuning runbook',
     'team': 'platform',
+    'tenant_id': 'tenant-a',
     'status': 'published',
     'severity': 1,
     'year': 2025
@@ -24,7 +30,9 @@ INSERT BULK INTO COLLECTION example_docs VALUES [
   {
     'id': 103,
     'text': 'Postmortem covering out of memory alerts during dense vector indexing on a staging cluster.',
+    'title': 'Dense indexing OOM postmortem',
     'team': 'infra',
+    'tenant_id': 'tenant-b',
     'status': 'draft',
     'severity': 3,
     'year': 2026

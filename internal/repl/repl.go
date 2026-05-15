@@ -224,10 +224,16 @@ func (r *REPL) printHelp() {
 	  Create a new collection. Add HYBRID for dense+sparse named vectors and RERANK for ColBERT.
       Optional: \033[33mUSING MODEL\033[0m '<model>'
       Optional: \033[33mUSING HYBRID\033[0m [\033[33mDENSE MODEL\033[0m '<model>']
+      Optional: \033[33mHNSW\033[0m { payload_m: <int> }
       Optional: \033[33mQUANTIZE SCALAR\033[0m [QUANTILE <0.0-1.0>] [ALWAYS RAM]
       Optional: \033[33mQUANTIZE BINARY\033[0m [ALWAYS RAM]
       Optional: \033[33mQUANTIZE PRODUCT\033[0m [ALWAYS RAM]
       Optional: \033[33mQUANTIZE TURBO\033[0m [BITS <1|1.5|2|4>] [ALWAYS RAM]
+
+  \033[33mCREATE INDEX ON COLLECTION\033[0m <name> \033[33mFOR\033[0m <field> \033[33mTYPE\033[0m <schema>
+      Create a payload index for filtering or text search.
+      Optional: \033[33mWITH\033[0m { is_tenant, on_disk, enable_hnsw } for keyword/uuid
+      Optional: \033[33mWITH\033[0m { tokenizer, min_token_len, max_token_len, lowercase, ascii_folding, phrase_matching, stopwords, on_disk, enable_hnsw } for text
 
   \033[33mDROP COLLECTION\033[0m <name>
       Delete a collection and all its points.
@@ -243,7 +249,7 @@ func (r *REPL) printHelp() {
       Optional: \033[33mWHERE\033[0m <filter>
       Optional: \033[33mRERANK\033[0m [\033[33mMODEL\033[0m '<model>']
       Optional: \033[33mEXACT\033[0m
-      Optional: \033[33mWITH\033[0m { hnsw_ef: <int>, exact: <bool>, acorn: <bool>, indexed_only: <bool>, quantization: { ignore: <bool>, rescore: <bool>, oversampling: <n> } }
+      Optional: \033[33mWITH\033[0m { hnsw_ef: <int>, exact: <bool>, acorn: <bool>, indexed_only: <bool>, quantization: { ignore: <bool>, rescore: <bool>, oversampling: <n> }, mmr_diversity: <0..1>, mmr_candidates: <int> }
 
   \033[33mSELECT\033[0m * \033[33mFROM\033[0m <name> \033[33mWHERE id =\033[0m '<id>|<int>'
       Retrieve a single point by ID.

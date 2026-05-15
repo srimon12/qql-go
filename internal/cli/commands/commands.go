@@ -41,7 +41,7 @@ const (
 	defaultInferenceMode    = "cloud"
 )
 
-var Version = "0.1.5"
+var Version = "0.1.6"
 
 type commandOutputMode struct {
 	json  bool
@@ -242,6 +242,9 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		if n.Model != nil && *n.Model != "" {
 			plan.WriteString(fmt.Sprintf("Model: %s\n", *n.Model))
 		}
+		if n.PayloadM != nil {
+			plan.WriteString(fmt.Sprintf("HNSW payload_m: %d\n", *n.PayloadM))
+		}
 		if n.Quantization != nil {
 			plan.WriteString(fmt.Sprintf("Quantization: %s\n", n.Quantization.Type))
 			if n.Quantization.Quantile != nil {
@@ -338,6 +341,12 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		if n.WithClause != nil && n.WithClause.Quantization != nil {
 			plan.WriteString("Search params: quantization enabled\n")
 		}
+		if n.WithClause != nil && n.WithClause.MmrDiversity != nil {
+			plan.WriteString(fmt.Sprintf("Search params: mmr_diversity=%.4f\n", *n.WithClause.MmrDiversity))
+		}
+		if n.WithClause != nil && n.WithClause.MmrCandidates != nil {
+			plan.WriteString(fmt.Sprintf("Search params: mmr_candidates=%d\n", *n.WithClause.MmrCandidates))
+		}
 		if n.GroupBy != "" {
 			plan.WriteString(fmt.Sprintf("Group by: %s\n", n.GroupBy))
 			plan.WriteString(fmt.Sprintf("Group size: %d\n", n.GroupSize))
@@ -418,6 +427,9 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			plan.WriteString(fmt.Sprintf(" TYPE %s", n.FieldType))
 		}
 		plan.WriteString("\n")
+		if len(n.Options) > 0 {
+			plan.WriteString(fmt.Sprintf("Options: %v\n", n.Options))
+		}
 		plan.WriteString("Action: Create payload index on field\n")
 	default:
 		plan.WriteString("Statement: Unknown\n")
@@ -558,10 +570,22 @@ func formatCollectionDiagnostics(data map[string]any) string {
 		}
 	}
 
-	if schema, ok := data["payload_schema"].(map[string]string); ok && len(schema) > 0 {
+	if schema, ok := data["payload_schema"].(map[string]any); ok && len(schema) > 0 {
 		b.WriteString("  Payload indexes:\n")
-		for field, dtype := range schema {
-			fmt.Fprintf(&b, "    %s: %s\n", field, dtype)
+		for field, raw := range schema {
+			if entry, ok := raw.(map[string]any); ok {
+				line := fmt.Sprintf("    %s: %v", field, entry["type"])
+				if params, ok := entry["params"].(map[string]any); ok && len(params) > 0 {
+					rendered := make([]string, 0, len(params))
+					for key, value := range params {
+						rendered = append(rendered, fmt.Sprintf("%s=%v", key, value))
+					}
+					line += " (" + strings.Join(rendered, ", ") + ")"
+				}
+				b.WriteString(line + "\n")
+				continue
+			}
+			fmt.Fprintf(&b, "    %s: %v\n", field, raw)
 		}
 	} else {
 		b.WriteString("  Payload indexes      : none\n")
@@ -654,9 +678,9 @@ func (e *Executor) extractCollectionDiagnostics(
 	}
 
 	// Payload schema / indexes
-	payloadIndexes := make(map[string]string)
+	payloadIndexes := make(map[string]any)
 	for fieldName, idxInfo := range info.PayloadSchema {
-		payloadIndexes[fieldName] = idxInfo.DataType.String()
+		payloadIndexes[fieldName] = serializePayloadSchemaInfo(idxInfo)
 	}
 	if len(payloadIndexes) == 0 {
 		payloadIndexes = nil
@@ -714,6 +738,104 @@ func detectQuantizationType(qc *qdrant.QuantizationConfig) string {
 	return ""
 }
 
+func serializePayloadSchemaInfo(idxInfo *qdrant.PayloadSchemaInfo) map[string]any {
+	data := map[string]any{
+		"type": strings.ToLower(strings.TrimPrefix(idxInfo.GetDataType().String(), "PayloadSchemaType_")),
+	}
+	if params := idxInfo.GetParams(); params != nil {
+		if serialized := serializePayloadIndexParams(params); len(serialized) > 0 {
+			data["params"] = serialized
+		}
+	}
+	return data
+}
+
+func serializePayloadIndexParams(params *qdrant.PayloadIndexParams) map[string]any {
+	switch typed := params.GetIndexParams().(type) {
+	case *qdrant.PayloadIndexParams_KeywordIndexParams:
+		return serializeKeywordIndexParams(typed.KeywordIndexParams)
+	case *qdrant.PayloadIndexParams_TextIndexParams:
+		return serializeTextIndexParams(typed.TextIndexParams)
+	case *qdrant.PayloadIndexParams_UuidIndexParams:
+		return serializeUUIDIndexParams(typed.UuidIndexParams)
+	default:
+		return nil
+	}
+}
+
+func serializeKeywordIndexParams(params *qdrant.KeywordIndexParams) map[string]any {
+	if params == nil {
+		return nil
+	}
+	data := map[string]any{}
+	if params.IsTenant != nil {
+		data["is_tenant"] = params.GetIsTenant()
+	}
+	if params.OnDisk != nil {
+		data["on_disk"] = params.GetOnDisk()
+	}
+	if params.EnableHnsw != nil {
+		data["enable_hnsw"] = params.GetEnableHnsw()
+	}
+	return data
+}
+
+func serializeUUIDIndexParams(params *qdrant.UuidIndexParams) map[string]any {
+	if params == nil {
+		return nil
+	}
+	data := map[string]any{}
+	if params.IsTenant != nil {
+		data["is_tenant"] = params.GetIsTenant()
+	}
+	if params.OnDisk != nil {
+		data["on_disk"] = params.GetOnDisk()
+	}
+	if params.EnableHnsw != nil {
+		data["enable_hnsw"] = params.GetEnableHnsw()
+	}
+	return data
+}
+
+func serializeTextIndexParams(params *qdrant.TextIndexParams) map[string]any {
+	if params == nil {
+		return nil
+	}
+	data := map[string]any{}
+	if params.Tokenizer != qdrant.TokenizerType_Unknown {
+		data["tokenizer"] = strings.ToLower(strings.TrimPrefix(params.Tokenizer.String(), "TokenizerType_"))
+	}
+	if params.MinTokenLen != nil {
+		data["min_token_len"] = params.GetMinTokenLen()
+	}
+	if params.MaxTokenLen != nil {
+		data["max_token_len"] = params.GetMaxTokenLen()
+	}
+	if params.Lowercase != nil {
+		data["lowercase"] = params.GetLowercase()
+	}
+	if params.AsciiFolding != nil {
+		data["ascii_folding"] = params.GetAsciiFolding()
+	}
+	if params.PhraseMatching != nil {
+		data["phrase_matching"] = params.GetPhraseMatching()
+	}
+	if params.OnDisk != nil {
+		data["on_disk"] = params.GetOnDisk()
+	}
+	if params.EnableHnsw != nil {
+		data["enable_hnsw"] = params.GetEnableHnsw()
+	}
+	if params.Stopwords != nil {
+		if len(params.Stopwords.Languages) > 0 {
+			data["stopwords"] = params.Stopwords.Languages
+		} else if len(params.Stopwords.Custom) > 0 {
+			data["stopwords"] = params.Stopwords.Custom
+		}
+	}
+	return data
+}
+
 func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecResponse, error) {
 	ctx := context.Background()
 
@@ -743,6 +865,11 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 	collection := &qdrant.CreateCollection{
 		CollectionName: n.Collection,
 		VectorsConfig:  qdrant.NewVectorsConfigMap(collectionVectorParams(denseSize, n.Rerank)),
+	}
+	if n.PayloadM != nil {
+		collection.HnswConfig = &qdrant.HnswConfigDiff{
+			PayloadM: qdrant.PtrOf(*n.PayloadM),
+		}
 	}
 	if n.Quantization != nil {
 		collection.QuantizationConfig, err = buildQuantizationConfig(n.Quantization)
@@ -1103,6 +1230,9 @@ func (e *Executor) doSearch(n *ast.SearchStmt) (*ExecResponse, error) {
 
 	model := e.resolveDenseModel(n.Model)
 	sparseModel := e.resolveSparseModel(n.SparseModel)
+	if err := validateSearchMMRUsage(n); err != nil {
+		return nil, err
+	}
 
 	hasRerankVector, err := e.collectionHasRerankVector(ctx, n.Collection)
 	if err != nil {
@@ -1172,7 +1302,27 @@ func (e *Executor) doSearch(n *ast.SearchStmt) (*ExecResponse, error) {
 	}, nil
 }
 
+func hasMMR(withClause *ast.SearchWith) bool {
+	return withClause != nil && (withClause.MmrDiversity != nil || withClause.MmrCandidates != nil)
+}
+
+func validateSearchMMRUsage(n *ast.SearchStmt) error {
+	if !hasMMR(n.WithClause) {
+		return nil
+	}
+	if n.Hybrid {
+		return fmt.Errorf("MMR is not supported with USING HYBRID yet")
+	}
+	if n.SparseOnly {
+		return fmt.Errorf("MMR is not supported with USING SPARSE yet")
+	}
+	return nil
+}
+
 func buildRecommendRequest(n *ast.RecommendStmt) (*qdrant.QueryPoints, error) {
+	if hasMMR(n.WithClause) {
+		return nil, fmt.Errorf("MMR is supported only for SEARCH statements")
+	}
 	query := qdrant.NewQueryRecommend(&qdrant.RecommendInput{
 		Positive: buildRecommendVectorInputs(n.PositiveIDs),
 		Negative: buildRecommendVectorInputs(n.NegativeIDs),
@@ -1381,14 +1531,27 @@ func (e *Executor) doCreateIndex(n *ast.CreateIndexStmt) (*ExecResponse, error) 
 		fieldType = qdrant.FieldType_FieldTypeFloat
 	} else if n.FieldType == "bool" {
 		fieldType = qdrant.FieldType_FieldTypeBool
+	} else if n.FieldType == "text" {
+		fieldType = qdrant.FieldType_FieldTypeText
+	} else if n.FieldType == "geo" {
+		fieldType = qdrant.FieldType_FieldTypeGeo
+	} else if n.FieldType == "datetime" {
+		fieldType = qdrant.FieldType_FieldTypeDatetime
+	} else if n.FieldType == "uuid" {
+		fieldType = qdrant.FieldType_FieldTypeUuid
 	}
 
+	fieldIndexParams, err := buildPayloadIndexParams(n.FieldType, n.Options)
+	if err != nil {
+		return nil, err
+	}
 	wait := true
-	_, err := e.client.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
-		CollectionName: n.Collection,
-		FieldName:      n.Field,
-		FieldType:      &fieldType,
-		Wait:           &wait,
+	_, err = e.client.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
+		CollectionName:   n.Collection,
+		FieldName:        n.Field,
+		FieldType:        &fieldType,
+		FieldIndexParams: fieldIndexParams,
+		Wait:             &wait,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create index: %w", err)
@@ -1670,6 +1833,7 @@ func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, de
 		Text:  n.QueryText,
 		Model: denseModel,
 	})
+	var mmrNearest *qdrant.VectorInput
 	if e.usesLocalEmbeddings() {
 		embedClient, err := e.embeddingClient(denseModel)
 		if err != nil {
@@ -1680,6 +1844,21 @@ func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, de
 			return nil, fmt.Errorf("failed to embed search query: %w", err)
 		}
 		query = qdrant.NewQueryDense(denseVector)
+		if hasMMR(n.WithClause) {
+			mmrNearest = qdrant.NewVectorInputDense(denseVector)
+		}
+	} else if hasMMR(n.WithClause) {
+		mmrNearest = qdrant.NewVectorInputDocument(&qdrant.Document{
+			Text:  n.QueryText,
+			Model: denseModel,
+		})
+	}
+
+	if hasMMR(n.WithClause) {
+		query = qdrant.NewQueryMMR(mmrNearest, &qdrant.Mmr{
+			Diversity:       float32PtrFromFloat64(n.WithClause.MmrDiversity),
+			CandidatesLimit: uint32PtrFromInt(n.WithClause.MmrCandidates),
+		})
 	}
 
 	return &qdrant.QueryPoints{
@@ -1812,6 +1991,213 @@ func searchParamsFromWithClause(withClause *ast.SearchWith) *qdrant.SearchParams
 	}
 
 	return params
+}
+
+func buildPayloadIndexParams(fieldType string, options map[string]interface{}) (*qdrant.PayloadIndexParams, error) {
+	if len(options) == 0 {
+		return nil, nil
+	}
+
+	switch fieldType {
+	case "keyword":
+		if err := validateIndexOptionKeys(fieldType, options, []string{"is_tenant", "on_disk", "enable_hnsw"}); err != nil {
+			return nil, err
+		}
+		isTenant, err := boolOption(options, "is_tenant")
+		if err != nil {
+			return nil, err
+		}
+		onDisk, err := boolOption(options, "on_disk")
+		if err != nil {
+			return nil, err
+		}
+		enableHnsw, err := boolOption(options, "enable_hnsw")
+		if err != nil {
+			return nil, err
+		}
+		return qdrant.NewPayloadIndexParamsKeyword(&qdrant.KeywordIndexParams{
+			IsTenant:   isTenant,
+			OnDisk:     onDisk,
+			EnableHnsw: enableHnsw,
+		}), nil
+	case "uuid":
+		if err := validateIndexOptionKeys(fieldType, options, []string{"is_tenant", "on_disk", "enable_hnsw"}); err != nil {
+			return nil, err
+		}
+		isTenant, err := boolOption(options, "is_tenant")
+		if err != nil {
+			return nil, err
+		}
+		onDisk, err := boolOption(options, "on_disk")
+		if err != nil {
+			return nil, err
+		}
+		enableHnsw, err := boolOption(options, "enable_hnsw")
+		if err != nil {
+			return nil, err
+		}
+		return qdrant.NewPayloadIndexParamsUUID(&qdrant.UuidIndexParams{
+			IsTenant:   isTenant,
+			OnDisk:     onDisk,
+			EnableHnsw: enableHnsw,
+		}), nil
+	case "text":
+		if err := validateIndexOptionKeys(fieldType, options, []string{"tokenizer", "min_token_len", "max_token_len", "lowercase", "ascii_folding", "phrase_matching", "stopwords", "on_disk", "enable_hnsw"}); err != nil {
+			return nil, err
+		}
+		minTokenLen, err := uint64Option(options, "min_token_len")
+		if err != nil {
+			return nil, err
+		}
+		maxTokenLen, err := uint64Option(options, "max_token_len")
+		if err != nil {
+			return nil, err
+		}
+		if minTokenLen != nil && maxTokenLen != nil && *minTokenLen > *maxTokenLen {
+			return nil, fmt.Errorf("CREATE INDEX text option min_token_len cannot be greater than max_token_len")
+		}
+		tokenizer, err := tokenizerOption(options, "tokenizer")
+		if err != nil {
+			return nil, err
+		}
+		stopwords, err := stopwordsOption(options, "stopwords")
+		if err != nil {
+			return nil, err
+		}
+		lowercase, err := boolOption(options, "lowercase")
+		if err != nil {
+			return nil, err
+		}
+		asciiFolding, err := boolOption(options, "ascii_folding")
+		if err != nil {
+			return nil, err
+		}
+		phraseMatching, err := boolOption(options, "phrase_matching")
+		if err != nil {
+			return nil, err
+		}
+		onDisk, err := boolOption(options, "on_disk")
+		if err != nil {
+			return nil, err
+		}
+		enableHnsw, err := boolOption(options, "enable_hnsw")
+		if err != nil {
+			return nil, err
+		}
+		return qdrant.NewPayloadIndexParamsText(&qdrant.TextIndexParams{
+			Tokenizer:      tokenizer,
+			MinTokenLen:    minTokenLen,
+			MaxTokenLen:    maxTokenLen,
+			Lowercase:      lowercase,
+			AsciiFolding:   asciiFolding,
+			PhraseMatching: phraseMatching,
+			Stopwords:      stopwords,
+			OnDisk:         onDisk,
+			EnableHnsw:     enableHnsw,
+		}), nil
+	default:
+		return nil, fmt.Errorf("CREATE INDEX type '%s' does not support advanced options yet", fieldType)
+	}
+}
+
+func validateIndexOptionKeys(fieldType string, options map[string]interface{}, allowed []string) error {
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, key := range allowed {
+		allowedSet[key] = struct{}{}
+	}
+	for key := range options {
+		if _, ok := allowedSet[key]; !ok {
+			return fmt.Errorf("Unknown CREATE INDEX option '%s' for type '%s'. Expected one of: %s", key, fieldType, strings.Join(allowed, ", "))
+		}
+	}
+	return nil
+}
+
+func boolOption(options map[string]interface{}, key string) (*bool, error) {
+	value, ok := options[key]
+	if !ok {
+		return nil, nil
+	}
+	typed, ok := value.(bool)
+	if !ok {
+		return nil, fmt.Errorf("CREATE INDEX option '%s' must be a boolean", key)
+	}
+	return qdrant.PtrOf(typed), nil
+}
+
+func uint64Option(options map[string]interface{}, key string) (*uint64, error) {
+	value, ok := options[key]
+	if !ok {
+		return nil, nil
+	}
+	typed, ok := value.(int)
+	if !ok || typed <= 0 {
+		return nil, fmt.Errorf("CREATE INDEX option '%s' must be a positive integer", key)
+	}
+	result := uint64(typed)
+	return &result, nil
+}
+
+func tokenizerOption(options map[string]interface{}, key string) (qdrant.TokenizerType, error) {
+	value, ok := options[key]
+	if !ok {
+		return qdrant.TokenizerType_Unknown, nil
+	}
+	typed, ok := value.(string)
+	if !ok {
+		return qdrant.TokenizerType_Unknown, fmt.Errorf("CREATE INDEX option '%s' must be a string", key)
+	}
+	switch strings.ToLower(typed) {
+	case "prefix":
+		return qdrant.TokenizerType_Prefix, nil
+	case "whitespace":
+		return qdrant.TokenizerType_Whitespace, nil
+	case "word":
+		return qdrant.TokenizerType_Word, nil
+	case "multilingual":
+		return qdrant.TokenizerType_Multilingual, nil
+	default:
+		return qdrant.TokenizerType_Unknown, fmt.Errorf("CREATE INDEX option '%s' must be one of: prefix, whitespace, word, multilingual", key)
+	}
+}
+
+func stopwordsOption(options map[string]interface{}, key string) (*qdrant.StopwordsSet, error) {
+	value, ok := options[key]
+	if !ok {
+		return nil, nil
+	}
+	switch typed := value.(type) {
+	case string:
+		return &qdrant.StopwordsSet{Languages: []string{strings.ToLower(typed)}}, nil
+	case []interface{}:
+		words := make([]string, 0, len(typed))
+		for _, item := range typed {
+			word, ok := item.(string)
+			if !ok {
+				return nil, fmt.Errorf("CREATE INDEX option '%s' list values must be strings", key)
+			}
+			words = append(words, word)
+		}
+		return &qdrant.StopwordsSet{Custom: words}, nil
+	default:
+		return nil, fmt.Errorf("CREATE INDEX option '%s' must be a string language name or a list of strings", key)
+	}
+}
+
+func float32PtrFromFloat64(value *float64) *float32 {
+	if value == nil {
+		return nil
+	}
+	converted := float32(*value)
+	return &converted
+}
+
+func uint32PtrFromInt(value *int) *uint32 {
+	if value == nil {
+		return nil
+	}
+	converted := uint32(*value)
+	return &converted
 }
 
 func (e *Executor) resolveDenseModel(override *string) string {

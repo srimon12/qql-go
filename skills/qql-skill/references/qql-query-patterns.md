@@ -14,6 +14,13 @@ Use these patterns as templates. Keep them short and adapt only what matters.
 SEARCH articles SIMILAR TO 'vector database performance tuning' LIMIT 5
 ```
 
+## Dense search with MMR
+
+```sql
+SEARCH articles SIMILAR TO 'vector database performance tuning' LIMIT 5
+WITH { mmr_diversity: 0.5, mmr_candidates: 25 }
+```
+
 ## Dense search with filter
 
 Create indexes first:
@@ -105,6 +112,20 @@ SEARCH articles SIMILAR TO 'attention mechanism' LIMIT 10 EXACT
 ```sql
 SEARCH articles SIMILAR TO 'transformer inference' LIMIT 10
 WITH { hnsw_ef: 256 }
+```
+
+## Tenant-aware indexing and payload HNSW
+
+```sql
+CREATE COLLECTION tenant_docs HYBRID HNSW { payload_m: 16 }
+CREATE INDEX ON COLLECTION tenant_docs FOR tenant_id TYPE keyword WITH { is_tenant: true, on_disk: true }
+```
+
+## Full-text index tuning
+
+```sql
+CREATE INDEX ON COLLECTION tenant_docs FOR title TYPE text
+WITH { tokenizer: 'word', min_token_len: 2, max_token_len: 20, lowercase: true, phrase_matching: true }
 ```
 
 ## Rerank
@@ -220,6 +241,7 @@ INSERT BULK INTO COLLECTION notes VALUES [
 ```sql
 CREATE COLLECTION notes
 CREATE COLLECTION notes HYBRID
+CREATE COLLECTION notes HYBRID HNSW { payload_m: 16 }
 CREATE COLLECTION notes USING MODEL 'sentence-transformers/all-MiniLM-L6-v2'
 CREATE COLLECTION notes QUANTIZE SCALAR
 CREATE COLLECTION notes QUANTIZE SCALAR QUANTILE 0.95 ALWAYS RAM
@@ -335,6 +357,7 @@ SEARCH docs SIMILAR TO 'hello world' LIMIT 5 USING HYBRID
 - recall debugging -> `EXACT`
 - query-time recall tuning -> `WITH { hnsw_ef: ... }`
 - filtered recall concern -> `WITH { acorn: true }`
+- semantically diverse dense results -> `WITH { mmr_diversity: ..., mmr_candidates: ... }`
 - right docs, wrong order -> `RERANK` (cloud only)
 - broader retrieval plus better ordering -> `USING HYBRID RERANK` (cloud only)
 - sparse retrieval plus better ordering -> `USING SPARSE RERANK` (cloud only)
@@ -347,4 +370,4 @@ SEARCH docs SIMILAR TO 'hello world' LIMIT 5 USING HYBRID
 - replace a stored vector -> `UPDATE ... SET VECTOR ...`
 - script round-trip -> `qql-go execute` / `qql-go dump [--batch-size N]`
 - interactive shell -> `qql-go repl`
-- MMR, feedback, score boosting, discovery -> outside current QQL
+- feedback, score boosting, discovery -> outside current QQL

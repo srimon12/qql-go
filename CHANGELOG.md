@@ -6,15 +6,27 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 ## [Unreleased]
 
+- No unreleased changes yet.
+
+## [0.1.6] - 2026-05-16
+
 ### Added
 
-- `WITH` now exposes `indexed_only` plus quantization search params (`ignore`, `rescore`, `oversampling`) for `SEARCH` and `RECOMMEND`.
+- **Expanded query-time search params** — `WITH` now exposes `indexed_only` plus quantization search params (`ignore`, `rescore`, `oversampling`) for `SEARCH` and `RECOMMEND`.
+- **Native dense MMR** — `SEARCH ... WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }` now maps to Qdrant's native MMR path for dense search, including grouped dense search.
+- **Rich payload indexing** — `CREATE INDEX` now supports advanced `keyword`, `uuid`, and `text` index options, including `is_tenant`, `on_disk`, `enable_hnsw`, tokenizer settings, phrase matching, and stopwords.
+- **Payload-aware HNSW config** — `CREATE COLLECTION ... HNSW { payload_m: <n> }` now exposes collection-level payload-aware HNSW tuning.
+
+### Changed
+
+- `SHOW COLLECTION <name>` now reports structured payload index params and `payload_m`, making advanced index configuration visible from the CLI.
+- README, examples, release notes, and bundled `qql-skill` references now showcase dense MMR, tenant-aware indexing, text index tuning, and payload-aware HNSW setup.
 
 ### Fixed
 
 - Filter predicates and `IN`/`NOT IN` lists now accept boolean literals such as `true` and `false`.
 - `SCROLL` now preserves numeric `next_offset` values instead of coercing every cursor to a string.
-- Bundled retrieval examples now keep index-setup steps explicit without relying on unsupported semicolon-separated CLI statements.
+- Bundled retrieval examples now keep index setup explicit and runnable without unsupported semicolon-separated CLI statements.
 
 ## [0.1.5] - 2026-05-15
 

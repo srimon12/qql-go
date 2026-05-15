@@ -64,7 +64,7 @@
 | Grouped search | `query_points_groups` | ✅ v2.3 | ✅ v0.1.5 | `GROUP BY ... [GROUP_SIZE ...]` |
 | Search pagination | `offset` | ❌ | ❌ | Gap |
 | Batch search | `search_batch` | ❌ | ❌ | Gap |
-| MMR diversity | `diversity` param (v1.15+) | ❌ | ❌ | Gap |
+| MMR diversity | `diversity` param (v1.15+) | ✅ v1.0 | ✅ v0.1 | `WITH { mmr_diversity, mmr_candidates }` |
 | Score boosting | `rescore` / `formula` | ❌ | ❌ | Gap |
 | Multivector search | `multivector` | ❌ | ❌ | Gap |
 | Rerank (cross-encoder) | `rerank` / Fastembed | ✅ v1.0 (local) | ⚠️ v0.1 (cloud only) | Sparse-only rerank added v0.1.4 |
@@ -87,13 +87,14 @@
 
 | Feature | Qdrant API | Python `qql-cli` | Go `qql-go` | Notes |
 |---|---|---|---|---|
-| Keyword index | `create_payload_index` | ❌ | ✅ v0.1 | Python README claims support but parser does not implement it |
-| Integer index | `create_payload_index` | ❌ | ✅ v0.1 | Python README claims support but parser does not implement it |
-| Float index | `create_payload_index` | ❌ | ✅ v0.1 | Python README claims support but parser does not implement it |
-| Bool index | `create_payload_index` | ❌ | ✅ v0.1 | Python README claims support but parser does not implement it |
-| Full-text index | `create_payload_index` (text) | ❌ | ⚠️ | `MATCH` works in both; explicit index creation only in Go |
+| Keyword index | `create_payload_index` | ❌ | ✅ v0.1 | Go supports advanced keyword params via `WITH { is_tenant, on_disk, enable_hnsw }` |
+| Integer index | `create_payload_index` | ❌ | ✅ v0.1 | |
+| Float index | `create_payload_index` | ❌ | ✅ v0.1 | |
+| Bool index | `create_payload_index` | ❌ | ✅ v0.1 | |
+| Full-text index | `create_payload_index` (text) | ❌ | ✅ v0.1 | Go supports tokenizer and text index tuning via `WITH { ... }` |
 | Geo index | `create_payload_index` (geo) | ❌ | ❌ | |
-| Datetime index | `create_payload_index` (datetime) | ❌ | ❌ | |
+| Datetime index | `create_payload_index` (datetime) | ❌ | ✅ v0.1 | |
+| UUID index | `create_payload_index` (uuid) | ❌ | ✅ v0.1 | |
 
 ### Filtering
 

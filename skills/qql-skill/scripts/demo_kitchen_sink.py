@@ -12,12 +12,12 @@ HEADACHE_ID = "123e4567-e89b-12d3-a456-426614174004"
 
 
 BASE_STATEMENTS = [
-    # Create collection with HYBRID vectors plus TURBO quantization.
+    # Create collection with HYBRID vectors, payload-aware HNSW, and TURBO quantization.
     (
         "create-hybrid",
-        f"CREATE COLLECTION {COLLECTION} HYBRID QUANTIZE TURBO BITS 2 ALWAYS RAM",
+        f"CREATE COLLECTION {COLLECTION} HYBRID HNSW {{ payload_m: 16 }} QUANTIZE TURBO BITS 2 ALWAYS RAM",
     ),
-    # Create payload indexes for filtering
+    # Create payload indexes for filtering and tenant-style grouping.
     (
         "index-specialty",
         f"CREATE INDEX ON COLLECTION {COLLECTION} FOR specialty TYPE keyword",
@@ -36,7 +36,11 @@ BASE_STATEMENTS = [
     ),
     (
         "index-patient",
-        f"CREATE INDEX ON COLLECTION {COLLECTION} FOR patient_id TYPE keyword",
+        f"CREATE INDEX ON COLLECTION {COLLECTION} FOR patient_id TYPE keyword WITH {{ is_tenant: true, on_disk: true }}",
+    ),
+    (
+        "index-diagnosis-text",
+        f"CREATE INDEX ON COLLECTION {COLLECTION} FOR diagnosis TYPE text WITH {{ tokenizer: 'word', min_token_len: 2, max_token_len: 20, lowercase: true, phrase_matching: true }}",
     ),
     # Insert medical records using HYBRID (auto dense + sparse vectorization)
     (
@@ -100,6 +104,10 @@ BASE_STATEMENTS = [
         "search-dense-exact",
         f"SEARCH {COLLECTION} SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 EXACT",
     ),
+    (
+        "search-dense-mmr",
+        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency triage' LIMIT 3 WITH {{ mmr_diversity: 0.5, mmr_candidates: 20 }}",
+    ),
     # HYBRID search (dense + sparse fusion)
     (
         "search-hybrid",
@@ -151,6 +159,10 @@ BASE_STATEMENTS = [
     (
         "group-by-specialty",
         f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency' LIMIT 3 USING HYBRID GROUP BY specialty GROUP_SIZE 2",
+    ),
+    (
+        "grouped-dense-mmr",
+        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency' LIMIT 3 WITH {{ mmr_diversity: 0.35, mmr_candidates: 20 }} GROUP BY specialty GROUP_SIZE 2",
     ),
     (
         "group-by-priority-with-params",

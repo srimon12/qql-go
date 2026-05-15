@@ -1,11 +1,13 @@
 package ast
 
 type SearchWith struct {
-	HnswEf       int
-	Exact        bool
-	Acorn        bool
-	IndexedOnly  bool
-	Quantization *QuantizationSearchWith
+	HnswEf        int
+	Exact         bool
+	Acorn         bool
+	IndexedOnly   bool
+	Quantization  *QuantizationSearchWith
+	MmrDiversity  *float64
+	MmrCandidates *int
 }
 
 type FilterExpr interface {

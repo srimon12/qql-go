@@ -287,6 +287,7 @@ CREATE COLLECTION <name> QUANTIZE PRODUCT ALWAYS RAM
 CREATE COLLECTION <name> QUANTIZE TURBO
 CREATE COLLECTION <name> QUANTIZE TURBO BITS <1|1.5|2|4>
 CREATE COLLECTION <name> QUANTIZE TURBO BITS <1|1.5|2|4> ALWAYS RAM
+CREATE COLLECTION <name> HNSW { payload_m: <n> }
 DROP COLLECTION <name>
 SHOW COLLECTIONS
 SHOW COLLECTION <name>
@@ -295,6 +296,9 @@ CREATE INDEX ON COLLECTION <name> FOR <field> TYPE keyword
 CREATE INDEX ON COLLECTION <name> FOR <field> TYPE integer
 CREATE INDEX ON COLLECTION <name> FOR <field> TYPE float
 CREATE INDEX ON COLLECTION <name> FOR <field> TYPE bool
+CREATE INDEX ON COLLECTION <name> FOR <field> TYPE uuid
+CREATE INDEX ON COLLECTION <name> FOR <field> TYPE keyword WITH { is_tenant: true, on_disk: true, enable_hnsw: false }
+CREATE INDEX ON COLLECTION <name> FOR <field> TYPE text WITH { tokenizer: 'word', min_token_len: 2, max_token_len: 20, lowercase: true }
 
 INSERT INTO COLLECTION <name> VALUES {...}
 INSERT INTO COLLECTION <name> VALUES {...} USING MODEL '<model>'
@@ -315,6 +319,7 @@ SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WHERE <filter>
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef: <n>, exact: true|false, acorn: true|false, indexed_only: true|false }
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { quantization: { ignore: true|false, rescore: true|false, oversampling: <n> } }
+SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK
@@ -392,6 +397,7 @@ Search-time tuning:
 - `WITH { acorn: true|false }`
 - `WITH { indexed_only: true|false }`
 - `WITH { quantization: { ignore, rescore, oversampling } }`
+- `WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }`
 
 ## Filter Syntax
 

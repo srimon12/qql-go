@@ -31,7 +31,11 @@ Supported syntax in this repo includes:
 - `CREATE COLLECTION <name> QUANTIZE BINARY [ALWAYS RAM]`
 - `CREATE COLLECTION <name> QUANTIZE PRODUCT [ALWAYS RAM]`
 - `CREATE COLLECTION <name> QUANTIZE TURBO [BITS <1|1.5|2|4>] [ALWAYS RAM]`
+- `CREATE COLLECTION <name> HNSW { payload_m: <n> }`
 - `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE <kind>`
+- `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE keyword WITH { is_tenant, on_disk, enable_hnsw }`
+- `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE uuid WITH { is_tenant, on_disk, enable_hnsw }`
+- `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE text WITH { tokenizer, min_token_len, max_token_len, lowercase, ascii_folding, phrase_matching, stopwords, on_disk, enable_hnsw }`
 - `SHOW COLLECTIONS`
 - `SHOW COLLECTION <name>`
 - `DROP COLLECTION <name>`
@@ -57,6 +61,8 @@ Supported syntax in this repo includes:
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID GROUP BY <field> [GROUP_SIZE <m>]`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef, exact, acorn }`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { indexed_only, quantization }`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { mmr_diversity, mmr_candidates }`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK`
@@ -180,6 +186,11 @@ Use `WITH { hnsw_ef: ... }` when recall needs tuning without changing collection
 
 Use `WITH { acorn: true }` only when filtered-query recall is the actual problem.
 
+Use `WITH { mmr_diversity: ..., mmr_candidates: ... }` when the user wants semantic diversity inside the top-k dense results.
+
+MMR currently works for dense `SEARCH` and dense `SEARCH ... GROUP BY`.
+Do not suggest it for `USING HYBRID`, `USING SPARSE`, or `RECOMMEND`.
+
 ### Rerank
 
 Use `RERANK` when the right candidates are likely already retrieved but the top ordering is weak.
@@ -217,6 +228,9 @@ Use:
 ```sql
 CREATE INDEX ON COLLECTION docs FOR specialty TYPE keyword
 CREATE INDEX ON COLLECTION docs FOR year TYPE integer
+CREATE INDEX ON COLLECTION docs FOR tenant_id TYPE keyword WITH { is_tenant: true, on_disk: true }
+CREATE INDEX ON COLLECTION docs FOR external_id TYPE uuid WITH { on_disk: true }
+CREATE INDEX ON COLLECTION docs FOR title TYPE text WITH { tokenizer: 'word', min_token_len: 2, lowercase: true }
 ```
 
 Then write the filtered search.
@@ -240,10 +254,8 @@ Examples of current gaps:
 
 - local/external rerank
 - discovery API
-- MMR or diversity controls
 - score boosting
 - relevance feedback
-- collection-level HNSW tuning
 - custom distance metrics or vector sizes in `CREATE COLLECTION`
 
 Use [references/qql-gaps.md](references/qql-gaps.md) for the current boundary.
