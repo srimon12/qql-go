@@ -8,6 +8,24 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 - No unreleased changes yet.
 
+## [0.1.5] - 2026-05-15
+
+### Added
+
+- **Collection diagnostics** — `SHOW COLLECTION <name>` returns collection-level details for a single collection.
+- **Grouped search** — `SEARCH ... GROUP BY <field> [GROUP_SIZE <n>]` groups top results by payload field across dense, sparse, and hybrid retrieval.
+- **In-place point updates** — `UPDATE ... SET PAYLOAD` patches payload data by point ID or filter, and `UPDATE ... SET VECTOR WHERE id = <point_id>` replaces a stored vector.
+
+### Changed
+
+- Parser and explain-plan support now cover grouped retrieval and update statements, including validation for duplicate `GROUP BY`, invalid `GROUP_SIZE`, and unsupported `GROUP BY` + `RERANK` combinations.
+- README, examples, compatibility notes, and bundled skill references now document `SHOW COLLECTION`, grouped search, and update statements consistently.
+
+### Notes
+
+- This release brings `qql-go` to the upstream QQL 2.3.0 parity line for collection info, grouped retrieval, payload updates, and vector updates.
+- `GROUP BY` cannot be combined with `RERANK`, and `GROUP_SIZE` defaults to `3`.
+
 ## [0.1.4] - 2026-05-14
 
 ### Added

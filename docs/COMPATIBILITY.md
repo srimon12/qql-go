@@ -31,7 +31,7 @@
 | Create with multivectors | `multivector_config` | ❌ | ❌ | |
 | Drop collection | `delete_collection` | ✅ v1.0 | ✅ v0.1 | |
 | List collections | `get_collections` | ✅ v1.0 | ✅ v0.1 | `SHOW COLLECTIONS` |
-| Collection info | `get_collection` | ❌ | ✅ | Go supports `SHOW COLLECTION <name>`; Python `DESCRIBE` is not implemented |
+| Collection info | `get_collection` | ❌ | ✅ v0.1.5 | Go supports `SHOW COLLECTION <name>`; Python `DESCRIBE` is not implemented |
 | Collection aliases | `create_alias` / `delete_alias` | ❌ | ❌ | |
 | Collection snapshots | `create_snapshot` | ❌ | ❌ | |
 
@@ -42,8 +42,8 @@
 | Insert single point | `upsert` | ✅ v1.0 | ✅ v0.1 | Requires `text` field |
 | Insert bulk | `upsert` (batch) | ✅ v1.0 | ✅ v0.1 | |
 | Get point by ID | `retrieve` | ✅ v2.2 | ✅ v0.1.4 | `SELECT` statement |
-| Update payload | `set_payload` | ✅ v2.3 | ✅ v0.1.4 | `UPDATE ... SET PAYLOAD` |
-| Update vector | `update_vectors` | ✅ v2.3 | ✅ v0.1.4 | `UPDATE ... SET VECTOR` |
+| Update payload | `set_payload` | ✅ v2.3 | ✅ v0.1.5 | `UPDATE ... SET PAYLOAD` |
+| Update vector | `update_vectors` | ✅ v2.3 | ✅ v0.1.5 | `UPDATE ... SET VECTOR` |
 | Delete point by ID | `delete` | ✅ v1.0 | ✅ v0.1 | |
 | Delete points by filter | `delete` (filter) | ❌ | ✅ v0.1 | Python README claims support but parser only handles `WHERE id = ...` |
 | Delete payload keys | `delete_payload` | ❌ | ❌ | Gap |
@@ -61,7 +61,7 @@
 | HNSW ef tuning | `search_params.hnsw_ef` | ✅ v1.0 | ✅ v0.1 | `WITH { hnsw_ef: N }` |
 | ACORN filtered search | `search_params.acorn` | ✅ v1.0 | ✅ v0.1 | `WITH { acorn: true }` |
 | Search with filters | `filter` | ✅ v1.0 | ✅ v0.1 | `WHERE` clause |
-| Grouped search | `query_points_groups` | ✅ v2.3 | ✅ v0.1.4 | `GROUP BY ... [GROUP_SIZE ...]` |
+| Grouped search | `query_points_groups` | ✅ v2.3 | ✅ v0.1.5 | `GROUP BY ... [GROUP_SIZE ...]` |
 | Search pagination | `offset` | ❌ | ❌ | Gap |
 | Batch search | `search_batch` | ❌ | ❌ | Gap |
 | MMR diversity | `diversity` param (v1.15+) | ❌ | ❌ | Gap |
@@ -123,13 +123,13 @@
 | QQL Version | Minimum Qdrant | Recommended Qdrant | Tested Qdrant Versions |
 |---|---|---|---|
 | Python 1.4.0 | 1.13.0 | 1.13.x | 1.13.0 |
-| Go 0.1.4 | 1.13.0 | 1.13.x | 1.13.0 |
+| Go 0.1.5 | 1.13.0 | 1.13.x | 1.13.0 |
 
 ### Language Support
 
 | QQL Version | Python `qql-cli` | Go `qql-go` | Feature Parity |
 |---|---|---|---|
-| Current | 2.2.0 | 0.1.4 | ~90% |
+| Current | 2.3.0 | 0.1.5 | ~95% |
 | Target (Phase 1) | 2.3.0 | 0.2.0 | ~95% |
 | Target (Phase 2) | 1.6.0 | 0.3.0 | ~98% |
 

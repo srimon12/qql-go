@@ -41,7 +41,7 @@ const (
 	defaultInferenceMode    = "cloud"
 )
 
-var Version = "0.1.4"
+var Version = "0.1.5"
 
 type commandOutputMode struct {
 	json  bool

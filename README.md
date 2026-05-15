@@ -12,7 +12,7 @@ Use `qql-go` when you need repeatable commands, stable JSON output, version-cont
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go 1.24+](https://img.shields.io/badge/Go-1.24%2B-00ADD8.svg)](https://go.dev/)
-[![Version](https://img.shields.io/badge/Version-0.1.4-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/Version-0.1.5-blue.svg)](VERSION)
 [![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/srimon12/qql-go/releases)
 
 ## What qql-go supports
@@ -104,7 +104,7 @@ curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | s
 Install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | VERSION=v0.1.4 sh
+curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | VERSION=v0.1.5 sh
 ```
 
 The Unix installer defaults to `~/.local/bin/qql-go`. Override with `INSTALL_DIR=/your/bin/path` when needed.
@@ -490,7 +490,7 @@ Config is stored at:
 - [CONTRIBUTING.md](CONTRIBUTING.md) for contributors
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for maintainers and release workflow details
 - [CHANGELOG.md](CHANGELOG.md) for user-facing changes
-- [docs/releases/0.1.4.md](docs/releases/0.1.4.md) for the current release note
+- [docs/releases/0.1.5.md](docs/releases/0.1.5.md) for the current release note
 
 ## Project Layout
 
