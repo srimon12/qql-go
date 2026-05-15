@@ -332,6 +332,12 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		if n.WithClause != nil && n.WithClause.Acorn {
 			plan.WriteString("Search params: acorn=true\n")
 		}
+		if n.WithClause != nil && n.WithClause.IndexedOnly {
+			plan.WriteString("Search params: indexed_only=true\n")
+		}
+		if n.WithClause != nil && n.WithClause.Quantization != nil {
+			plan.WriteString("Search params: quantization enabled\n")
+		}
 		if n.GroupBy != "" {
 			plan.WriteString(fmt.Sprintf("Group by: %s\n", n.GroupBy))
 			plan.WriteString(fmt.Sprintf("Group size: %d\n", n.GroupSize))
@@ -376,6 +382,12 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		}
 		if n.WithClause != nil && n.WithClause.HnswEf > 0 {
 			plan.WriteString(fmt.Sprintf("Search params: hnsw_ef=%d\n", n.WithClause.HnswEf))
+		}
+		if n.WithClause != nil && n.WithClause.IndexedOnly {
+			plan.WriteString("Search params: indexed_only=true\n")
+		}
+		if n.WithClause != nil && n.WithClause.Quantization != nil {
+			plan.WriteString("Search params: quantization enabled\n")
 		}
 		plan.WriteString("Action: Recommend points by example IDs\n")
 	case *ast.DeleteStmt:
@@ -1031,7 +1043,7 @@ func (e *Executor) doScroll(n *ast.ScrollStmt) (*ExecResponse, error) {
 
 	var next interface{}
 	if nextOffset != nil {
-		next = pointIDString(nextOffset)
+		next = pointIDValue(nextOffset)
 	}
 
 	return &ExecResponse{
@@ -1779,8 +1791,23 @@ func searchParamsFromWithClause(withClause *ast.SearchWith) *qdrant.SearchParams
 	if withClause.Acorn {
 		params.Acorn = &qdrant.AcornSearchParams{Enable: qdrant.PtrOf(true)}
 	}
+	if withClause.IndexedOnly {
+		params.IndexedOnly = qdrant.PtrOf(true)
+	}
+	if withClause.Quantization != nil {
+		params.Quantization = &qdrant.QuantizationSearchParams{}
+		if withClause.Quantization.Ignore != nil {
+			params.Quantization.Ignore = qdrant.PtrOf(*withClause.Quantization.Ignore)
+		}
+		if withClause.Quantization.Rescore != nil {
+			params.Quantization.Rescore = qdrant.PtrOf(*withClause.Quantization.Rescore)
+		}
+		if withClause.Quantization.Oversampling != nil {
+			params.Quantization.Oversampling = qdrant.PtrOf(*withClause.Quantization.Oversampling)
+		}
+	}
 
-	if params.HnswEf == nil && params.Exact == nil && params.Acorn == nil {
+	if params.HnswEf == nil && params.Exact == nil && params.Acorn == nil && params.IndexedOnly == nil && params.Quantization == nil {
 		return nil
 	}
 
@@ -2328,11 +2355,24 @@ func pointIDString(id *qdrant.PointId) string {
 	if id == nil {
 		return ""
 	}
+	switch value := pointIDValue(id).(type) {
+	case string:
+		return value
+	case uint64:
+		return strconv.FormatUint(value, 10)
+	}
+	return fmt.Sprintf("%v", id)
+}
+
+func pointIDValue(id *qdrant.PointId) any {
+	if id == nil {
+		return ""
+	}
 	if uuid := id.GetUuid(); uuid != "" {
 		return uuid
 	}
-	if num := id.GetNum(); num != 0 {
-		return strconv.FormatUint(num, 10)
+	if num, ok := id.GetPointIdOptions().(*qdrant.PointId_Num); ok {
+		return num.Num
 	}
 	return fmt.Sprintf("%v", id)
 }
