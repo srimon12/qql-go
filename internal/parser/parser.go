@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/srimon12/qql-go/internal/ast"
@@ -43,6 +44,8 @@ func (p *Parser) Parse(tokens []lexer.Token) (ast.ASTNode, error) {
 		node, err = p.parseRecommend()
 	case lexer.TokenKindDelete:
 		node, err = p.parseDelete()
+	case lexer.TokenKindUpdate:
+		node, err = p.parseUpdate()
 	default:
 		return nil, errors.NewQQLSyntaxError("Unexpected token '"+tok.Value+"'; expected a QQL statement keyword", tok.Pos)
 	}
@@ -414,9 +417,12 @@ func (p *Parser) parseSearch() (*ast.SearchStmt, error) {
 	rerank := false
 	var rerankModel *string
 	var withClause *ast.SearchWith
+	groupBy := ""
+	groupSize := 0
 	seenWhere := false
 	seenRerank := false
 	seenWith := false
+	seenGroup := false
 
 	for {
 		switch p.peek().Kind {
@@ -433,6 +439,9 @@ func (p *Parser) parseSearch() (*ast.SearchStmt, error) {
 		case lexer.TokenKindRerank:
 			if seenRerank {
 				return nil, errors.NewQQLSyntaxError("Duplicate RERANK clause", p.peek().Pos)
+			}
+			if seenGroup {
+				return nil, errors.NewQQLSyntaxError("GROUP BY and RERANK cannot be combined in the same SEARCH statement", p.peek().Pos)
 			}
 			seenRerank = true
 			p.advance()
@@ -455,6 +464,37 @@ func (p *Parser) parseSearch() (*ast.SearchStmt, error) {
 				return nil, err
 			}
 			mergeSearchWith(&withClause, parsedWith)
+		case lexer.TokenKindGroup:
+			if seenGroup {
+				return nil, errors.NewQQLSyntaxError("Duplicate GROUP BY clause", p.peek().Pos)
+			}
+			if rerank {
+				return nil, errors.NewQQLSyntaxError("GROUP BY and RERANK cannot be combined in the same SEARCH statement", p.peek().Pos)
+			}
+			seenGroup = true
+			p.advance()
+			if _, err := p.expect(lexer.TokenKindBy); err != nil {
+				return nil, err
+			}
+			groupBy, err = p.parseFieldPath()
+			if err != nil {
+				return nil, err
+			}
+			groupSize = 3
+			if p.peek().Kind == lexer.TokenKindGroupSize {
+				p.advance()
+				groupTok, err := p.expect(lexer.TokenKindInteger)
+				if err != nil {
+					return nil, err
+				}
+				groupSize, err = parseIntToken(groupTok)
+				if err != nil {
+					return nil, err
+				}
+				if groupSize <= 0 {
+					return nil, errors.NewQQLSyntaxError("GROUP_SIZE must be a positive integer, got "+groupTok.Value, groupTok.Pos)
+				}
+			}
 		default:
 			return &ast.SearchStmt{
 				Collection:  collection,
@@ -469,6 +509,8 @@ func (p *Parser) parseSearch() (*ast.SearchStmt, error) {
 				Rerank:      rerank,
 				RerankModel: rerankModel,
 				WithClause:  withClause,
+				GroupBy:     groupBy,
+				GroupSize:   groupSize,
 			}, nil
 		}
 	}
@@ -523,7 +565,7 @@ func (p *Parser) parseRecommend() (*ast.RecommendStmt, error) {
 		if err != nil {
 			return nil, err
 		}
-		if p.peek().Kind == lexer.TokenKindIdentifier && toUpper(p.peek().Value) == "VECTOR" {
+		if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && toUpper(p.peek().Value) == "VECTOR") {
 			p.advance()
 			lookupVector, err = p.parseStringPtr()
 			if err != nil {
@@ -752,6 +794,92 @@ func (p *Parser) parseDelete() (*ast.DeleteStmt, error) {
 		return nil, err
 	}
 	return &ast.DeleteStmt{Collection: collection, Field: field, Value: value}, nil
+}
+
+func (p *Parser) parseUpdate() (ast.ASTNode, error) {
+	p.advance()
+	collection, err := p.parseIdentifier()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(lexer.TokenKindSet); err != nil {
+		return nil, err
+	}
+
+	switch p.peek().Kind {
+	case lexer.TokenKindVector:
+		p.advance()
+		if _, err := p.expect(lexer.TokenKindWhere); err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(lexer.TokenKindId); err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
+			return nil, err
+		}
+		pointID, err := p.parsePointIDValue("UPDATE SET VECTOR")
+		if err != nil {
+			return nil, err
+		}
+		vectorValue, err := p.parseValue()
+		if err != nil {
+			return nil, err
+		}
+		rawVector, ok := vectorValue.([]interface{})
+		if !ok {
+			return nil, errors.NewQQLSyntaxError("Expected a vector list [...] after point ID in UPDATE SET VECTOR", p.peek().Pos)
+		}
+		vector, err := coerceVectorValues(rawVector)
+		if err != nil {
+			return nil, err
+		}
+		return &ast.UpdateVectorStmt{
+			Collection: collection,
+			PointID:    pointID,
+			Vector:     vector,
+		}, nil
+	case lexer.TokenKindPayload:
+		p.advance()
+		if _, err := p.expect(lexer.TokenKindWhere); err != nil {
+			return nil, err
+		}
+		if p.peek().Kind == lexer.TokenKindId {
+			p.advance()
+			if _, err := p.expect(lexer.TokenKindEquals); err != nil {
+				return nil, err
+			}
+			pointID, err := p.parsePointIDValue("UPDATE SET PAYLOAD")
+			if err != nil {
+				return nil, err
+			}
+			payload, err := p.parseDict()
+			if err != nil {
+				return nil, err
+			}
+			return &ast.UpdatePayloadStmt{
+				Collection: collection,
+				PointID:    pointID,
+				Payload:    payload,
+			}, nil
+		}
+		queryFilter, err := p.parseFilterExpr()
+		if err != nil {
+			return nil, err
+		}
+		payload, err := p.parseDict()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.UpdatePayloadStmt{
+			Collection:  collection,
+			QueryFilter: queryFilter,
+			Payload:     payload,
+		}, nil
+	default:
+		tok := p.peek()
+		return nil, errors.NewQQLSyntaxError("Expected VECTOR or PAYLOAD after SET, got '"+tok.Value+"'", tok.Pos)
+	}
 }
 
 func (p *Parser) parseFilterExpr() (ast.FilterExpr, error) {
@@ -1413,6 +1541,23 @@ func parseFloatToken(tok lexer.Token) (float64, error) {
 		return 0, errors.NewQQLSyntaxError("Invalid float literal '"+tok.Value+"'", tok.Pos)
 	}
 	return value, nil
+}
+
+func coerceVectorValues(values []interface{}) ([]float32, error) {
+	vector := make([]float32, 0, len(values))
+	for _, value := range values {
+		switch v := value.(type) {
+		case bool:
+			return nil, errors.NewQQLSyntaxError("Vector elements must be numeric; got invalid value: bool", -1)
+		case int:
+			vector = append(vector, float32(v))
+		case float64:
+			vector = append(vector, float32(v))
+		default:
+			return nil, errors.NewQQLSyntaxError("Vector elements must be numeric; got invalid value: "+fmt.Sprintf("%v", v), -1)
+		}
+	}
+	return vector, nil
 }
 
 func (p *Parser) parseNumericLiteral() (float64, error) {

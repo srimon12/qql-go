@@ -1,7 +1,7 @@
 # QQL / Qdrant Compatibility Matrix
 
 > This document tracks which QQL versions support which Qdrant features, across both Python and Go implementations.
-> Last updated: 2026-05-14
+> Last updated: 2026-05-15
 
 ## Legend
 
@@ -42,7 +42,8 @@
 | Insert single point | `upsert` | ✅ v1.0 | ✅ v0.1 | Requires `text` field |
 | Insert bulk | `upsert` (batch) | ✅ v1.0 | ✅ v0.1 | |
 | Get point by ID | `retrieve` | ✅ v2.2 | ✅ v0.1.4 | `SELECT` statement |
-| Update payload | `set_payload` | ❌ | ❌ | Gap |
+| Update payload | `set_payload` | ✅ v2.3 | ✅ v0.1.4 | `UPDATE ... SET PAYLOAD` |
+| Update vector | `update_vectors` | ✅ v2.3 | ✅ v0.1.4 | `UPDATE ... SET VECTOR` |
 | Delete point by ID | `delete` | ✅ v1.0 | ✅ v0.1 | |
 | Delete points by filter | `delete` (filter) | ❌ | ✅ v0.1 | Python README claims support but parser only handles `WHERE id = ...` |
 | Delete payload keys | `delete_payload` | ❌ | ❌ | Gap |
@@ -60,6 +61,7 @@
 | HNSW ef tuning | `search_params.hnsw_ef` | ✅ v1.0 | ✅ v0.1 | `WITH { hnsw_ef: N }` |
 | ACORN filtered search | `search_params.acorn` | ✅ v1.0 | ✅ v0.1 | `WITH { acorn: true }` |
 | Search with filters | `filter` | ✅ v1.0 | ✅ v0.1 | `WHERE` clause |
+| Grouped search | `query_points_groups` | ✅ v2.3 | ✅ v0.1.4 | `GROUP BY ... [GROUP_SIZE ...]` |
 | Search pagination | `offset` | ❌ | ❌ | Gap |
 | Batch search | `search_batch` | ❌ | ❌ | Gap |
 | MMR diversity | `diversity` param (v1.15+) | ❌ | ❌ | Gap |

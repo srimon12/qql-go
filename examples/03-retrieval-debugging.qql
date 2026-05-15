@@ -27,5 +27,6 @@ SEARCH retrieval_debug_docs SIMILAR TO 'hnsw recall regression' LIMIT 3 USING HY
 SEARCH retrieval_debug_docs SIMILAR TO 'hnsw recall regression' LIMIT 3 USING HYBRID FUSION 'dbsf'
 SEARCH retrieval_debug_docs SIMILAR TO 'hnsw recall regression' LIMIT 3 USING SPARSE
 SEARCH retrieval_debug_docs SIMILAR TO 'hnsw recall regression' LIMIT 3 EXACT
+SEARCH retrieval_debug_docs SIMILAR TO 'hnsw recall regression' LIMIT 3 USING HYBRID GROUP BY team GROUP_SIZE 2
 SEARCH retrieval_debug_docs SIMILAR TO 'filtered support runbook recall' LIMIT 3 WHERE team = 'platform'
 SEARCH retrieval_debug_docs SIMILAR TO 'filtered support runbook recall' LIMIT 3 WHERE team = 'platform' WITH { acorn: true }

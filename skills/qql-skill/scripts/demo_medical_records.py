@@ -145,10 +145,26 @@ BASE_STATEMENTS = [
         "search-combined",
         f"SEARCH {COLLECTION} SIMILAR TO 'cardiac emergency chest' LIMIT 3 USING HYBRID WHERE priority = 'high' AND status = 'admitted'",
     ),
+    (
+        "group-by-specialty",
+        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency' LIMIT 3 USING HYBRID GROUP BY specialty GROUP_SIZE 2",
+    ),
+    (
+        "group-by-priority-with-params",
+        f"SEARCH {COLLECTION} SIMILAR TO 'critical care escalation' LIMIT 3 USING HYBRID WITH {{ hnsw_ef: 128, acorn: true }} GROUP BY priority GROUP_SIZE 2",
+    ),
     # Recommend from an explicit ID
     (
         "recommend-stroke",
         f"RECOMMEND FROM {COLLECTION} POSITIVE IDS (414) LIMIT 3",
+    ),
+    (
+        "update-stroke-payload",
+        f"UPDATE {COLLECTION} SET PAYLOAD WHERE id = 414 {{'status': 'reviewed', 'care_path': 'stroke-alert'}}",
+    ),
+    (
+        "publish-discharged",
+        f"UPDATE {COLLECTION} SET PAYLOAD WHERE status = 'discharged' {{'status': 'archived'}}",
     ),
     # Retrieve a point by exact ID
     (

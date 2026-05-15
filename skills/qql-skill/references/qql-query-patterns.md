@@ -76,6 +76,24 @@ USING HYBRID
 WHERE specialty = 'gastroenterology' AND priority = 'high'
 ```
 
+## Grouped search
+
+```sql
+SEARCH articles SIMILAR TO 'vector database' LIMIT 5
+GROUP BY category
+GROUP_SIZE 2
+```
+
+## Grouped hybrid search with query-time params
+
+```sql
+SEARCH incidents SIMILAR TO 'hnsw recall regression' LIMIT 4
+USING HYBRID
+WITH { hnsw_ef: 128, acorn: true }
+GROUP BY team
+GROUP_SIZE 2
+```
+
 ## Exact baseline
 
 ```sql
@@ -234,6 +252,19 @@ DELETE FROM notes WHERE id = '123e4567-e89b-12d3-a456-426614174000'
 DELETE FROM notes WHERE category = 'archived'
 ```
 
+## Update vector
+
+```sql
+UPDATE notes SET VECTOR WHERE id = 42 [0.1, 0.2, 0.3]
+```
+
+## Update payload
+
+```sql
+UPDATE notes SET PAYLOAD WHERE id = 42 {'topic': 'retrieval', 'status': 'reviewed'}
+UPDATE notes SET PAYLOAD WHERE category = 'draft' {'status': 'published'}
+```
+
 ## Explain
 
 ```powershell
@@ -307,10 +338,13 @@ SEARCH docs SIMILAR TO 'hello world' LIMIT 5 USING HYBRID
 - right docs, wrong order -> `RERANK` (cloud only)
 - broader retrieval plus better ordering -> `USING HYBRID RERANK` (cloud only)
 - sparse retrieval plus better ordering -> `USING SPARSE RERANK` (cloud only)
+- grouped top results by field -> `GROUP BY <field> [GROUP_SIZE <n>]`
 - exact point lookup -> `SELECT`
 - browse points page by page -> `SCROLL`
 - find similar items by example IDs -> `RECOMMEND`
 - batch ingest -> `INSERT BULK`
+- patch a stored payload -> `UPDATE ... SET PAYLOAD ...`
+- replace a stored vector -> `UPDATE ... SET VECTOR ...`
 - script round-trip -> `qql-go execute` / `qql-go dump [--batch-size N]`
 - interactive shell -> `qql-go repl`
 - MMR, feedback, score boosting, discovery -> outside current QQL

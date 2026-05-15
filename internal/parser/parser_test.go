@@ -630,6 +630,40 @@ func TestParseSearch(t *testing.T) {
 				WithClause:  &ast.SearchWith{HnswEf: 64, Exact: true, Acorn: true},
 			},
 		},
+		{
+			name:  "grouped hybrid search",
+			input: "SEARCH mycollection SIMILAR TO 'query text' LIMIT 10 USING HYBRID GROUP BY category GROUP_SIZE 4",
+			want: &ast.SearchStmt{
+				Collection: "mycollection",
+				QueryText:  "query text",
+				Limit:      10,
+				Hybrid:     true,
+				GroupBy:    "category",
+				GroupSize:  4,
+			},
+		},
+		{
+			name:  "grouped search with filter",
+			input: "SEARCH mycollection SIMILAR TO 'query text' LIMIT 10 WHERE tags = 'important' GROUP BY meta.author",
+			want: &ast.SearchStmt{
+				Collection:  "mycollection",
+				QueryText:   "query text",
+				Limit:       10,
+				GroupBy:     "meta.author",
+				GroupSize:   3,
+				QueryFilter: &ast.CompareExpr{Field: "tags", Op: "=", Value: "important"},
+			},
+		},
+		{
+			name:    "grouped rerank is rejected",
+			input:   "SEARCH mycollection SIMILAR TO 'query text' LIMIT 10 RERANK GROUP BY category",
+			wantErr: true,
+		},
+		{
+			name:    "group size must be positive",
+			input:   "SEARCH mycollection SIMILAR TO 'query text' LIMIT 10 GROUP BY category GROUP_SIZE 0",
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -676,6 +710,8 @@ func TestParseSearch(t *testing.T) {
 				require.NotNil(t, stmt.RerankModel)
 				assert.Equal(t, *tt.want.RerankModel, *stmt.RerankModel)
 			}
+			assert.Equal(t, tt.want.GroupBy, stmt.GroupBy)
+			assert.Equal(t, tt.want.GroupSize, stmt.GroupSize)
 		})
 	}
 }
@@ -903,6 +939,76 @@ func TestParseDelete(t *testing.T) {
 			assert.Equal(t, tt.want.PointID, stmt.PointID)
 			assert.Equal(t, tt.want.Field, stmt.Field)
 			assert.Equal(t, tt.want.Value, stmt.Value)
+		})
+	}
+}
+
+func TestParseUpdate(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		check   func(t *testing.T, node ast.ASTNode)
+	}{
+		{
+			name:  "update vector by id",
+			input: "UPDATE articles SET VECTOR WHERE id = 42 [0.1, 0.2]",
+			check: func(t *testing.T, node ast.ASTNode) {
+				stmt, ok := node.(*ast.UpdateVectorStmt)
+				require.True(t, ok)
+				assert.Equal(t, "articles", stmt.Collection)
+				assert.Equal(t, 42, stmt.PointID)
+				assert.Equal(t, []float32{0.1, 0.2}, stmt.Vector)
+			},
+		},
+		{
+			name:  "update payload by filter",
+			input: "UPDATE articles SET PAYLOAD WHERE category = 'draft' {'status': 'published'}",
+			check: func(t *testing.T, node ast.ASTNode) {
+				stmt, ok := node.(*ast.UpdatePayloadStmt)
+				require.True(t, ok)
+				assert.Equal(t, "articles", stmt.Collection)
+				assert.Nil(t, stmt.PointID)
+				assertFilterExprEqual(t, &ast.CompareExpr{Field: "category", Op: "=", Value: "draft"}, stmt.QueryFilter)
+				assert.Equal(t, map[string]interface{}{"status": "published"}, stmt.Payload)
+			},
+		},
+		{
+			name:  "update payload by id",
+			input: "UPDATE articles SET PAYLOAD WHERE id = 'abc-123' {'year': 2025}",
+			check: func(t *testing.T, node ast.ASTNode) {
+				stmt, ok := node.(*ast.UpdatePayloadStmt)
+				require.True(t, ok)
+				assert.Equal(t, "abc-123", stmt.PointID)
+				assert.Equal(t, map[string]interface{}{"year": 2025}, stmt.Payload)
+			},
+		},
+		{
+			name:    "update vector rejects bools",
+			input:   "UPDATE articles SET VECTOR WHERE id = 1 [true, 0.2]",
+			wantErr: true,
+		},
+		{
+			name:    "update rejects invalid target",
+			input:   "UPDATE articles SET NAME WHERE id = 1 {'x': 1}",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.input)
+			require.NoError(t, err)
+
+			p := NewParser()
+			node, err := p.Parse(tokens)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			tt.check(t, node)
 		})
 	}
 }

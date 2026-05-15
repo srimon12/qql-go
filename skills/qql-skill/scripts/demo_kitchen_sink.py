@@ -149,8 +149,24 @@ BASE_STATEMENTS = [
         f"SEARCH {COLLECTION} SIMILAR TO 'cardiac chest pain' LIMIT 3 USING HYBRID WHERE priority IN ('high', 'medium') AND status = 'admitted' AND year >= 2024",
     ),
     (
+        "group-by-specialty",
+        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency' LIMIT 3 USING HYBRID GROUP BY specialty GROUP_SIZE 2",
+    ),
+    (
+        "group-by-priority-with-params",
+        f"SEARCH {COLLECTION} SIMILAR TO 'critical care escalation' LIMIT 3 USING HYBRID WITH {{ hnsw_ef: 128, acorn: true }} GROUP BY priority GROUP_SIZE 2",
+    ),
+    (
         "recommend-stroke",
         f"RECOMMEND FROM {COLLECTION} POSITIVE IDS ('{STROKE_ID}') LIMIT 3",
+    ),
+    (
+        "update-stroke-payload",
+        f"UPDATE {COLLECTION} SET PAYLOAD WHERE id = '{STROKE_ID}' {{'status': 'reviewed', 'care_path': 'stroke-alert'}}",
+    ),
+    (
+        "publish-drafts",
+        f"UPDATE {COLLECTION} SET PAYLOAD WHERE status = 'draft' {{'status': 'reviewed'}}",
     ),
     (
         "select-stemi",

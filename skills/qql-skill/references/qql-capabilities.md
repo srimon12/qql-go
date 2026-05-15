@@ -50,6 +50,9 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE MODEL '<model>'` (cloud only; local uses client-side BM25)
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WHERE <filter>`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> GROUP BY <field>`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> GROUP BY <field> GROUP_SIZE <m>`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID GROUP BY <field> [GROUP_SIZE <m>]`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef: <n> }`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { exact: true|false }`
@@ -85,6 +88,14 @@ All recommend clauses can be combined in order: `POSITIVE IDS`, `NEGATIVE IDS`, 
 
 - `DELETE FROM <name> WHERE id = '<uuid>'`
 - `DELETE FROM <name> WHERE <field> = '<value>'`
+
+### Update
+
+- `UPDATE <name> SET VECTOR WHERE id = '<uuid>' [<float>, ...]`
+- `UPDATE <name> SET VECTOR WHERE id = <integer> [<float>, ...]`
+- `UPDATE <name> SET PAYLOAD WHERE id = '<uuid>' {...}`
+- `UPDATE <name> SET PAYLOAD WHERE id = <integer> {...}`
+- `UPDATE <name> SET PAYLOAD WHERE <filter> {...}`
 
 ### Explain
 
@@ -173,6 +184,14 @@ In local/external mode, sparse vectors are generated client-side using BM25-styl
 ### Sparse-only
 
 Use `USING SPARSE` when the request is purely keyword/BM25 retrieval with no semantic component.
+
+### Grouped retrieval
+
+Use `GROUP BY` when the result needs grouped top matches by payload field.
+
+`GROUP_SIZE` defaults to `3` and must be a positive integer.
+
+`GROUP BY` works with dense, sparse, hybrid, `WHERE`, and query-time params, but not with `RERANK`.
 
 ### Collection quantization
 

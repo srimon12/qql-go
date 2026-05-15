@@ -23,8 +23,10 @@ Use `qql-go` when you need repeatable commands, stable JSON output, version-cont
 - collection quantization
 - payload index creation
 - document insertion
+- vector and payload update
 - point retrieval and scroll pagination
 - dense, sparse, and hybrid retrieval
+- grouped retrieval
 - recommendation by example IDs
 - rerank retrieval
 - explain plans
@@ -182,9 +184,11 @@ qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID"
 qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID FUSION 'dbsf'"
 qql-go exec "SEARCH docs SIMILAR TO 'bm25 keyword' LIMIT 5 USING SPARSE"
 qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID RERANK"
+qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID GROUP BY topic GROUP_SIZE 2"
 qql-go exec "SHOW COLLECTION docs"
 qql-go exec "SELECT * FROM docs WHERE id = 'pt-1'"
 qql-go exec "SCROLL FROM docs LIMIT 10"
+qql-go exec "UPDATE docs SET PAYLOAD WHERE id = 'pt-1' {'topic': 'retrieval'}"
 ```
 
 Start the interactive shell:

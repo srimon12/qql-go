@@ -149,6 +149,44 @@ func TestBuildSearchRequestAppliesWithClauseAndSparseOverride(t *testing.T) {
 	require.Equal(t, uint64(128), prefetch[0].GetParams().GetHnswEf())
 }
 
+func TestBuildGroupSearchRequestCarriesHybridPrefetchParamsAndCustomModels(t *testing.T) {
+	sparseModel := "custom-sparse"
+	exec := NewExecutor(nil, &config.Config{})
+	req, err := exec.buildSearchRequest(context.Background(), &ast.SearchStmt{
+		Collection:  "demo",
+		QueryText:   "vector database",
+		Limit:       5,
+		Hybrid:      true,
+		SparseModel: &sparseModel,
+		WithClause: &ast.SearchWith{
+			HnswEf: 128,
+			Acorn:  true,
+		},
+		GroupBy:   "category",
+		GroupSize: 2,
+	}, "dense-model", sparseModel, false, 5)
+	require.NoError(t, err)
+
+	groupReq := buildGroupSearchRequest(&ast.SearchStmt{
+		Collection:  "demo",
+		QueryText:   "vector database",
+		Limit:       5,
+		Hybrid:      true,
+		SparseModel: &sparseModel,
+		GroupBy:     "category",
+		GroupSize:   2,
+	}, req, nil)
+
+	require.Equal(t, "category", groupReq.GetGroupBy())
+	require.Equal(t, uint64(2), groupReq.GetGroupSize())
+	require.Len(t, groupReq.GetPrefetch(), 2)
+	require.Equal(t, "custom-sparse", groupReq.GetPrefetch()[0].GetQuery().GetNearest().GetDocument().GetModel())
+	require.Equal(t, "dense-model", groupReq.GetPrefetch()[1].GetQuery().GetNearest().GetDocument().GetModel())
+	require.Equal(t, uint64(128), groupReq.GetPrefetch()[0].GetParams().GetHnswEf())
+	require.NotNil(t, groupReq.GetPrefetch()[0].GetParams().GetAcorn())
+	require.True(t, groupReq.GetPrefetch()[0].GetParams().GetAcorn().GetEnable())
+}
+
 func TestBuildSearchRequestRejectsRerankWithoutCollectionSupport(t *testing.T) {
 	exec := NewExecutor(nil, &config.Config{})
 	_, err := exec.buildSearchRequest(context.Background(), &ast.SearchStmt{
@@ -863,6 +901,10 @@ type fakeQdrantClient struct {
 	createRequests []*qdrant.CreateCollection
 	upserts        []*qdrant.UpsertPoints
 	queryRequests  []*qdrant.QueryPoints
+	groupRequests  []*qdrant.QueryPointGroups
+	groupResults   []*qdrant.PointGroup
+	updateVectors  []*qdrant.UpdatePointVectors
+	setPayloads    []*qdrant.SetPayloadPoints
 	scrollRecords  []*qdrant.RetrievedPoint
 	scrollOffset   *qdrant.PointId
 	getRecords     []*qdrant.RetrievedPoint
@@ -903,10 +945,31 @@ func (f *fakeQdrantClient) Upsert(_ context.Context, req *qdrant.UpsertPoints) (
 	f.upserts = append(f.upserts, req)
 	return &qdrant.UpdateResult{}, nil
 }
-func (f *fakeQdrantClient) Query(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) {
+func (f *fakeQdrantClient) Query(_ context.Context, req *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.queryRequests = append(f.queryRequests, req)
 	return nil, nil
 }
+func (f *fakeQdrantClient) QueryGroups(_ context.Context, req *qdrant.QueryPointGroups) ([]*qdrant.PointGroup, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.groupRequests = append(f.groupRequests, req)
+	return f.groupResults, nil
+}
 func (f *fakeQdrantClient) Delete(context.Context, *qdrant.DeletePoints) (*qdrant.UpdateResult, error) {
+	return &qdrant.UpdateResult{}, nil
+}
+func (f *fakeQdrantClient) UpdateVectors(_ context.Context, req *qdrant.UpdatePointVectors) (*qdrant.UpdateResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.updateVectors = append(f.updateVectors, req)
+	return &qdrant.UpdateResult{}, nil
+}
+func (f *fakeQdrantClient) SetPayload(_ context.Context, req *qdrant.SetPayloadPoints) (*qdrant.UpdateResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.setPayloads = append(f.setPayloads, req)
 	return &qdrant.UpdateResult{}, nil
 }
 func (f *fakeQdrantClient) CreateFieldIndex(context.Context, *qdrant.CreateFieldIndexCollection) (*qdrant.UpdateResult, error) {
@@ -918,6 +981,86 @@ func (f *fakeQdrantClient) ScrollAndOffset(context.Context, *qdrant.ScrollPoints
 }
 func (f *fakeQdrantClient) Get(context.Context, *qdrant.GetPoints) ([]*qdrant.RetrievedPoint, error) {
 	return f.getRecords, nil
+}
+
+func TestDoSearchUsesQueryGroupsForGroupedSearch(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
+					denseVectorName:  {Size: uint64(denseVectorSize), Distance: qdrant.Distance_Cosine},
+					sparseVectorName: {Size: uint64(denseVectorSize), Distance: qdrant.Distance_Cosine},
+				}),
+			},
+		},
+	}
+	client.groupResults = []*qdrant.PointGroup{
+		{
+			Id: qdrant.NewGroupIDString("tech"),
+			Hits: []*qdrant.ScoredPoint{
+				{
+					Id:      qdrant.NewIDNum(1),
+					Score:   0.95,
+					Payload: qdrant.NewValueMap(map[string]any{"text": "hello"}),
+				},
+			},
+		},
+	}
+	exec := NewExecutor(client, &config.Config{})
+
+	resp, err := exec.doSearch(&ast.SearchStmt{
+		Collection: "docs",
+		QueryText:  "vector database",
+		Limit:      5,
+		Hybrid:     true,
+		GroupBy:    "category",
+		GroupSize:  2,
+		WithClause: &ast.SearchWith{HnswEf: 128, Acorn: true},
+	})
+	require.NoError(t, err)
+	require.Len(t, client.groupRequests, 1)
+	require.Empty(t, client.queryRequests)
+	require.Equal(t, "category", client.groupRequests[0].GetGroupBy())
+	require.Equal(t, uint64(2), client.groupRequests[0].GetGroupSize())
+	require.Equal(t, uint64(128), client.groupRequests[0].GetPrefetch()[0].GetParams().GetHnswEf())
+	require.Contains(t, resp.Message, "Found 1 group(s)")
+}
+
+func TestBuildUpdateVectorRequestUsesNamedDenseVectorForHybridCollections(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
+					denseVectorName: {Size: uint64(denseVectorSize), Distance: qdrant.Distance_Cosine},
+				}),
+			},
+		},
+	}
+	exec := NewExecutor(client, &config.Config{})
+
+	req, err := exec.buildUpdateVectorRequest(context.Background(), &ast.UpdateVectorStmt{
+		Collection: "docs",
+		PointID:    7,
+		Vector:     []float32{0.1, 0.2},
+	})
+	require.NoError(t, err)
+	require.Len(t, req.GetPoints(), 1)
+	require.NotNil(t, req.GetPoints()[0].GetVectors().GetVectors().GetVectors()[denseVectorName])
+}
+
+func TestBuildUpdatePayloadRequestSupportsFilterSelector(t *testing.T) {
+	req, err := buildUpdatePayloadRequest(&ast.UpdatePayloadStmt{
+		Collection:  "docs",
+		QueryFilter: &ast.CompareExpr{Field: "status", Op: "=", Value: "draft"},
+		Payload:     map[string]interface{}{"status": "published"},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, req.GetPointsSelector().GetFilter())
+	require.Equal(t, "published", req.GetPayload()["status"].GetStringValue())
 }
 
 func TestBuildSearchPrefetchesLocalModeReturnsExplicitQueries(t *testing.T) {

@@ -256,6 +256,22 @@ func TestTokenizeKeywords(t *testing.T) {
 			},
 		},
 		{
+			name:  "GROUP",
+			input: "GROUP",
+			expected: []Token{
+				{Kind: TokenKindGroup, Value: "GROUP", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 5},
+			},
+		},
+		{
+			name:  "GROUP_SIZE",
+			input: "GROUP_SIZE",
+			expected: []Token{
+				{Kind: TokenKindGroupSize, Value: "GROUP_SIZE", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 10},
+			},
+		},
+		{
 			name:  "POSITIVE",
 			input: "POSITIVE",
 			expected: []Token{
@@ -293,6 +309,30 @@ func TestTokenizeKeywords(t *testing.T) {
 			expected: []Token{
 				{Kind: TokenKindDelete, Value: "DELETE", Pos: 0},
 				{Kind: TokenKindEof, Value: "", Pos: 6},
+			},
+		},
+		{
+			name:  "UPDATE",
+			input: "UPDATE",
+			expected: []Token{
+				{Kind: TokenKindUpdate, Value: "UPDATE", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 6},
+			},
+		},
+		{
+			name:  "VECTOR",
+			input: "VECTOR",
+			expected: []Token{
+				{Kind: TokenKindVector, Value: "VECTOR", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 6},
+			},
+		},
+		{
+			name:  "PAYLOAD",
+			input: "PAYLOAD",
+			expected: []Token{
+				{Kind: TokenKindPayload, Value: "PAYLOAD", Pos: 0},
+				{Kind: TokenKindEof, Value: "", Pos: 7},
 			},
 		},
 		{

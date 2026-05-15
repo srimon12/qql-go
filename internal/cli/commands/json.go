@@ -76,3 +76,8 @@ type SearchHit struct {
 	Score float32 `json:"score"`
 	Text  string  `json:"text,omitempty"`
 }
+
+type GroupedSearchResult struct {
+	GroupID string      `json:"group_id"`
+	Hits    []SearchHit `json:"hits"`
+}

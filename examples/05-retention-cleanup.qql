@@ -23,6 +23,8 @@ INSERT BULK INTO COLLECTION retention_demo VALUES [
   }
 ] USING HYBRID
 SCROLL FROM retention_demo WHERE status = 'archived' LIMIT 10
-DELETE FROM retention_demo WHERE status = 'archived'
+UPDATE retention_demo SET PAYLOAD WHERE status = 'archived' {'status': 'pending_delete'}
+SCROLL FROM retention_demo WHERE status = 'pending_delete' LIMIT 10
+DELETE FROM retention_demo WHERE status = 'pending_delete'
 SCROLL FROM retention_demo LIMIT 10
 SHOW COLLECTION retention_demo

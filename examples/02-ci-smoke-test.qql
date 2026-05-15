@@ -25,6 +25,7 @@ INSERT BULK INTO COLLECTION ci_smoke_docs VALUES [
 SEARCH ci_smoke_docs SIMILAR TO 'deployment validation' LIMIT 2 USING HYBRID
 SEARCH ci_smoke_docs SIMILAR TO 'deployment validation' LIMIT 2 EXACT
 RECOMMEND FROM ci_smoke_docs POSITIVE IDS (201) LIMIT 2
+UPDATE ci_smoke_docs SET PAYLOAD WHERE id = 201 {'status': 'validated'}
 DELETE FROM ci_smoke_docs WHERE status = 'archived'
 SHOW COLLECTION ci_smoke_docs
 DROP COLLECTION ci_smoke_docs

@@ -10,7 +10,6 @@ Use this file when a request sounds reasonable in Qdrant terms but is still outs
 - score boosting
 - relevance feedback
 - multi-stage retrieval beyond the built-in hybrid and rerank paths
-- update or upsert by explicit id (you can `INSERT` with explicit `id` to overwrite)
 - offset-style search pagination
 - collection-level HNSW config
 - on-disk vector or payload toggles
@@ -34,6 +33,9 @@ Prefer plain language:
 - Need hybrid DBSF fusion: use `USING HYBRID FUSION 'dbsf'`
 - Need better ordering: use `RERANK` (cloud only)
 - Need filtering: create an index first, then use `WHERE`
+- Need grouped top results by field: use `SEARCH ... GROUP BY <field> [GROUP_SIZE <n>]`
+- Need to patch metadata in place: use `UPDATE <collection> SET PAYLOAD ...`
+- Need to replace a stored vector: use `UPDATE <collection> SET VECTOR ...`
 - Need a runnable prototype: stay inside `CREATE`, `CREATE INDEX`, `INSERT`, `SEARCH`, `DELETE`, `RECOMMEND`
 - Need batch insert: use `INSERT BULK`
 - Need script round-trip: use `qql-go execute` and `qql-go dump [--batch-size N]`
