@@ -49,6 +49,16 @@ func TestSplitStatementsSelectAndScroll(t *testing.T) {
 	require.Equal(t, "SCROLL FROM docs WHERE status = 'active' AFTER 'pt-1' LIMIT 10", statements[2])
 }
 
+func TestSplitStatementsUpdate(t *testing.T) {
+	input := "SHOW COLLECTION docs\nUPDATE docs SET PAYLOAD WHERE id = 1 {'status': 'reviewed'}\nDROP COLLECTION docs"
+	statements, err := SplitStatements(input)
+	require.NoError(t, err)
+	require.Len(t, statements, 3)
+	require.Equal(t, "SHOW COLLECTION docs", statements[0])
+	require.Equal(t, "UPDATE docs SET PAYLOAD WHERE id = 1 {'status': 'reviewed'}", statements[1])
+	require.Equal(t, "DROP COLLECTION docs", statements[2])
+}
+
 func TestRunFileWithSelectAndScroll(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sample.qql")

@@ -74,6 +74,25 @@ EXAMPLES = [
         "requires_index": ["team"],
     },
     {
+        "mode": "grouped",
+        "when": "Use when results should be grouped by a payload field instead of returned as one flat list.",
+        "query": (
+            "SEARCH incidents SIMILAR TO 'retrieval recall regression' "
+            "LIMIT 5 GROUP BY team GROUP_SIZE 2"
+        ),
+        "requires_index": ["team"],
+    },
+    {
+        "mode": "grouped-hybrid",
+        "when": "Use when grouped results still need hybrid recall and query-time tuning.",
+        "query": (
+            "SEARCH incidents SIMILAR TO 'retrieval recall regression' "
+            "LIMIT 4 USING HYBRID WITH { hnsw_ef: 128, acorn: true } "
+            "GROUP BY team GROUP_SIZE 2"
+        ),
+        "requires_index": ["team"],
+    },
+    {
         "mode": "rerank",
         "when": "Use when recall is likely good but top-result ordering needs help. Requires Qdrant Cloud and a rerank-capable collection.",
         "query": (
@@ -121,6 +140,21 @@ EXAMPLES = [
         "when": "Delete points by field value instead of ID.",
         "query": ("DELETE FROM articles WHERE category = 'archived'"),
         "requires_index": ["category"],
+    },
+    {
+        "mode": "update-payload",
+        "when": "Patch stored metadata in place for one point or a filtered subset.",
+        "query": (
+            "UPDATE articles SET PAYLOAD WHERE category = 'draft' "
+            "{'status': 'published'}"
+        ),
+        "requires_index": ["category"],
+    },
+    {
+        "mode": "update-vector",
+        "when": "Replace the stored dense vector for one exact point ID.",
+        "query": "UPDATE articles SET VECTOR WHERE id = 42 [0.1, 0.2, 0.3]",
+        "requires_index": [],
     },
 ]
 

@@ -1,6 +1,6 @@
 ---
 name: qql-skill
-description: "Use QQL to create collections, create payload indexes, insert documents (single or bulk), search with dense, sparse, or hybrid retrieval, recommend by example IDs, use exact and query-time search params, explain plans, execute scripts, dump collections, and delete data. Use when Codex needs to write or review QQL statements for the Go CLI, choose between dense, sparse, hybrid, and reranked search, or explain what QQL can and cannot do in the current Go implementation."
+description: "Use QQL to create collections, create payload indexes, insert documents (single or bulk), search with dense, sparse, hybrid, or grouped retrieval, recommend by example IDs, update vectors or payloads, use exact and query-time search params, explain plans, execute scripts, dump collections, and delete data. Use when Codex needs to write or review QQL statements for the Go CLI, choose between dense, sparse, hybrid, grouped, and reranked search, or explain what QQL can and cannot do in the current Go implementation."
 ---
 
 # QQL Skill
@@ -52,6 +52,9 @@ Supported syntax in this repo includes:
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE MODEL '<model>'` (cloud only)
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WHERE <filter>`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> GROUP BY <field>`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> GROUP BY <field> GROUP_SIZE <m>`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID GROUP BY <field> [GROUP_SIZE <m>]`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef, exact, acorn }`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK`
@@ -73,6 +76,9 @@ Supported syntax in this repo includes:
 - `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LOOKUP FROM <collection> [VECTOR '<name>'] LIMIT <n>`
 - `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) USING '<vector_name>' LIMIT <n>`
 - `DELETE FROM <name> WHERE ...`
+- `UPDATE <name> SET VECTOR WHERE id = <id> [<float>, ...]`
+- `UPDATE <name> SET PAYLOAD WHERE id = <id> {...}`
+- `UPDATE <name> SET PAYLOAD WHERE <filter> {...}`
 - `qql-go explain <statement>`
 - `qql-go execute <script.qql>`
 - `qql-go execute --stop-on-error <script.qql>`
@@ -180,6 +186,14 @@ Use `RERANK` when the right candidates are likely already retrieved but the top 
 
 **Cloud mode only.** In local/external mode, reranking returns an explicit error.
 
+### Grouped search
+
+Use `GROUP BY` when the user wants the top matches grouped by a payload field instead of one flat ranked list.
+
+Use `GROUP_SIZE` to cap how many hits each group returns.
+
+Do not combine `GROUP BY` with `RERANK`.
+
 ### Point lookup
 
 Use `SELECT` when the user already knows the exact point ID and wants the stored payload back.
@@ -229,7 +243,6 @@ Examples of current gaps:
 - MMR or diversity controls
 - score boosting
 - relevance feedback
-- update or upsert by explicit id (you can overwrite with `INSERT` + explicit `id`)
 - collection-level HNSW tuning
 - custom distance metrics or vector sizes in `CREATE COLLECTION`
 

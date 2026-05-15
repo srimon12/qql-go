@@ -12,7 +12,7 @@ Use `qql-go` when you need repeatable commands, stable JSON output, version-cont
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go 1.24+](https://img.shields.io/badge/Go-1.24%2B-00ADD8.svg)](https://go.dev/)
-[![Version](https://img.shields.io/badge/Version-0.1.4-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/Version-0.1.5-blue.svg)](VERSION)
 [![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/srimon12/qql-go/releases)
 
 ## What qql-go supports
@@ -23,8 +23,10 @@ Use `qql-go` when you need repeatable commands, stable JSON output, version-cont
 - collection quantization
 - payload index creation
 - document insertion
+- vector and payload update
 - point retrieval and scroll pagination
 - dense, sparse, and hybrid retrieval
+- grouped retrieval
 - recommendation by example IDs
 - rerank retrieval
 - explain plans
@@ -102,7 +104,7 @@ curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | s
 Install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | VERSION=v0.1.4 sh
+curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | VERSION=v0.1.5 sh
 ```
 
 The Unix installer defaults to `~/.local/bin/qql-go`. Override with `INSTALL_DIR=/your/bin/path` when needed.
@@ -182,9 +184,11 @@ qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID"
 qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID FUSION 'dbsf'"
 qql-go exec "SEARCH docs SIMILAR TO 'bm25 keyword' LIMIT 5 USING SPARSE"
 qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID RERANK"
+qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID GROUP BY topic GROUP_SIZE 2"
 qql-go exec "SHOW COLLECTION docs"
 qql-go exec "SELECT * FROM docs WHERE id = 'pt-1'"
 qql-go exec "SCROLL FROM docs LIMIT 10"
+qql-go exec "UPDATE docs SET PAYLOAD WHERE id = 'pt-1' {'topic': 'retrieval'}"
 ```
 
 Start the interactive shell:
@@ -486,7 +490,7 @@ Config is stored at:
 - [CONTRIBUTING.md](CONTRIBUTING.md) for contributors
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for maintainers and release workflow details
 - [CHANGELOG.md](CHANGELOG.md) for user-facing changes
-- [docs/releases/0.1.4.md](docs/releases/0.1.4.md) for the current release note
+- [docs/releases/0.1.5.md](docs/releases/0.1.5.md) for the current release note
 
 ## Project Layout
 

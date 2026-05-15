@@ -41,7 +41,7 @@ const (
 	defaultInferenceMode    = "cloud"
 )
 
-var Version = "0.1.4"
+var Version = "0.1.5"
 
 type commandOutputMode struct {
 	json  bool
@@ -61,7 +61,10 @@ type qdrantClient interface {
 	DeleteCollection(context.Context, string) error
 	Upsert(context.Context, *qdrant.UpsertPoints) (*qdrant.UpdateResult, error)
 	Query(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error)
+	QueryGroups(context.Context, *qdrant.QueryPointGroups) ([]*qdrant.PointGroup, error)
 	Delete(context.Context, *qdrant.DeletePoints) (*qdrant.UpdateResult, error)
+	UpdateVectors(context.Context, *qdrant.UpdatePointVectors) (*qdrant.UpdateResult, error)
+	SetPayload(context.Context, *qdrant.SetPayloadPoints) (*qdrant.UpdateResult, error)
 	CreateFieldIndex(context.Context, *qdrant.CreateFieldIndexCollection) (*qdrant.UpdateResult, error)
 	Count(context.Context, *qdrant.CountPoints) (uint64, error)
 	ScrollAndOffset(context.Context, *qdrant.ScrollPoints) ([]*qdrant.RetrievedPoint, *qdrant.PointId, error)
@@ -193,6 +196,10 @@ func (e *Executor) ExecuteResult(query string) (*ExecResponse, error) {
 		return e.doRecommend(n)
 	case *ast.DeleteStmt:
 		return e.doDelete(n)
+	case *ast.UpdateVectorStmt:
+		return e.doUpdateVector(n)
+	case *ast.UpdatePayloadStmt:
+		return e.doUpdatePayload(n)
 	case *ast.CreateIndexStmt:
 		return e.doCreateIndex(n)
 	default:
@@ -322,6 +329,13 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		if n.WithClause != nil && n.WithClause.HnswEf > 0 {
 			plan.WriteString(fmt.Sprintf("Search params: hnsw_ef=%d\n", n.WithClause.HnswEf))
 		}
+		if n.WithClause != nil && n.WithClause.Acorn {
+			plan.WriteString("Search params: acorn=true\n")
+		}
+		if n.GroupBy != "" {
+			plan.WriteString(fmt.Sprintf("Group by: %s\n", n.GroupBy))
+			plan.WriteString(fmt.Sprintf("Group size: %d\n", n.GroupSize))
+		}
 		if n.Rerank {
 			plan.WriteString("Rerank: enabled\n")
 			if n.RerankModel != nil && *n.RerankModel != "" {
@@ -373,6 +387,18 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			plan.WriteString(fmt.Sprintf("Statement: DELETE FROM %s WHERE id = '%v'\n",
 				n.Collection, n.PointID))
 			plan.WriteString("Action: Delete point by ID\n")
+		}
+	case *ast.UpdateVectorStmt:
+		plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET VECTOR WHERE id = '%v'\n", n.Collection, n.PointID))
+		plan.WriteString(fmt.Sprintf("Vector length: %d\n", len(n.Vector)))
+		plan.WriteString("Action: Update point vector\n")
+	case *ast.UpdatePayloadStmt:
+		if n.QueryFilter != nil {
+			plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET PAYLOAD WHERE %s\n", n.Collection, e.filterToString(n.QueryFilter)))
+			plan.WriteString("Action: Update payload for points matching filter\n")
+		} else {
+			plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET PAYLOAD WHERE id = '%v'\n", n.Collection, n.PointID))
+			plan.WriteString("Action: Update payload for point by ID\n")
 		}
 	case *ast.CreateIndexStmt:
 		plan.WriteString(fmt.Sprintf("Statement: CREATE INDEX ON COLLECTION %s FOR %s", n.Collection, n.Field))
@@ -1083,13 +1109,36 @@ func (e *Executor) doSearch(n *ast.SearchStmt) (*ExecResponse, error) {
 		return nil, err
 	}
 
+	var filter *qdrant.Filter
 	if n.QueryFilter != nil {
-		filter, err := filters.NewFilterConverter().BuildFilter(n.QueryFilter)
+		filter, err = filters.NewFilterConverter().BuildFilter(n.QueryFilter)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build filter: %w", err)
 		}
-		searchReq.Filter = filter
 	}
+
+	if n.GroupBy != "" {
+		groupReq := buildGroupSearchRequest(n, searchReq, filter)
+		results, err := e.client.QueryGroups(ctx, groupReq)
+		if err != nil {
+			return nil, fmt.Errorf("grouped search failed: %w", err)
+		}
+		message, groups := formatGroupSearchResults(n.GroupBy, n.Hybrid, n.SparseOnly, results)
+		return &ExecResponse{
+			OK:        true,
+			Operation: "search",
+			Message:   message,
+			Data: map[string]any{
+				"count":      len(groups),
+				"groups":     groups,
+				"collection": n.Collection,
+				"group_by":   n.GroupBy,
+				"hybrid":     n.Hybrid,
+			},
+		}, nil
+	}
+
+	searchReq.Filter = filter
 
 	results, err := e.client.Query(ctx, searchReq)
 	if err != nil {
@@ -1242,6 +1291,70 @@ func (e *Executor) doDelete(n *ast.DeleteStmt) (*ExecResponse, error) {
 		Data: map[string]any{
 			"collection": n.Collection,
 			"point_id":   n.PointID,
+		},
+	}, nil
+}
+
+func (e *Executor) doUpdateVector(n *ast.UpdateVectorStmt) (*ExecResponse, error) {
+	ctx := context.Background()
+
+	exists, err := e.client.CollectionExists(ctx, n.Collection)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check collection: %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("collection '%s' does not exist", n.Collection)
+	}
+
+	request, err := e.buildUpdateVectorRequest(ctx, n)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := e.client.UpdateVectors(ctx, request); err != nil {
+		return nil, fmt.Errorf("failed to update vector: %w", err)
+	}
+
+	return &ExecResponse{
+		OK:        true,
+		Operation: "update_vector",
+		Message:   fmt.Sprintf("Updated vector for point [%v] in '%s'", n.PointID, n.Collection),
+		Data: map[string]any{
+			"collection": n.Collection,
+			"point_id":   n.PointID,
+		},
+	}, nil
+}
+
+func (e *Executor) doUpdatePayload(n *ast.UpdatePayloadStmt) (*ExecResponse, error) {
+	ctx := context.Background()
+
+	exists, err := e.client.CollectionExists(ctx, n.Collection)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check collection: %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("collection '%s' does not exist", n.Collection)
+	}
+
+	request, err := buildUpdatePayloadRequest(n)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := e.client.SetPayload(ctx, request); err != nil {
+		return nil, fmt.Errorf("failed to update payload: %w", err)
+	}
+
+	message := fmt.Sprintf("Payload updated for point [%v] in '%s'", n.PointID, n.Collection)
+	if n.QueryFilter != nil {
+		message = fmt.Sprintf("Payload updated in '%s' (filter-based)", n.Collection)
+	}
+
+	return &ExecResponse{
+		OK:        true,
+		Operation: "update_payload",
+		Message:   message,
+		Data: map[string]any{
+			"collection": n.Collection,
 		},
 	}, nil
 }
@@ -1605,6 +1718,52 @@ func (e *Executor) buildSearchPrefetches(ctx context.Context, queryText, denseMo
 	}, nil
 }
 
+func buildGroupSearchRequest(n *ast.SearchStmt, req *qdrant.QueryPoints, filter *qdrant.Filter) *qdrant.QueryPointGroups {
+	groupSize := uint64(n.GroupSize)
+	if groupSize == 0 {
+		groupSize = 3
+	}
+
+	return &qdrant.QueryPointGroups{
+		CollectionName: req.GetCollectionName(),
+		Prefetch:       req.GetPrefetch(),
+		Query:          req.GetQuery(),
+		Using:          req.Using,
+		Filter:         filter,
+		Params:         req.GetParams(),
+		Limit:          req.Limit,
+		GroupSize:      qdrant.PtrOf(groupSize),
+		GroupBy:        n.GroupBy,
+		WithPayload:    qdrant.NewWithPayload(true),
+	}
+}
+
+func (e *Executor) buildUpdateVectorRequest(ctx context.Context, n *ast.UpdateVectorStmt) (*qdrant.UpdatePointVectors, error) {
+	info, err := e.client.GetCollectionInfo(ctx, n.Collection)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect collection: %w", err)
+	}
+
+	wait := true
+	vectors := qdrant.NewVectors(n.Vector...)
+	if info.GetConfig().GetParams().GetVectorsConfig().GetParamsMap() != nil {
+		vectors = qdrant.NewVectorsMap(map[string]*qdrant.Vector{
+			denseVectorName: qdrant.NewVectorDense(n.Vector),
+		})
+	}
+
+	return &qdrant.UpdatePointVectors{
+		CollectionName: n.Collection,
+		Wait:           &wait,
+		Points: []*qdrant.PointVectors{
+			{
+				Id:      newPointID(n.PointID),
+				Vectors: vectors,
+			},
+		},
+	}, nil
+}
+
 func searchParamsFromWithClause(withClause *ast.SearchWith) *qdrant.SearchParams {
 	if withClause == nil {
 		return nil
@@ -1865,6 +2024,27 @@ func buildDeleteRequest(n *ast.DeleteStmt) (*qdrant.DeletePoints, error) {
 	}, nil
 }
 
+func buildUpdatePayloadRequest(n *ast.UpdatePayloadStmt) (*qdrant.SetPayloadPoints, error) {
+	wait := true
+	request := &qdrant.SetPayloadPoints{
+		CollectionName: n.Collection,
+		Payload:        qdrant.NewValueMap(n.Payload),
+		Wait:           &wait,
+	}
+
+	if n.QueryFilter != nil {
+		filter, err := filters.NewFilterConverter().BuildFilter(n.QueryFilter)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build update payload filter: %w", err)
+		}
+		request.PointsSelector = qdrant.NewPointsSelectorFilter(filter)
+		return request, nil
+	}
+
+	request.PointsSelector = qdrant.NewPointsSelector(newPointID(n.PointID))
+	return request, nil
+}
+
 func (e *Executor) collectionHasRerankVector(ctx context.Context, collection string) (bool, error) {
 	info, err := e.client.GetCollectionInfo(ctx, collection)
 	if err != nil {
@@ -2089,6 +2269,50 @@ func (e *Executor) formatSearchResults(results []*qdrant.ScoredPoint) (string, [
 	return fmt.Sprintf("Found %d result(s):\n%s", len(results), strings.Join(resultLines, "\n")), hits
 }
 
+func formatGroupSearchResults(groupBy string, hybrid, sparseOnly bool, groups []*qdrant.PointGroup) (string, []GroupedSearchResult) {
+	if len(groups) == 0 {
+		return fmt.Sprintf("Found 0 group(s) by '%s' (grouped)", groupBy), []GroupedSearchResult{}
+	}
+
+	label := "grouped"
+	if hybrid {
+		label = "hybrid, grouped"
+	} else if sparseOnly {
+		label = "sparse, grouped"
+	}
+
+	lines := make([]string, 0, len(groups))
+	formatted := make([]GroupedSearchResult, 0, len(groups))
+	for _, group := range groups {
+		groupID := groupIDString(group.GetId())
+		if groupID == "" {
+			groupID = fmt.Sprintf("%v", group.GetId())
+		}
+		lines = append(lines, fmt.Sprintf("group:%s hits:%d", groupID, len(group.GetHits())))
+
+		hits := make([]SearchHit, 0, len(group.GetHits()))
+		for _, hit := range group.GetHits() {
+			jsonID := pointIDString(hit.GetId())
+			text := ""
+			if payload := hit.GetPayload(); payload != nil {
+				if value, ok := payload["text"]; ok {
+					if sv, ok := value.GetKind().(*qdrant.Value_StringValue); ok {
+						text = sv.StringValue
+					}
+				}
+			}
+			hits = append(hits, SearchHit{
+				ID:    jsonID,
+				Score: hit.GetScore(),
+				Text:  text,
+			})
+		}
+		formatted = append(formatted, GroupedSearchResult{GroupID: groupID, Hits: hits})
+	}
+
+	return fmt.Sprintf("Found %d group(s) by '%s' (%s)\n%s", len(groups), groupBy, label, strings.Join(lines, "\n")), formatted
+}
+
 func parseUint64(s string) (uint64, error) {
 	var n uint64
 	for _, c := range s {
@@ -2111,6 +2335,22 @@ func pointIDString(id *qdrant.PointId) string {
 		return strconv.FormatUint(num, 10)
 	}
 	return fmt.Sprintf("%v", id)
+}
+
+func groupIDString(id *qdrant.GroupId) string {
+	if id == nil {
+		return ""
+	}
+	if value := id.GetStringValue(); value != "" {
+		return value
+	}
+	if value := id.GetUnsignedValue(); value != 0 {
+		return strconv.FormatUint(value, 10)
+	}
+	if value := id.GetIntegerValue(); value != 0 {
+		return strconv.FormatInt(value, 10)
+	}
+	return ""
 }
 
 func readOutputMode(cmd *cobra.Command) commandOutputMode {

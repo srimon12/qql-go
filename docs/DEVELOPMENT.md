@@ -190,7 +190,7 @@ Changelog entries live in:
 
 - [CHANGELOG.md](../CHANGELOG.md)
 
-When preparing a release, update all three together.
+When preparing a release, update all four together.
 
 ## CI
 

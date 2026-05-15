@@ -77,6 +77,8 @@ type SearchStmt struct {
 	Rerank      bool
 	RerankModel *string
 	WithClause  *SearchWith
+	GroupBy     string
+	GroupSize   int
 }
 
 type RecommendStmt struct {
@@ -101,6 +103,19 @@ type DeleteStmt struct {
 	Value      interface{}
 }
 
+type UpdateVectorStmt struct {
+	Collection string
+	PointID    interface{}
+	Vector     []float32
+}
+
+type UpdatePayloadStmt struct {
+	Collection  string
+	PointID     interface{}
+	QueryFilter FilterExpr
+	Payload     map[string]interface{}
+}
+
 type CreateIndexStmt struct {
 	Collection string
 	Field      string
@@ -116,10 +131,12 @@ func (InsertBulkStmt) isASTNode()       {}
 func (CreateCollectionStmt) isASTNode() {}
 func (DropCollectionStmt) isASTNode()   {}
 func (ShowCollectionsStmt) isASTNode()  {}
-func (ShowCollectionStmt) isASTNode()  {}
+func (ShowCollectionStmt) isASTNode()   {}
 func (SelectStmt) isASTNode()           {}
 func (ScrollStmt) isASTNode()           {}
 func (SearchStmt) isASTNode()           {}
 func (RecommendStmt) isASTNode()        {}
 func (DeleteStmt) isASTNode()           {}
+func (UpdateVectorStmt) isASTNode()     {}
+func (UpdatePayloadStmt) isASTNode()    {}
 func (CreateIndexStmt) isASTNode()      {}

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 REPO_LOCAL_QQL_BIN = REPO_ROOT / ("qql-go.exe" if os.name == "nt" else "qql-go")
 
 

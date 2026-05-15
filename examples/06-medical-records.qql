@@ -41,5 +41,6 @@ INSERT BULK INTO COLLECTION medical_records_demo VALUES [
 SEARCH medical_records_demo SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 USING HYBRID
 SEARCH medical_records_demo SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 USING SPARSE
 SEARCH medical_records_demo SIMILAR TO 'cardiac emergency chest pain' LIMIT 3 USING HYBRID WHERE priority = 'high' AND status = 'admitted'
+SEARCH medical_records_demo SIMILAR TO 'acute neurological emergency' LIMIT 3 USING HYBRID GROUP BY specialty GROUP_SIZE 2
 RECOMMEND FROM medical_records_demo POSITIVE IDS (601) LIMIT 3
 SHOW COLLECTION medical_records_demo

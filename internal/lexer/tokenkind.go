@@ -40,11 +40,18 @@ const (
 	TokenKindSimilar
 	TokenKindTo
 	TokenKindLimit
+	TokenKindGroup
+	TokenKindBy
+	TokenKindGroupSize
 	TokenKindPositive
 	TokenKindNegative
 	TokenKindIds
 	TokenKindStrategy
 	TokenKindDelete
+	TokenKindUpdate
+	TokenKindSet
+	TokenKindVector
+	TokenKindPayload
 	TokenKindFrom
 	TokenKindWhere
 	TokenKindId
@@ -126,11 +133,18 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindSimilar:     "SIMILAR",
 	TokenKindTo:          "TO",
 	TokenKindLimit:       "LIMIT",
+	TokenKindGroup:       "GROUP",
+	TokenKindBy:          "BY",
+	TokenKindGroupSize:   "GROUP_SIZE",
 	TokenKindPositive:    "POSITIVE",
 	TokenKindNegative:    "NEGATIVE",
 	TokenKindIds:         "IDS",
 	TokenKindStrategy:    "STRATEGY",
 	TokenKindDelete:      "DELETE",
+	TokenKindUpdate:      "UPDATE",
+	TokenKindSet:         "SET",
+	TokenKindVector:      "VECTOR",
+	TokenKindPayload:     "PAYLOAD",
 	TokenKindFrom:        "FROM",
 	TokenKindWhere:       "WHERE",
 	TokenKindId:          "ID",
