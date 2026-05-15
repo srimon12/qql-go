@@ -9,10 +9,10 @@ COLLECTION = "medical_records_demo"
 
 
 BASE_STATEMENTS = [
-    # Create a HYBRID collection with scalar quantization for the medical showcase.
+    # Create a HYBRID collection with payload-aware HNSW and scalar quantization.
     (
         "create-collection",
-        f"CREATE COLLECTION {COLLECTION} HYBRID QUANTIZE SCALAR QUANTILE 0.99 ALWAYS RAM",
+        f"CREATE COLLECTION {COLLECTION} HYBRID HNSW {{ payload_m: 16 }} QUANTIZE SCALAR QUANTILE 0.99 ALWAYS RAM",
     ),
     # Create payload indexes for filtering
     (
@@ -21,7 +21,7 @@ BASE_STATEMENTS = [
     ),
     (
         "index-patient",
-        f"CREATE INDEX ON COLLECTION {COLLECTION} FOR patient_id TYPE keyword",
+        f"CREATE INDEX ON COLLECTION {COLLECTION} FOR patient_id TYPE keyword WITH {{ is_tenant: true, on_disk: true }}",
     ),
     (
         "index-priority",
@@ -29,7 +29,7 @@ BASE_STATEMENTS = [
     ),
     (
         "index-diagnosis",
-        f"CREATE INDEX ON COLLECTION {COLLECTION} FOR diagnosis TYPE keyword",
+        f"CREATE INDEX ON COLLECTION {COLLECTION} FOR diagnosis TYPE text WITH {{ tokenizer: 'word', min_token_len: 2, max_token_len: 20, lowercase: true, phrase_matching: true }}",
     ),
     (
         "index-status",
@@ -125,6 +125,10 @@ BASE_STATEMENTS = [
         "search-exact",
         f"SEARCH {COLLECTION} SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 EXACT",
     ),
+    (
+        "search-dense-mmr",
+        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency triage' LIMIT 3 WITH {{ mmr_diversity: 0.5, mmr_candidates: 20 }}",
+    ),
     # HYBRID with specialty filter
     (
         "search-neurology",
@@ -148,6 +152,10 @@ BASE_STATEMENTS = [
     (
         "group-by-specialty",
         f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency' LIMIT 3 USING HYBRID GROUP BY specialty GROUP_SIZE 2",
+    ),
+    (
+        "grouped-dense-mmr",
+        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency' LIMIT 3 WITH {{ mmr_diversity: 0.35, mmr_candidates: 20 }} GROUP BY specialty GROUP_SIZE 2",
     ),
     (
         "group-by-priority-with-params",

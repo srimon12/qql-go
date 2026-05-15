@@ -178,6 +178,7 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 	rerank := false
 	var model *string
 	var quantization *ast.QuantizationConfig
+	var payloadM *uint64
 	if p.peek().Kind == lexer.TokenKindHybrid {
 		p.advance()
 		hybrid = true
@@ -206,13 +207,32 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 			}
 		}
 	}
-	if p.peek().Kind == lexer.TokenKindQuantize {
+	seenQuantize := false
+	seenHnsw := false
+	for p.peek().Kind == lexer.TokenKindQuantize || p.peek().Kind == lexer.TokenKindHnsw {
+		if p.peek().Kind == lexer.TokenKindQuantize {
+			if seenQuantize {
+				return nil, errors.NewQQLSyntaxError("QUANTIZE clause may only appear once", p.peek().Pos)
+			}
+			p.advance()
+			var err error
+			quantization, err = p.parseQuantizeClause()
+			if err != nil {
+				return nil, err
+			}
+			seenQuantize = true
+			continue
+		}
+		if seenHnsw {
+			return nil, errors.NewQQLSyntaxError("HNSW clause may only appear once", p.peek().Pos)
+		}
 		p.advance()
-		var err error
-		quantization, err = p.parseQuantizeClause()
+		value, err := p.parseCollectionHnswClause()
 		if err != nil {
 			return nil, err
 		}
+		payloadM = &value
+		seenHnsw = true
 	}
 	return &ast.CreateCollectionStmt{
 		Collection:   collection,
@@ -220,7 +240,32 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 		Rerank:       rerank,
 		Model:        model,
 		Quantization: quantization,
+		PayloadM:     payloadM,
 	}, nil
+}
+
+func (p *Parser) parseCollectionHnswClause() (uint64, error) {
+	config, err := p.parseDict()
+	if err != nil {
+		return 0, err
+	}
+	if len(config) == 0 {
+		return 0, errors.NewQQLSyntaxError("HNSW clause requires payload_m", p.peek().Pos)
+	}
+	for key := range config {
+		if toLower(key) != "payload_m" {
+			return 0, errors.NewQQLSyntaxError("Unknown HNSW parameter '"+key+"'. Expected: payload_m", p.peek().Pos)
+		}
+	}
+	rawValue, ok := config["payload_m"]
+	if !ok {
+		return 0, errors.NewQQLSyntaxError("HNSW clause requires payload_m", p.peek().Pos)
+	}
+	value, ok := rawValue.(int)
+	if !ok || value <= 0 {
+		return 0, errors.NewQQLSyntaxError("payload_m must be a positive integer", p.peek().Pos)
+	}
+	return uint64(value), nil
 }
 
 func (p *Parser) parseQuantizeClause() (*ast.QuantizationConfig, error) {
@@ -344,10 +389,20 @@ func (p *Parser) parseCreateIndex() (*ast.CreateIndexStmt, error) {
 		}
 		fieldType = toLower(typeTok.Value)
 	}
+	var options map[string]interface{}
+	if p.peek().Kind == lexer.TokenKindWith {
+		p.advance()
+		dict, err := p.parseDict()
+		if err != nil {
+			return nil, err
+		}
+		options = dict
+	}
 	return &ast.CreateIndexStmt{
 		Collection: collection,
 		Field:      field,
 		FieldType:  fieldType,
+		Options:    options,
 	}, nil
 }
 
@@ -1293,6 +1348,8 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 	acorn := false
 	indexedOnly := false
 	var quantization *ast.QuantizationSearchWith
+	var mmrDiversity *float64
+	var mmrCandidates *int
 	var err error
 	for p.peek().Kind != lexer.TokenKindRbrace {
 		keyTok := p.peek()
@@ -1334,8 +1391,39 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 			if err != nil {
 				return nil, err
 			}
+		case "mmr_diversity":
+			value, err := p.parseNumber()
+			if err != nil {
+				return nil, err
+			}
+			var diversity float64
+			switch typed := value.(type) {
+			case int:
+				diversity = float64(typed)
+			case float64:
+				diversity = typed
+			default:
+				return nil, errors.NewQQLSyntaxError("mmr_diversity must be numeric", keyTok.Pos)
+			}
+			if diversity < 0 || diversity > 1 {
+				return nil, errors.NewQQLSyntaxError("mmr_diversity must be between 0 and 1, got '"+fmt.Sprintf("%v", diversity)+"'", keyTok.Pos)
+			}
+			mmrDiversity = &diversity
+		case "mmr_candidates":
+			intTok, err := p.expect(lexer.TokenKindInteger)
+			if err != nil {
+				return nil, err
+			}
+			candidates, err := parseIntToken(intTok)
+			if err != nil {
+				return nil, err
+			}
+			if candidates <= 0 {
+				return nil, errors.NewQQLSyntaxError("mmr_candidates must be a positive integer, got '"+intTok.Value+"'", intTok.Pos)
+			}
+			mmrCandidates = &candidates
 		default:
-			return nil, errors.NewQQLSyntaxError("Unknown WITH parameter '"+key+"'. Expected: hnsw_ef, exact, acorn, indexed_only, quantization", keyTok.Pos)
+			return nil, errors.NewQQLSyntaxError("Unknown WITH parameter '"+key+"'. Expected: hnsw_ef, exact, acorn, indexed_only, quantization, mmr_diversity, mmr_candidates", keyTok.Pos)
 		}
 		if p.peek().Kind == lexer.TokenKindComma {
 			p.advance()
@@ -1350,11 +1438,13 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 		return nil, err
 	}
 	return &ast.SearchWith{
-		HnswEf:       hnswEf,
-		Exact:        exact,
-		Acorn:        acorn,
-		IndexedOnly:  indexedOnly,
-		Quantization: quantization,
+		HnswEf:        hnswEf,
+		Exact:         exact,
+		Acorn:         acorn,
+		IndexedOnly:   indexedOnly,
+		Quantization:  quantization,
+		MmrDiversity:  mmrDiversity,
+		MmrCandidates: mmrCandidates,
 	}, nil
 }
 
@@ -1630,6 +1720,12 @@ func mergeSearchWith(dst **ast.SearchWith, src *ast.SearchWith) {
 	}
 	if src.Quantization != nil {
 		current.Quantization = src.Quantization
+	}
+	if src.MmrDiversity != nil {
+		current.MmrDiversity = src.MmrDiversity
+	}
+	if src.MmrCandidates != nil {
+		current.MmrCandidates = src.MmrCandidates
 	}
 }
 

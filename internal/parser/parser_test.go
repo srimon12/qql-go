@@ -176,6 +176,14 @@ func TestParseCreate(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:  "create with payload hnsw",
+			input: "CREATE COLLECTION mycollection HNSW {payload_m: 16}",
+			want: &ast.CreateCollectionStmt{
+				Collection: "mycollection",
+				PayloadM:   uint64Ptr(16),
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -207,6 +215,7 @@ func TestParseCreate(t *testing.T) {
 					assert.Nil(t, stmt.Quantization.Quantile)
 				}
 			}
+			assert.Equal(t, tt.want.PayloadM, stmt.PayloadM)
 		})
 	}
 }
@@ -372,6 +381,35 @@ func TestParseCreateIndex(t *testing.T) {
 				FieldType:  "bool",
 			},
 		},
+		{
+			name:  "create index with keyword options",
+			input: "CREATE INDEX ON COLLECTION mycollection FOR tenant_id TYPE keyword WITH {is_tenant: true, on_disk: true, enable_hnsw: false}",
+			want: &ast.CreateIndexStmt{
+				Collection: "mycollection",
+				Field:      "tenant_id",
+				FieldType:  "keyword",
+				Options: map[string]interface{}{
+					"is_tenant":   true,
+					"on_disk":     true,
+					"enable_hnsw": false,
+				},
+			},
+		},
+		{
+			name:  "create index with text options",
+			input: "CREATE INDEX ON COLLECTION mycollection FOR title TYPE text WITH {tokenizer: 'word', min_token_len: 2, max_token_len: 20, lowercase: true}",
+			want: &ast.CreateIndexStmt{
+				Collection: "mycollection",
+				Field:      "title",
+				FieldType:  "text",
+				Options: map[string]interface{}{
+					"tokenizer":     "word",
+					"min_token_len": 2,
+					"max_token_len": 20,
+					"lowercase":     true,
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -393,6 +431,7 @@ func TestParseCreateIndex(t *testing.T) {
 			assert.Equal(t, tt.want.Collection, stmt.Collection)
 			assert.Equal(t, tt.want.Field, stmt.Field)
 			assert.Equal(t, tt.want.FieldType, stmt.FieldType)
+			assert.Equal(t, tt.want.Options, stmt.Options)
 		})
 	}
 }
@@ -536,6 +575,19 @@ func TestParseSearch(t *testing.T) {
 						Rescore:      boolPtr(false),
 						Oversampling: float64Ptr(2),
 					},
+				},
+			},
+		},
+		{
+			name:  "search with mmr params",
+			input: "SEARCH mycollection SIMILAR TO 'query text' LIMIT 10 WITH {mmr_diversity: 0.5, mmr_candidates: 50}",
+			want: &ast.SearchStmt{
+				Collection: "mycollection",
+				QueryText:  "query text",
+				Limit:      10,
+				WithClause: &ast.SearchWith{
+					MmrDiversity:  float64Ptr(0.5),
+					MmrCandidates: intPtr(50),
 				},
 			},
 		},
@@ -729,6 +781,8 @@ func TestParseSearch(t *testing.T) {
 				assert.Equal(t, tt.want.WithClause.Acorn, stmt.WithClause.Acorn)
 				assert.Equal(t, tt.want.WithClause.IndexedOnly, stmt.WithClause.IndexedOnly)
 				assert.Equal(t, tt.want.WithClause.Quantization, stmt.WithClause.Quantization)
+				assert.Equal(t, tt.want.WithClause.MmrDiversity, stmt.WithClause.MmrDiversity)
+				assert.Equal(t, tt.want.WithClause.MmrCandidates, stmt.WithClause.MmrCandidates)
 			}
 			if tt.want.QueryFilter != nil {
 				require.NotNil(t, stmt.QueryFilter)
@@ -1635,6 +1689,14 @@ func float64Ptr(f float64) *float64 {
 
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+func intPtr(v int) *int {
+	return &v
+}
+
+func uint64Ptr(v uint64) *uint64 {
+	return &v
 }
 
 func assertFilterExprEqual(t *testing.T, expected, actual ast.FilterExpr) {

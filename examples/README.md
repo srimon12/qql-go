@@ -25,9 +25,9 @@ Some examples use text `INSERT` and `SEARCH ... SIMILAR TO ...`, so they need ei
 
 | File | What it demonstrates | Run it with |
 |---|---|---|
-| `01-bootstrap-docs.qql` | Create a hybrid collection, add payload indexes, bulk-insert seed documents, inspect schema | `qql-go execute examples/01-bootstrap-docs.qql` |
+| `01-bootstrap-docs.qql` | Create a hybrid collection with payload-aware HNSW, add tenant-aware and text payload indexes, bulk-insert seed documents, inspect schema | `qql-go execute examples/01-bootstrap-docs.qql` |
 | `02-ci-smoke-test.qql` | Disposable end-to-end smoke test for create, insert, search, recommend, delete, update, and drop | `qql-go execute --quiet --json examples/02-ci-smoke-test.qql` |
-| `03-retrieval-debugging.qql` | Compare dense, hybrid, sparse, exact, filtered, and ACORN-assisted retrieval flows | `qql-go execute examples/03-retrieval-debugging.qql` |
+| `03-retrieval-debugging.qql` | Compare dense, dense+MMR, hybrid, sparse, exact, filtered, and ACORN-assisted retrieval flows | `qql-go execute examples/03-retrieval-debugging.qql` |
 | `04-support-diagnostics.qql` | Show collection health, exact point lookup, filtered scroll, and incident recommendations | `qql-go execute examples/04-support-diagnostics.qql` |
 | `05-retention-cleanup.qql` | Review archived data, delete by filter, and verify retention cleanup | `qql-go execute examples/05-retention-cleanup.qql` |
 | `06-medical-records.qql` | Real-world healthcare search demo with hybrid retrieval and metadata filters | `qql-go execute examples/06-medical-records.qql` |
@@ -48,7 +48,7 @@ qql-go dump --quiet --json docs docs-backup.qql
 
 - Bootstrap a collection and seed example data: `01-bootstrap-docs.qql`
 - Prove a cluster is healthy in CI: `02-ci-smoke-test.qql`
-- Debug why retrieval quality changed: `03-retrieval-debugging.qql`
+- Debug why retrieval quality changed, including diversity tuning: `03-retrieval-debugging.qql`
 - Hand a support engineer a reproducible inspection flow: `04-support-diagnostics.qql`
 - Automate retention cleanup and post-delete checks: `05-retention-cleanup.qql`
 - Demo a real vertical use case instead of synthetic lorem ipsum: `06-medical-records.qql`

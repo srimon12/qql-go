@@ -61,6 +61,16 @@ EXAMPLES = [
         "requires_index": [],
     },
     {
+        "mode": "dense-mmr",
+        "when": "Use when dense search results are too redundant and you want semantic diversity in the top-k.",
+        "query": (
+            "SEARCH articles SIMILAR TO 'vector database performance tuning' "
+            "LIMIT 10 WITH { mmr_diversity: 0.5, mmr_candidates: 25 }"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
         "mode": "with-filter",
         "when": "Use when metadata constraints should narrow the search. Requires CREATE INDEX first.",
         "setup": [
@@ -83,6 +93,29 @@ EXAMPLES = [
             "CREATE INDEX ON COLLECTION incidents FOR team TYPE keyword",
         ],
         "requires_index": ["team"],
+    },
+    {
+        "mode": "tenant-aware-indexing",
+        "when": "Use when a filter field acts like a tenant boundary and Qdrant should optimize for that grouping.",
+        "query": (
+            "SEARCH tenant_docs SIMILAR TO 'stroke discharge summary' "
+            "LIMIT 5 WHERE tenant_id = 'tenant-a'"
+        ),
+        "setup": [
+            "CREATE COLLECTION tenant_docs HYBRID HNSW { payload_m: 16 }",
+            "CREATE INDEX ON COLLECTION tenant_docs FOR tenant_id TYPE keyword WITH { is_tenant: true, on_disk: true }",
+        ],
+        "requires_index": ["tenant_id"],
+    },
+    {
+        "mode": "text-index-tuning",
+        "when": "Use when a text payload field needs explicit tokenization controls before phrase or keyword-heavy filtering.",
+        "query": (
+            "CREATE INDEX ON COLLECTION tenant_docs FOR title TYPE text "
+            "WITH { tokenizer: 'word', min_token_len: 2, max_token_len: 20, lowercase: true, phrase_matching: true }"
+        ),
+        "setup": [],
+        "requires_index": [],
     },
     {
         "mode": "grouped",

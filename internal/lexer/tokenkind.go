@@ -26,6 +26,7 @@ const (
 	TokenKindQuantile
 	TokenKindAlways
 	TokenKindRam
+	TokenKindHnsw
 	TokenKindCreate
 	TokenKindDrop
 	TokenKindShow
@@ -119,6 +120,7 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindQuantile:    "QUANTILE",
 	TokenKindAlways:      "ALWAYS",
 	TokenKindRam:         "RAM",
+	TokenKindHnsw:        "HNSW",
 	TokenKindCreate:      "CREATE",
 	TokenKindDrop:        "DROP",
 	TokenKindShow:        "SHOW",

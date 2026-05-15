@@ -23,6 +23,7 @@ type CreateCollectionStmt struct {
 	Rerank       bool
 	Model        *string
 	Quantization *QuantizationConfig
+	PayloadM     *uint64
 }
 
 type QuantizationType string
@@ -126,6 +127,7 @@ type CreateIndexStmt struct {
 	Collection string
 	Field      string
 	FieldType  string
+	Options    map[string]interface{}
 }
 
 type ASTNode interface {
