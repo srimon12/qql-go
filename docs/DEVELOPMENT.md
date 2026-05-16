@@ -168,12 +168,11 @@ Generated via the `internal/embedding` package using an OpenAI-compatible `/v1/e
 ### Sparse Vectors
 
 Generated via `internal/sparse` using:
-- Rust-compatible tokenization (Unicode letters/digits/underscore, length >= 2)
+- Rust-compatible tokenization with better preservation of hyphenated domain terms
 - Length-prefixed FNV-1a hash to avoid prefix collisions
-- BM25 weighting with corpus statistics stored in `~/.qql/corpus/<collection>.json`
+- normalized TF weighting for documents
 - Log-TF weighting for queries
-
-Corpus stats are cleaned up on `DROP COLLECTION` and rebuilt if corrupted.
+- Qdrant's sparse `idf` modifier for collection-wide rarity weighting
 
 ## Versioning
 
@@ -262,12 +261,6 @@ Keep skill docs small and point back to [README.md](../README.md) for the canoni
 
 ```bash
 go run ./cmd/qql-go exec --json "SEARCH docs SIMILAR TO 'hello' LIMIT 5"
-```
-
-### Check corpus stats
-
-```bash
-cat ~/.qql/corpus/<collection>.json
 ```
 
 ### Explain without executing

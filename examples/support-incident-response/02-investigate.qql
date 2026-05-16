@@ -1,9 +1,0 @@
-SHOW COLLECTION support_incident_response
-SELECT * FROM support_incident_response WHERE id = 2101
-SCROLL FROM support_incident_response WHERE priority = 'high' LIMIT 10
-SEARCH support_incident_response SIMILAR TO 'billing policy search regression after index removal' LIMIT 3 USING HYBRID
-SEARCH support_incident_response SIMILAR TO 'billing policy search regression after index removal' LIMIT 3 EXACT
-SEARCH support_incident_response SIMILAR TO 'billing policy search regression after index removal' LIMIT 3 USING SPARSE
-RECOMMEND FROM support_incident_response POSITIVE IDS (2104) LIMIT 3
-UPDATE support_incident_response SET PAYLOAD WHERE id = 2104 {'status': 'reviewed', 'owner': 'search-oncall'}
-SELECT * FROM support_incident_response WHERE id = 2104

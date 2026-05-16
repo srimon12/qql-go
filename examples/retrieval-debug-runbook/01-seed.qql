@@ -1,0 +1,250 @@
+CREATE COLLECTION retrieval_debug_runbook HYBRID HNSW { payload_m: 16 }
+CREATE INDEX ON COLLECTION retrieval_debug_runbook FOR team TYPE keyword
+CREATE INDEX ON COLLECTION retrieval_debug_runbook FOR service TYPE keyword
+CREATE INDEX ON COLLECTION retrieval_debug_runbook FOR severity TYPE keyword
+CREATE INDEX ON COLLECTION retrieval_debug_runbook FOR doc_type TYPE keyword
+CREATE INDEX ON COLLECTION retrieval_debug_runbook FOR status TYPE keyword
+CREATE INDEX ON COLLECTION retrieval_debug_runbook FOR title TYPE text WITH { tokenizer: 'word', lowercase: true, phrase_matching: true }
+INSERT BULK INTO COLLECTION retrieval_debug_runbook VALUES [
+  {
+    'id': 4101,
+    'text': 'Customers can request a refund within 30 days of purchase. Annual plans are prorated only during the first billing cycle. Refund requests must include the workspace ID and invoice number.',
+    'title': 'Refund policy for annual and monthly plans',
+    'team': 'billing',
+    'service': 'knowledge-base',
+    'severity': 'medium',
+    'doc_type': 'policy',
+    'status': 'active'
+  },
+  {
+    'id': 4102,
+    'text': 'SAML SSO is available on the enterprise plan. Upload identity provider metadata, map email attributes, and verify the ACS URL before enforcing login.',
+    'title': 'Enterprise SSO setup checklist',
+    'team': 'security',
+    'service': 'knowledge-base',
+    'severity': 'medium',
+    'doc_type': 'runbook',
+    'status': 'active'
+  },
+  {
+    'id': 4103,
+    'text': 'Indexer backlog grew after the embeddings endpoint timed out in the ingestion pipeline. Newly uploaded documents were not searchable for 45 minutes.',
+    'title': 'Ingestion delay after embeddings timeout',
+    'team': 'ingest',
+    'service': 'retrieval-stack',
+    'severity': 'high',
+    'doc_type': 'incident-note',
+    'status': 'investigating'
+  },
+  {
+    'id': 4104,
+    'text': 'Filtered billing policy search stopped returning results after a payload index was removed from the release branch. Hybrid retrieval still found the record but filtered search quality regressed until the billing index was restored.',
+    'title': 'Billing policy retrieval regression after payload index removal',
+    'team': 'billing',
+    'service': 'retrieval-stack',
+    'severity': 'high',
+    'doc_type': 'incident-note',
+    'status': 'open'
+  },
+  {
+    'id': 4105,
+    'text': 'To recover filtered billing search, restore the payload index on team, confirm the collection schema, and rerun the regression query in hybrid, sparse, and exact modes.',
+    'title': 'Runbook to restore billing payload index and recheck search',
+    'team': 'billing',
+    'service': 'retrieval-stack',
+    'severity': 'high',
+    'doc_type': 'runbook',
+    'status': 'active'
+  },
+  {
+    'id': 4106,
+    'text': 'Search API pods restarted after vector cache saturation during a traffic spike. Latency spiked for customer-facing hybrid retrieval requests.',
+    'title': 'Search API pods restarting under cache pressure',
+    'team': 'search-api',
+    'service': 'retrieval-stack',
+    'severity': 'high',
+    'doc_type': 'incident-note',
+    'status': 'open'
+  },
+  {
+    'id': 4107,
+    'text': 'Billing portal invoices can be downloaded by workspace admins from the finance page. Missing invoices are usually caused by stale cache in the portal, not retrieval failures.',
+    'title': 'Invoice download issues in the billing portal',
+    'team': 'billing',
+    'service': 'billing-portal',
+    'severity': 'medium',
+    'doc_type': 'faq',
+    'status': 'active'
+  },
+  {
+    'id': 4108,
+    'text': 'A search quality review found that exact search still returned the right refund document while hybrid search drifted after sparse score normalization changed.',
+    'title': 'Hybrid ranking drift after sparse score normalization change',
+    'team': 'search-ranking',
+    'service': 'retrieval-stack',
+    'severity': 'high',
+    'doc_type': 'incident-note',
+    'status': 'resolved'
+  },
+  {
+    'id': 4109,
+    'text': 'Payload indexes on team, product, and status are required for filtered knowledge-base retrieval. Removing any of them can turn a narrow support query into a noisy result set.',
+    'title': 'Required payload indexes for filtered support search',
+    'team': 'search-platform',
+    'service': 'retrieval-stack',
+    'severity': 'high',
+    'doc_type': 'runbook',
+    'status': 'active'
+  },
+  {
+    'id': 4110,
+    'text': 'Billing policy content was re-chunked into shorter passages during a release. Search recall improved for hybrid queries but exact search became more sensitive to title wording.',
+    'title': 'Billing policy corpus re-chunk after search release',
+    'team': 'content-platform',
+    'service': 'knowledge-base',
+    'severity': 'medium',
+    'doc_type': 'change-note',
+    'status': 'active'
+  },
+  {
+    'id': 4111,
+    'text': 'Region-filtered search returned incomplete results because the region payload field was populated only for new documents. Backfill jobs restored filter coverage later.',
+    'title': 'Region filter mismatch caused partial search results',
+    'team': 'search-platform',
+    'service': 'retrieval-stack',
+    'severity': 'high',
+    'doc_type': 'incident-note',
+    'status': 'resolved'
+  },
+  {
+    'id': 4112,
+    'text': 'Support agents searching for cancellation policy articles often confuse refund policy and cancellation policy because both mention billing cycle and admin approval.',
+    'title': 'Cancellation policy and refund policy confusion in support search',
+    'team': 'billing',
+    'service': 'knowledge-base',
+    'severity': 'medium',
+    'doc_type': 'analysis',
+    'status': 'active'
+  },
+  {
+    'id': 4113,
+    'text': 'A release removed the billing_team payload index from one environment only. Hybrid search still surfaced billing docs, but filtered queries narrowed by team failed badly.',
+    'title': 'Missing billing team index in one environment',
+    'team': 'billing',
+    'service': 'retrieval-stack',
+    'severity': 'high',
+    'doc_type': 'incident-note',
+    'status': 'open'
+  },
+  {
+    'id': 4114,
+    'text': 'When investigating retrieval regressions, compare hybrid, exact, and sparse outputs before changing embeddings. If all three disagree, inspect the representative documents by ID.',
+    'title': 'Runbook for comparing retrieval modes during search incidents',
+    'team': 'search-platform',
+    'service': 'retrieval-stack',
+    'severity': 'high',
+    'doc_type': 'runbook',
+    'status': 'active'
+  },
+  {
+    'id': 4115,
+    'text': 'Search complaints about missing billing docs sometimes trace back to stale article status flags. Archived articles can still be present in the collection if retention cleanup lags.',
+    'title': 'Archived billing documents leaking into retrieval',
+    'team': 'billing',
+    'service': 'knowledge-base',
+    'severity': 'medium',
+    'doc_type': 'incident-note',
+    'status': 'investigating'
+  },
+  {
+    'id': 4116,
+    'text': 'Low-priority dashboard rendering issues in the internal operations UI do not affect search relevance or query routing.',
+    'title': 'Dashboard rendering bug in internal ops UI',
+    'team': 'ops-dashboard',
+    'service': 'internal-tools',
+    'severity': 'low',
+    'doc_type': 'incident-note',
+    'status': 'open'
+  },
+  {
+    'id': 4117,
+    'text': 'The query router sent billing searches to a stale replica that had not yet received the restored payload index. Exact search against the primary looked healthy.',
+    'title': 'Stale replica served billing queries after index restore',
+    'team': 'search-api',
+    'service': 'retrieval-stack',
+    'severity': 'high',
+    'doc_type': 'incident-note',
+    'status': 'resolved'
+  },
+  {
+    'id': 4118,
+    'text': 'Knowledge-base article titles were normalized to sentence case during a content migration. Some exact matches changed order, but hybrid results remained acceptable.',
+    'title': 'Title normalization changed exact ranking for policy articles',
+    'team': 'content-platform',
+    'service': 'knowledge-base',
+    'severity': 'low',
+    'doc_type': 'change-note',
+    'status': 'active'
+  },
+  {
+    'id': 4119,
+    'text': 'A billing refund article and a billing cancellation article shared too much overlapping vocabulary, so sparse search sometimes promoted the wrong one when query wording was short.',
+    'title': 'Sparse billing search favored cancellation over refund article',
+    'team': 'search-ranking',
+    'service': 'retrieval-stack',
+    'severity': 'medium',
+    'doc_type': 'analysis',
+    'status': 'active'
+  },
+  {
+    'id': 4120,
+    'text': 'Restoring payload indexes fixed filtered search but did not improve hybrid latency. Separate caching work was needed for the API pods.',
+    'title': 'Index restore fixed recall but not API latency',
+    'team': 'search-api',
+    'service': 'retrieval-stack',
+    'severity': 'medium',
+    'doc_type': 'postmortem',
+    'status': 'active'
+  },
+  {
+    'id': 4121,
+    'text': 'If a billing support query still fails after index restoration, inspect whether the expected document has the correct team payload and active status before touching embeddings.',
+    'title': 'Check payload and status before changing embeddings',
+    'team': 'billing',
+    'service': 'retrieval-stack',
+    'severity': 'high',
+    'doc_type': 'runbook',
+    'status': 'active'
+  },
+  {
+    'id': 4122,
+    'text': 'Support notes showed that enterprise SSO queries and billing policy queries were both routed through the same hybrid pipeline, but only billing queries used the broken team filter.',
+    'title': 'Broken team filter affected billing queries but not SSO queries',
+    'team': 'search-platform',
+    'service': 'retrieval-stack',
+    'severity': 'medium',
+    'doc_type': 'analysis',
+    'status': 'active'
+  },
+  {
+    'id': 4123,
+    'text': 'A previous release removed the title text index and caused long search phrases to degrade in sparse mode. Re-adding the text index improved lookup for policy and runbook titles.',
+    'title': 'Removing the title text index hurt long support queries',
+    'team': 'search-platform',
+    'service': 'retrieval-stack',
+    'severity': 'high',
+    'doc_type': 'incident-note',
+    'status': 'resolved'
+  },
+  {
+    'id': 4124,
+    'text': 'Bulk backfills for knowledge-base metadata should preserve team and status fields. Missing payloads create the appearance of retrieval regression even when embeddings remain correct.',
+    'title': 'Metadata backfill safeguards for support search',
+    'team': 'content-platform',
+    'service': 'retrieval-stack',
+    'severity': 'medium',
+    'doc_type': 'runbook',
+    'status': 'active'
+  }
+] USING HYBRID
+SHOW COLLECTION retrieval_debug_runbook

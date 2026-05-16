@@ -1,0 +1,80 @@
+{
+  "collection": "release_validation_docs",
+  "collection_expect": {
+    "topology": "hybrid",
+    "min_points": 6,
+    "payload_indexes": [
+      "team",
+      "title"
+    ]
+  },
+  "checks": [
+    {
+      "id": "03-explain-refund",
+      "command": "explain",
+      "statement": "SEARCH release_validation_docs SIMILAR TO 'refund policy' LIMIT 3 USING HYBRID",
+      "expect": {
+        "plan_contains": [
+          "Search: HYBRID"
+        ]
+      }
+    },
+    {
+      "id": "04-hybrid-refund",
+      "command": "exec",
+      "statement": "SEARCH release_validation_docs SIMILAR TO 'refund policy for annual plan' LIMIT 3 USING HYBRID",
+      "expect": {
+        "min_results": 3,
+        "hybrid": true,
+        "top_ids": [
+          "1101"
+        ]
+      }
+    },
+    {
+      "id": "05-exact-refund",
+      "command": "exec",
+      "statement": "SEARCH release_validation_docs SIMILAR TO 'refund policy for annual plan' LIMIT 3 EXACT",
+      "expect": {
+        "min_results": 3,
+        "hybrid": false,
+        "top_ids": [
+          "1101"
+        ]
+      }
+    },
+    {
+      "id": "06-sparse-invoice",
+      "command": "exec",
+      "statement": "SEARCH release_validation_docs SIMILAR TO 'billing portal invoice download' LIMIT 3 USING SPARSE",
+      "expect": {
+        "min_results": 3,
+        "hybrid": false,
+        "top_ids": [
+          "1103"
+        ]
+      }
+    },
+    {
+      "id": "07-filtered-sso",
+      "command": "exec",
+      "statement": "SEARCH release_validation_docs SIMILAR TO 'single sign on setup checklist' LIMIT 3 USING HYBRID WHERE plan = 'enterprise'",
+      "expect": {
+        "min_results": 3,
+        "hybrid": true,
+        "top_ids": [
+          "1201"
+        ]
+      }
+    },
+    {
+      "id": "08-grouped-security",
+      "command": "exec",
+      "statement": "SEARCH release_validation_docs SIMILAR TO 'security compliance and audit logs' LIMIT 3 USING HYBRID GROUP BY team GROUP_SIZE 2",
+      "expect": {
+        "group_by": "team",
+        "first_group": "security"
+      }
+    }
+  ]
+}

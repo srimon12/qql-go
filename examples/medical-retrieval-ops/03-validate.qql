@@ -1,6 +1,0 @@
-SHOW COLLECTION medical_retrieval_ops
-SEARCH medical_retrieval_ops SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 USING HYBRID
-SEARCH medical_retrieval_ops SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 USING SPARSE
-SEARCH medical_retrieval_ops SIMILAR TO 'cardiac emergency chest pain' LIMIT 3 USING HYBRID WHERE priority = 'high' AND status = 'admitted'
-SEARCH medical_retrieval_ops SIMILAR TO 'acute neurological emergency' LIMIT 3 USING HYBRID GROUP BY specialty GROUP_SIZE 2
-RECOMMEND FROM medical_retrieval_ops POSITIVE IDS (3101) LIMIT 3

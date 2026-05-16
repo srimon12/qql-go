@@ -1,6 +1,0 @@
-SHOW COLLECTION release_validation_docs
-SEARCH release_validation_docs SIMILAR TO 'refund policy for annual plan' LIMIT 3 USING HYBRID
-SEARCH release_validation_docs SIMILAR TO 'refund policy for annual plan' LIMIT 3 EXACT
-SEARCH release_validation_docs SIMILAR TO 'billing portal invoice download' LIMIT 3 USING SPARSE
-SEARCH release_validation_docs SIMILAR TO 'single sign on setup checklist' LIMIT 3 USING HYBRID WHERE plan = 'enterprise'
-SEARCH release_validation_docs SIMILAR TO 'security compliance and audit logs' LIMIT 3 USING HYBRID GROUP BY team GROUP_SIZE 2

@@ -1,84 +1,90 @@
 # Examples
 
-`qql-go` needs to be shown through workflows people already recognize.
+These examples are runnable retrieval workflows.
 
-The canonical demos in this folder are now the **demo folders**, not the loose `.qql` files.
+Each one ships as a folder with:
 
-Use the folders when you want an end-to-end showcase with:
-
-- ordered QQL steps
-- a runnable PowerShell driver
-- JSON artifacts you can screenshot, diff, or feed into docs
-- a clear operational narrative instead of a raw syntax sample
+- a Bash runner
+- a PowerShell runner
+- checked-in QQL used by the workflow
+- JSON artifacts you can inspect, diff, or attach to CI
 
 ## Before You Run Them
 
-Connect `qql-go` to a Qdrant instance first:
+Install `qql-go`, then connect it to Qdrant:
 
 ```bash
 qql-go connect --url https://<cluster>.qdrant.io --secret <api-key>
 ```
 
-Or use local/self-hosted Qdrant for management-only flows:
+If you use local or self-hosted Qdrant:
 
 ```bash
-qql-go connect --url http://localhost:6334
+qql-go connect --url http://localhost:6333
 ```
 
-Some examples use text `INSERT` and `SEARCH ... SIMILAR TO ...`, so they need either:
+Examples that use text `INSERT` or `SEARCH ... SIMILAR TO ...` also need embeddings through either:
 
 - Qdrant Cloud inference
-- local/external mode with an OpenAI-compatible embeddings endpoint
+- `local` or `external` inference mode with an OpenAI-compatible embeddings endpoint
 
-## Canonical Demo Folders
+## Start Here
 
-| Folder | Workflow it demonstrates | Run it with (PS / Bash) |
-|---|---|---|
-| `release-validation/` | Release validation for retrieval changes: provision, seed, explain, validate, dump | `examples/release-validation/run-demo.[ps1|sh]` |
-| `support-incident-response/` | Support and incident workflow: inspect, scroll, compare retrieval modes, recommend, update ownership | `examples/support-incident-response/run-demo.[ps1|sh]` |
-| `medical-retrieval-ops/` | Vertical demo: tenant-aware clinical retrieval with grouped and filtered search plus dump | `examples/medical-retrieval-ops/run-demo.[ps1|sh]` |
+### `release-validation/`
 
-These are the examples to showcase publicly.
+Use this when you want retrieval regression checks against an existing collection.
 
-## Single-File Building Blocks
+It runs `SHOW`, `EXPLAIN`, and `SEARCH` checks against the dataset you already have, validates the JSON results, and fits naturally into CI without reseeding the corpus.
 
-| File | What it demonstrates | Run it with |
-|---|---|---|
-| `01-bootstrap-docs.qql` | Create a hybrid collection with payload-aware HNSW, add tenant-aware and text payload indexes, bulk-insert seed documents, inspect schema | `qql-go execute examples/01-bootstrap-docs.qql` |
-| `02-ci-smoke-test.qql` | Disposable end-to-end smoke test for create, insert, search, recommend, delete, update, and drop | `qql-go execute --quiet --json examples/02-ci-smoke-test.qql` |
-| `03-retrieval-debugging.qql` | Compare dense, dense+MMR, hybrid, sparse, exact, filtered, and ACORN-assisted retrieval flows | `qql-go execute examples/03-retrieval-debugging.qql` |
-| `04-support-diagnostics.qql` | Show collection health, exact point lookup, filtered scroll, and incident recommendations | `qql-go execute examples/04-support-diagnostics.qql` |
-| `05-retention-cleanup.qql` | Review archived data, delete by filter, and verify retention cleanup | `qql-go execute examples/05-retention-cleanup.qql` |
-| `06-medical-records.qql` | Real-world healthcare search demo with hybrid retrieval and metadata filters | `qql-go execute examples/06-medical-records.qql` |
-
-Use the single-file scripts when you want a smaller isolated query pattern.
-
-## Why The Folder Demos Matter
-
-- they feel like real ops workflows, not parser tests
-- they generate reusable JSON artifacts
-- they make the standalone binary value obvious
-- they are easier to turn into docs, screenshots, or short demo videos
-
-## Automation Patterns
-
-Use these examples as building blocks for scripts, CI jobs, and agents:
+Run:
 
 ```bash
-qql-go doctor --quiet --json
-qql-go exec --quiet --json "SHOW COLLECTION docs"
-qql-go explain --quiet --json "SEARCH docs SIMILAR TO 'vector database latency' LIMIT 5 USING HYBRID"
-qql-go execute --quiet --json examples/02-ci-smoke-test.qql
-qql-go dump --quiet --json docs docs-backup.qql
+bash examples/release-validation/run-demo.sh
 ```
 
-## Which Demo Matches Which Job
+### `retrieval-debug-runbook/`
 
-- Release validation around retrieval changes: `release-validation/`
-- Support and on-call investigation: `support-incident-response/`
-- A domain-specific, non-toy retrieval showcase: `medical-retrieval-ops/`
-- Smaller isolated syntax patterns: the loose `.qql` files
+Use this when someone says search stopped working and you need to investigate quickly.
+
+It provisions a small runbook corpus, compares hybrid, exact, and sparse retrieval, reruns the issue with filters, inspects the expected document, and saves the artifacts you would want in a support or on-call report.
+
+Run:
+
+```bash
+bash examples/retrieval-debug-runbook/run-demo.sh
+```
+
+### `medical-retrieval-ops/`
+
+Use this when you want a full end-to-end benchmark and showcase.
+
+It downloads the full `ChatMED-Project/RAGCare-QA` dataset from Hugging Face, builds a QQL corpus, loads it into Qdrant, compares dense, sparse, hybrid RRF, hybrid DBSF, and exact retrieval, then writes benchmark results for `hit@1` and `hit@5`.
+
+Run:
+
+```bash
+bash examples/medical-retrieval-ops/run-demo.sh
+```
+
+## Which One To Show First
+
+- `release-validation/` if you want the clearest CI and ops story
+- `retrieval-debug-runbook/` if you want the fastest investigation story
+- `medical-retrieval-ops/` if you want the broadest feature and benchmark story
+
+## What The Artifacts Are For
+
+Each workflow writes JSON artifacts under its own `artifacts/` directory.
+
+Use them to:
+
+- diff retrieval behavior between runs
+- attach evidence to a CI failure
+- inspect explain plans and result IDs
+- feed screenshots, docs, or agent reports
 
 ## Boundaries
 
-These are operational examples, not application architecture templates. Use the Qdrant SDK in app code; use `qql-go` when you want deterministic, reviewable database operations.
+These examples show how to operate and validate retrieval systems around an app.
+
+Use the Qdrant SDK in application code. Use `qql-go` when you want deterministic, reviewable retrieval operations.

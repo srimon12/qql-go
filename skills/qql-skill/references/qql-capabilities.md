@@ -53,7 +53,7 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID FUSION 'rrf|dbsf'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE MODEL '<model>'` (cloud only; local uses client-side BM25)
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE MODEL '<model>'` (cloud only; local uses client-side sparse term weighting with Qdrant `idf`)
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WHERE <filter>`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> GROUP BY <field>`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> GROUP BY <field> GROUP_SIZE <m>`
@@ -187,7 +187,7 @@ Default fusion is `RRF`. Use `FUSION 'dbsf'` only when you want to explicitly sw
 Default sparse model name (for cloud inference):
 - `qdrant/bm25`
 
-In local/external mode, sparse vectors are generated client-side using BM25-style weighting with corpus statistics stored in `~/.qql/corpus/<collection>.json`.
+In local/external mode, sparse vectors are generated client-side and Qdrant applies collection-level `idf` weighting through the sparse vector modifier.
 
 ### Sparse-only
 

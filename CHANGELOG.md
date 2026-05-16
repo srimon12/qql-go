@@ -8,6 +8,25 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 - No unreleased changes yet.
 
+## [0.1.7] - 2026-05-17
+
+### Added
+
+- **Operational example suites** — the repo now ships runnable example folders for retrieval regression CI, retrieval debug runbooks, and a full medical retrieval benchmark workflow.
+- **Medical retrieval benchmark pack** — `examples/medical-retrieval-ops/` now builds a full Hugging Face-backed benchmark corpus, compares dense/sparse/hybrid/exact retrieval modes, and records `hit@1` / `hit@5`.
+
+### Changed
+
+- **Local sparse retrieval baseline** — local and external sparse indexing now use a simpler Qdrant-native sparse weighting path that relies on Qdrant's sparse `idf` modifier instead of repo-managed corpus statistics.
+- **Local sparse tokenization** — hyphenated domain terms such as `B-cell`, `anti-NMDA`, and `CD19-negative` now stay searchable in sparse mode instead of being degraded into missing single-character fragments.
+- README, maintainer docs, bundled skill references, and runnable examples are now aligned around the new sparse baseline and the stronger operational example story.
+
+### Fixed
+
+- Local sparse document generation now uses the actual document-weighted sparse path during insert and bulk insert instead of the deprecated raw-term-frequency builder.
+- The retrieval debug runbook example no longer ships a failing seed statement caused by using `product` as a field name.
+- Release-validation docs and generated medical metadata no longer leak repo-local absolute paths.
+
 ## [0.1.6] - 2026-05-16
 
 ### Added

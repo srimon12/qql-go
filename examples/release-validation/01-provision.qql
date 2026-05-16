@@ -1,8 +1,0 @@
-CREATE COLLECTION release_validation_docs HYBRID HNSW { payload_m: 16 } QUANTIZE TURBO BITS 2 ALWAYS RAM
-CREATE INDEX ON COLLECTION release_validation_docs FOR team TYPE keyword
-CREATE INDEX ON COLLECTION release_validation_docs FOR doc_type TYPE keyword
-CREATE INDEX ON COLLECTION release_validation_docs FOR plan TYPE keyword
-CREATE INDEX ON COLLECTION release_validation_docs FOR status TYPE keyword
-CREATE INDEX ON COLLECTION release_validation_docs FOR year TYPE integer
-CREATE INDEX ON COLLECTION release_validation_docs FOR title TYPE text WITH { tokenizer: 'word', min_token_len: 2, lowercase: true, phrase_matching: true }
-SHOW COLLECTION release_validation_docs
