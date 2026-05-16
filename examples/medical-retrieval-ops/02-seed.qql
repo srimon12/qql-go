@@ -1,0 +1,54 @@
+INSERT BULK INTO COLLECTION medical_retrieval_ops VALUES [
+  {
+    'id': 3101,
+    'text': 'Patient presents with sudden right-sided weakness and slurred speech. CT brain confirms left MCA infarct. Thrombolysis started in the treatment window.',
+    'patient_id': 'PT-03101',
+    'diagnosis': 'Acute ischemic stroke',
+    'specialty': 'neurology',
+    'priority': 'high',
+    'status': 'admitted',
+    'year': 2026
+  },
+  {
+    'id': 3102,
+    'text': 'Patient with crushing substernal chest pain radiating to the jaw. Troponin elevated and ECG changes consistent with acute coronary syndrome.',
+    'patient_id': 'PT-03102',
+    'diagnosis': 'Acute coronary syndrome',
+    'specialty': 'cardiology',
+    'priority': 'high',
+    'status': 'admitted',
+    'year': 2026
+  },
+  {
+    'id': 3103,
+    'text': 'Productive cough, fever, and right lower lobe consolidation on chest imaging. Broad-spectrum antibiotics started.',
+    'patient_id': 'PT-03103',
+    'diagnosis': 'Community-acquired pneumonia',
+    'specialty': 'pulmonology',
+    'priority': 'medium',
+    'status': 'reviewed',
+    'year': 2025
+  },
+  {
+    'id': 3104,
+    'text': 'Recurrent unilateral headache with photophobia and nausea, improved with migraine-directed therapy.',
+    'patient_id': 'PT-03104',
+    'diagnosis': 'Migraine',
+    'specialty': 'neurology',
+    'priority': 'low',
+    'status': 'discharged',
+    'year': 2024
+  },
+  {
+    'id': 3105,
+    'text': 'Episodes of expressive aphasia and transient right arm numbness resolved within thirty minutes. Secondary stroke prevention workup ordered.',
+    'patient_id': 'PT-03105',
+    'diagnosis': 'Transient ischemic attack',
+    'specialty': 'neurology',
+    'priority': 'high',
+    'status': 'admitted',
+    'year': 2026
+  }
+] USING HYBRID
+
+SHOW COLLECTION medical_retrieval_ops

@@ -1,6 +1,15 @@
 # Examples
 
-These examples present `qql-go` as an operational interface for Qdrant: bootstrap collections, run CI smoke checks, debug retrieval, inspect live data, and clean up collections with repeatable `.qql` scripts.
+`qql-go` needs to be shown through workflows people already recognize.
+
+The canonical demos in this folder are now the **demo folders**, not the loose `.qql` files.
+
+Use the folders when you want an end-to-end showcase with:
+
+- ordered QQL steps
+- a runnable PowerShell driver
+- JSON artifacts you can screenshot, diff, or feed into docs
+- a clear operational narrative instead of a raw syntax sample
 
 ## Before You Run Them
 
@@ -21,7 +30,17 @@ Some examples use text `INSERT` and `SEARCH ... SIMILAR TO ...`, so they need ei
 - Qdrant Cloud inference
 - local/external mode with an OpenAI-compatible embeddings endpoint
 
-## Example Scripts
+## Canonical Demo Folders
+
+| Folder | Workflow it demonstrates | Run it with (PS / Bash) |
+|---|---|---|
+| `release-validation/` | Release validation for retrieval changes: provision, seed, explain, validate, dump | `examples/release-validation/run-demo.[ps1|sh]` |
+| `support-incident-response/` | Support and incident workflow: inspect, scroll, compare retrieval modes, recommend, update ownership | `examples/support-incident-response/run-demo.[ps1|sh]` |
+| `medical-retrieval-ops/` | Vertical demo: tenant-aware clinical retrieval with grouped and filtered search plus dump | `examples/medical-retrieval-ops/run-demo.[ps1|sh]` |
+
+These are the examples to showcase publicly.
+
+## Single-File Building Blocks
 
 | File | What it demonstrates | Run it with |
 |---|---|---|
@@ -31,6 +50,15 @@ Some examples use text `INSERT` and `SEARCH ... SIMILAR TO ...`, so they need ei
 | `04-support-diagnostics.qql` | Show collection health, exact point lookup, filtered scroll, and incident recommendations | `qql-go execute examples/04-support-diagnostics.qql` |
 | `05-retention-cleanup.qql` | Review archived data, delete by filter, and verify retention cleanup | `qql-go execute examples/05-retention-cleanup.qql` |
 | `06-medical-records.qql` | Real-world healthcare search demo with hybrid retrieval and metadata filters | `qql-go execute examples/06-medical-records.qql` |
+
+Use the single-file scripts when you want a smaller isolated query pattern.
+
+## Why The Folder Demos Matter
+
+- they feel like real ops workflows, not parser tests
+- they generate reusable JSON artifacts
+- they make the standalone binary value obvious
+- they are easier to turn into docs, screenshots, or short demo videos
 
 ## Automation Patterns
 
@@ -44,14 +72,12 @@ qql-go execute --quiet --json examples/02-ci-smoke-test.qql
 qql-go dump --quiet --json docs docs-backup.qql
 ```
 
-## Which Example Matches Which Job
+## Which Demo Matches Which Job
 
-- Bootstrap a collection and seed example data: `01-bootstrap-docs.qql`
-- Prove a cluster is healthy in CI: `02-ci-smoke-test.qql`
-- Debug why retrieval quality changed, including diversity tuning: `03-retrieval-debugging.qql`
-- Hand a support engineer a reproducible inspection flow: `04-support-diagnostics.qql`
-- Automate retention cleanup and post-delete checks: `05-retention-cleanup.qql`
-- Demo a real vertical use case instead of synthetic lorem ipsum: `06-medical-records.qql`
+- Release validation around retrieval changes: `release-validation/`
+- Support and on-call investigation: `support-incident-response/`
+- A domain-specific, non-toy retrieval showcase: `medical-retrieval-ops/`
+- Smaller isolated syntax patterns: the loose `.qql` files
 
 ## Boundaries
 
