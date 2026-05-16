@@ -1,0 +1,36 @@
+name: retrieval-regression
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "examples/release-validation/**"
+      - ".github/workflows/retrieval-regression.yml"
+
+jobs:
+  retrieval-regression:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install qql-go
+        run: |
+          INSTALL_DIR="$RUNNER_TEMP/bin" curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | sh
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Run retrieval regression against existing Qdrant
+        env:
+          QDRANT_URL: ${{ secrets.QDRANT_URL }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+          EMBEDDING_ENDPOINT: ${{ secrets.EMBEDDING_ENDPOINT }}
+          EMBEDDING_API_KEY: ${{ secrets.EMBEDDING_API_KEY }}
+          EMBEDDING_MODEL: ${{ vars.EMBEDDING_MODEL }}
+        run: bash examples/release-validation/run-demo.sh
+
+      - name: Upload regression artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-regression-artifacts
+          path: examples/release-validation/artifacts

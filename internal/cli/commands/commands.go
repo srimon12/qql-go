@@ -41,7 +41,7 @@ const (
 	defaultInferenceMode    = "cloud"
 )
 
-var Version = "0.1.6"
+var Version = "0.1.7"
 
 type commandOutputMode struct {
 	json  bool
@@ -1680,7 +1680,7 @@ func (e *Executor) buildInsertVectors(ctx context.Context, text, denseModel, spa
 			denseVectorName: qdrant.NewVectorDense(denseVector),
 		}
 		if includeSparse {
-			sv := sparse.Build(text)
+			sv := sparse.BuildDocument(text)
 			vectors[sparseVectorName] = qdrant.NewVectorSparse(sv.Indices, sv.Values)
 		}
 		if includeRerank {
@@ -1730,7 +1730,7 @@ func (e *Executor) buildInsertVectorsBatch(ctx context.Context, texts []string, 
 				denseVectorName: qdrant.NewVectorDense(denseVectors[idx]),
 			}
 			if includeSparse {
-				sv := sparse.Build(text)
+				sv := sparse.BuildDocument(text)
 				vectors[sparseVectorName] = qdrant.NewVectorSparse(sv.Indices, sv.Values)
 			}
 			batch = append(batch, vectors)

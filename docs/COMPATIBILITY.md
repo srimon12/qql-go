@@ -124,13 +124,13 @@
 | QQL Version | Minimum Qdrant | Recommended Qdrant | Tested Qdrant Versions |
 |---|---|---|---|
 | Python 1.4.0 | 1.13.0 | 1.13.x | 1.13.0 |
-| Go 0.1.5 | 1.13.0 | 1.13.x | 1.13.0 |
+| Go 0.1.7 | 1.13.0 | 1.13.x | 1.13.0 |
 
 ### Language Support
 
 | QQL Version | Python `qql-cli` | Go `qql-go` | Feature Parity |
 |---|---|---|---|
-| Current | 2.3.0 | 0.1.5 | ~95% |
+| Current | 2.3.0 | 0.1.7 | ~95% |
 | Target (Phase 1) | 2.3.0 | 0.2.0 | ~95% |
 | Target (Phase 2) | 1.6.0 | 0.3.0 | ~98% |
 

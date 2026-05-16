@@ -12,7 +12,7 @@ Use `qql-go` when you need repeatable commands, stable JSON output, version-cont
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go 1.24+](https://img.shields.io/badge/Go-1.24%2B-00ADD8.svg)](https://go.dev/)
-[![Version](https://img.shields.io/badge/Version-0.1.5-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/Version-0.1.7-blue.svg)](VERSION)
 [![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/srimon12/qql-go/releases)
 
 ## What qql-go supports
@@ -104,7 +104,7 @@ curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | s
 Install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | VERSION=v0.1.5 sh
+curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | VERSION=v0.1.7 sh
 ```
 
 The Unix installer defaults to `~/.local/bin/qql-go`. Override with `INSTALL_DIR=/your/bin/path` when needed.
@@ -375,7 +375,7 @@ Hybrid search:
 
 Sparse-only search:
 
-- use `USING SPARSE` when the request is primarily keyword or BM25 retrieval
+- use `USING SPARSE` when the request is primarily keyword retrieval
 - use `USING SPARSE RERANK` when sparse recall is good but top ordering needs cloud rerank
 
 Point access:
@@ -437,25 +437,13 @@ If you filter heavily, create payload indexes first.
 
 The repo now ships first-class operational examples under [examples/README.md](examples/README.md).
 
+If you want the single strongest example first, start with `examples/release-validation/`: it runs read-only retrieval regression checks against an existing Qdrant collection, validates JSON artifacts, and fits naturally into CI without reseeding the corpus.
+
 Use them to showcase the workflows `qql-go` is strongest at:
 
-- collection bootstrap and indexing
-- CI smoke tests
-- retrieval debugging
-- support diagnostics
-- retention cleanup
-- vertical demos such as medical-record search
-
-Run them directly as versioned `.qql` scripts:
-
-```bash
-qql-go execute examples/01-bootstrap-docs.qql
-qql-go execute --quiet --json examples/02-ci-smoke-test.qql
-qql-go execute examples/03-retrieval-debugging.qql
-qql-go execute examples/04-support-diagnostics.qql
-qql-go execute examples/05-retention-cleanup.qql
-qql-go execute examples/06-medical-records.qql
-```
+- retrieval regression CI
+- retrieval debugging and runbooks
+- vertical benchmark workflows such as medical retrieval
 
 The agent-oriented helper demos still live under `skills/qql-skill/scripts/`, but they are now secondary to the public `examples/` surface.
 
@@ -500,7 +488,7 @@ Config is stored at:
 - [CONTRIBUTING.md](CONTRIBUTING.md) for contributors
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for maintainers and release workflow details
 - [CHANGELOG.md](CHANGELOG.md) for user-facing changes
-- [docs/releases/0.1.5.md](docs/releases/0.1.5.md) for the current release note
+- [docs/releases/0.1.7.md](docs/releases/0.1.7.md) for the current release note
 
 ## Project Layout
 

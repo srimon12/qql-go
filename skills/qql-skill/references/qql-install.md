@@ -67,6 +67,7 @@ $env:QQL_BIN = "C:\path\to\qql-go.exe"
 
 For local mode, connect with the extra embedding flags:
 
+### Windows (PowerShell)
 ```powershell
 qql-go connect `
   --url http://localhost:6334 `
@@ -74,6 +75,17 @@ qql-go connect `
   --embedding-endpoint http://127.0.0.1:1234/v1/embeddings `
   --embedding-key <embedding-api-key> `
   --embedding-model text-embedding-all-minilm-l6-v2-embedding `
+  --embedding-dimension 384
+```
+
+### Linux / macOS (Bash)
+```bash
+qql-go connect \
+  --url http://localhost:6334 \
+  --inference-mode local \
+  --embedding-endpoint http://127.0.0.1:1234/v1/embeddings \
+  --embedding-key <embedding-api-key> \
+  --embedding-model text-embedding-all-minilm-l6-v2-embedding \
   --embedding-dimension 384
 ```
 
