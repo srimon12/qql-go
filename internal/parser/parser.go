@@ -367,6 +367,11 @@ func (p *Parser) parseHnswConfigBlock() (*ast.CollectionConfig, error) {
 			return nil, errors.NewQQLSyntaxError("Unknown HNSW parameter '"+key+"'. Expected: m, ef_construct, full_scan_threshold, max_indexing_threads, on_disk, payload_m, inline_storage", p.peek().Pos)
 		}
 	}
+	for key, raw := range config {
+		if err := p.validateHnswValue(key, raw); err != nil {
+			return nil, err
+		}
+	}
 	mVal := collectionPositiveUint64(config, "m")
 	if mVal != nil && *mVal < 4 {
 		return nil, errors.NewQQLSyntaxError("m must be >= 4", p.peek().Pos)
@@ -394,6 +399,11 @@ func (p *Parser) parseVectorsConfigBlock() (*ast.CollectionConfig, error) {
 			return nil, errors.NewQQLSyntaxError("Unknown VECTORS parameter '"+key+"'. Expected: on_disk", p.peek().Pos)
 		}
 	}
+	for key, raw := range config {
+		if err := p.validateVectorsValue(key, raw); err != nil {
+			return nil, err
+		}
+	}
 	return &ast.CollectionConfig{
 		Vectors: &ast.VectorsConfig{
 			OnDisk: collectionBool(config, "on_disk"),
@@ -413,6 +423,11 @@ func (p *Parser) parseOptimizersConfigBlock() (*ast.CollectionConfig, error) {
 			continue
 		default:
 			return nil, errors.NewQQLSyntaxError("Unknown OPTIMIZERS parameter '"+key+"'. Expected: deleted_threshold, vacuum_min_vector_number, default_segment_number, max_segment_size, memmap_threshold, indexing_threshold, flush_interval_sec, max_optimization_threads, prevent_unoptimized", p.peek().Pos)
+		}
+	}
+	for key, raw := range config {
+		if err := p.validateOptimizersValue(key, raw); err != nil {
+			return nil, err
 		}
 	}
 	for key, raw := range config {
@@ -470,6 +485,11 @@ func (p *Parser) parseCollectionParamsConfigBlock(forAlter bool) (*ast.Collectio
 			continue
 		default:
 			return nil, errors.NewQQLSyntaxError("Unknown PARAMS parameter '"+key+"'. Expected: replication_factor, write_consistency_factor, read_fan_out_factor, read_fan_out_delay_ms, on_disk_payload", p.peek().Pos)
+		}
+	}
+	for key, raw := range config {
+		if err := p.validateParamsValue(key, raw); err != nil {
+			return nil, err
 		}
 	}
 	if !forAlter {
@@ -564,6 +584,74 @@ func collectionMaxOptimizationThreads(config map[string]interface{}, key string)
 				}
 			}
 			return nil
+		}
+	}
+	return nil
+}
+
+func (p *Parser) validateHnswValue(key string, raw interface{}) error {
+	lower := toLower(key)
+	switch lower {
+	case "m", "ef_construct", "full_scan_threshold", "max_indexing_threads", "payload_m":
+		if _, ok := raw.(int); !ok {
+			return errors.NewQQLSyntaxError(key+" must be an integer", p.peek().Pos)
+		}
+	case "on_disk", "inline_storage":
+		if _, ok := raw.(bool); !ok {
+			return errors.NewQQLSyntaxError(key+" must be true or false", p.peek().Pos)
+		}
+	}
+	return nil
+}
+
+func (p *Parser) validateVectorsValue(key string, raw interface{}) error {
+	lower := toLower(key)
+	switch lower {
+	case "on_disk":
+		if _, ok := raw.(bool); !ok {
+			return errors.NewQQLSyntaxError(key+" must be true or false", p.peek().Pos)
+		}
+	}
+	return nil
+}
+
+func (p *Parser) validateOptimizersValue(key string, raw interface{}) error {
+	lower := toLower(key)
+	switch lower {
+	case "deleted_threshold":
+		switch raw.(type) {
+		case int, float64:
+		default:
+			return errors.NewQQLSyntaxError(key+" must be a number", p.peek().Pos)
+		}
+	case "vacuum_min_vector_number", "default_segment_number", "max_segment_size", "memmap_threshold", "indexing_threshold", "flush_interval_sec":
+		if _, ok := raw.(int); !ok {
+			return errors.NewQQLSyntaxError(key+" must be an integer", p.peek().Pos)
+		}
+	case "max_optimization_threads":
+		switch raw.(type) {
+		case int, string:
+		default:
+			return errors.NewQQLSyntaxError(key+" must be a positive integer or 'auto'", p.peek().Pos)
+		}
+	case "prevent_unoptimized":
+		if _, ok := raw.(bool); !ok {
+			return errors.NewQQLSyntaxError(key+" must be true or false", p.peek().Pos)
+		}
+	}
+	return nil
+}
+
+func (p *Parser) validateParamsValue(key string, raw interface{}) error {
+	lower := toLower(key)
+	switch lower {
+	case "replication_factor", "write_consistency_factor", "read_fan_out_factor", "read_fan_out_delay_ms":
+		if _, ok := raw.(int); !ok {
+			return errors.NewQQLSyntaxError(key+" must be an integer", p.peek().Pos)
+		}
+	case "on_disk_payload":
+		if _, ok := raw.(bool); !ok {
+			return errors.NewQQLSyntaxError(key+" must be true or false", p.peek().Pos)
 		}
 	}
 	return nil
