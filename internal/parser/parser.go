@@ -268,11 +268,10 @@ func (p *Parser) parseCollectionConfigBlocks(forAlter bool) (*ast.CollectionConf
 		if config == nil {
 			config = block
 		} else {
-			merged, err := mergeCollectionConfig(config, block)
+			config, err = mergeCollectionConfig(config, block, p.peek().Pos)
 			if err != nil {
 				return nil, err
 			}
-			config = merged
 		}
 	}
 	return config, nil
@@ -302,69 +301,32 @@ func (p *Parser) parseOptionalAlterQuantization() (*ast.QuantizationUpdate, erro
 	return &ast.QuantizationUpdate{Config: config}, nil
 }
 
-func mergeCollectionConfig(current, new *ast.CollectionConfig) (*ast.CollectionConfig, error) {
-	vectors, err := mergeVectorsConfig(current.Vectors, new.Vectors)
-	if err != nil {
-		return nil, err
+func mergeCollectionConfig(current, new *ast.CollectionConfig, pos int) (*ast.CollectionConfig, error) {
+	if new.Vectors != nil {
+		if current.Vectors != nil {
+			return nil, errors.NewQQLSyntaxError("VECTORS clause may only appear once", pos)
+		}
+		current.Vectors = new.Vectors
 	}
-	hnsw, err := mergeHnswConfig(current.Hnsw, new.Hnsw)
-	if err != nil {
-		return nil, err
+	if new.Hnsw != nil {
+		if current.Hnsw != nil {
+			return nil, errors.NewQQLSyntaxError("HNSW clause may only appear once", pos)
+		}
+		current.Hnsw = new.Hnsw
 	}
-	optimizers, err := mergeOptimizersConfig(current.Optimizers, new.Optimizers)
-	if err != nil {
-		return nil, err
+	if new.Optimizers != nil {
+		if current.Optimizers != nil {
+			return nil, errors.NewQQLSyntaxError("OPTIMIZERS clause may only appear once", pos)
+		}
+		current.Optimizers = new.Optimizers
 	}
-	params, err := mergeParamsConfig(current.Params, new.Params)
-	if err != nil {
-		return nil, err
+	if new.Params != nil {
+		if current.Params != nil {
+			return nil, errors.NewQQLSyntaxError("PARAMS clause may only appear once", pos)
+		}
+		current.Params = new.Params
 	}
-	return &ast.CollectionConfig{
-		Vectors:    vectors,
-		Hnsw:       hnsw,
-		Optimizers: optimizers,
-		Params:     params,
-	}, nil
-}
-
-func mergeVectorsConfig(current, new *ast.VectorsConfig) (*ast.VectorsConfig, error) {
-	if new == nil {
-		return current, nil
-	}
-	if current == nil {
-		return new, nil
-	}
-	return nil, fmt.Errorf("VECTORS clause may only appear once")
-}
-
-func mergeHnswConfig(current, new *ast.HnswRuntimeConfig) (*ast.HnswRuntimeConfig, error) {
-	if new == nil {
-		return current, nil
-	}
-	if current == nil {
-		return new, nil
-	}
-	return nil, fmt.Errorf("HNSW clause may only appear once")
-}
-
-func mergeOptimizersConfig(current, new *ast.OptimizersRuntimeConfig) (*ast.OptimizersRuntimeConfig, error) {
-	if new == nil {
-		return current, nil
-	}
-	if current == nil {
-		return new, nil
-	}
-	return nil, fmt.Errorf("OPTIMIZERS clause may only appear once")
-}
-
-func mergeParamsConfig(current, new *ast.CollectionParamsConfig) (*ast.CollectionParamsConfig, error) {
-	if new == nil {
-		return current, nil
-	}
-	if current == nil {
-		return new, nil
-	}
-	return nil, fmt.Errorf("PARAMS clause may only appear once")
+	return current, nil
 }
 
 func (p *Parser) parseCollectionConfigClause(forAlter bool) (*ast.CollectionConfig, error) {
@@ -451,6 +413,34 @@ func (p *Parser) parseOptimizersConfigBlock() (*ast.CollectionConfig, error) {
 			continue
 		default:
 			return nil, errors.NewQQLSyntaxError("Unknown OPTIMIZERS parameter '"+key+"'. Expected: deleted_threshold, vacuum_min_vector_number, default_segment_number, max_segment_size, memmap_threshold, indexing_threshold, flush_interval_sec, max_optimization_threads, prevent_unoptimized", p.peek().Pos)
+		}
+	}
+	for key, raw := range config {
+		lower := toLower(key)
+		if lower == "deleted_threshold" {
+			switch v := raw.(type) {
+			case int:
+				f := float64(v)
+				if f < 0.0 || f > 1.0 {
+					return nil, errors.NewQQLSyntaxError("deleted_threshold must be between 0.0 and 1.0", p.peek().Pos)
+				}
+			case float64:
+				if v < 0.0 || v > 1.0 {
+					return nil, errors.NewQQLSyntaxError("deleted_threshold must be between 0.0 and 1.0", p.peek().Pos)
+				}
+			}
+		}
+		if lower == "max_optimization_threads" {
+			switch v := raw.(type) {
+			case int:
+				if v <= 0 {
+					return nil, errors.NewQQLSyntaxError("max_optimization_threads must be a positive integer or 'auto'", p.peek().Pos)
+				}
+			case string:
+				if toLower(v) != "auto" {
+					return nil, errors.NewQQLSyntaxError("max_optimization_threads must be a positive integer or 'auto'", p.peek().Pos)
+				}
+			}
 		}
 	}
 	return &ast.CollectionConfig{
