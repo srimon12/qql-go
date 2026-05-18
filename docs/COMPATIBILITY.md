@@ -1,7 +1,7 @@
 # QQL / Qdrant Compatibility Matrix
 
 > This document tracks which QQL versions support which Qdrant features, across both Python and Go implementations.
-> Last updated: 2026-05-15
+> Last updated: 2026-05-18
 
 ## Legend
 
@@ -28,10 +28,10 @@
 | Create with quantization | `quantization_config` | ✅ v1.4 | ✅ v0.1.4 | `QUANTIZE SCALAR|BINARY|PRODUCT|TURBO` |
 | Create with on-disk payload | `on_disk_payload` | ❌ | ❌ | |
 | Create with sparse vectors | `sparse_vectors_config` | ✅ v1.0 | ✅ v0.1 | Via `HYBRID` |
-| Create with multivectors | `multivector_config` | ❌ | ❌ | |
+| Create with multivectors | `multivector_config` | ❌ | ⚠️ v0.1 | Go supports `CREATE COLLECTION ... HYBRID RERANK` with a ColBERT multivector; Python has no equivalent collection topology |
 | Drop collection | `delete_collection` | ✅ v1.0 | ✅ v0.1 | |
 | List collections | `get_collections` | ✅ v1.0 | ✅ v0.1 | `SHOW COLLECTIONS` |
-| Collection info | `get_collection` | ❌ | ✅ v0.1.5 | Go supports `SHOW COLLECTION <name>`; Python `DESCRIBE` is not implemented |
+| Collection info | `get_collection` | ✅ v2.4.1 | ✅ v0.1.5 | Both support `SHOW COLLECTION <name>` |
 | Collection aliases | `create_alias` / `delete_alias` | ❌ | ❌ | |
 | Collection snapshots | `create_snapshot` | ❌ | ❌ | |
 
@@ -45,7 +45,7 @@
 | Update payload | `set_payload` | ✅ v2.3 | ✅ v0.1.5 | `UPDATE ... SET PAYLOAD` |
 | Update vector | `update_vectors` | ✅ v2.3 | ✅ v0.1.5 | `UPDATE ... SET VECTOR` |
 | Delete point by ID | `delete` | ✅ v1.0 | ✅ v0.1 | |
-| Delete points by filter | `delete` (filter) | ❌ | ✅ v0.1 | Python README claims support but parser only handles `WHERE id = ...` |
+| Delete points by filter | `delete` (filter) | ✅ v2.4.1 | ✅ v0.1 | Both support filter-based `DELETE FROM ... WHERE ...` |
 | Delete payload keys | `delete_payload` | ❌ | ❌ | Gap |
 | Count points | `count` | ❌ | ❌ | Gap |
 | Scroll points | `scroll` | ✅ v2.2 | ✅ v0.1.4 | `SCROLL` statement |
@@ -66,8 +66,8 @@
 | Batch search | `search_batch` | ❌ | ❌ | Gap |
 | MMR diversity | `diversity` param (v1.15+) | ✅ v1.0 | ✅ v0.1 | `WITH { mmr_diversity, mmr_candidates }` |
 | Score boosting | `rescore` / `formula` | ❌ | ❌ | Gap |
-| Multivector search | `multivector` | ❌ | ❌ | Gap |
-| Rerank (cross-encoder) | `rerank` / Fastembed | ✅ v1.0 (local) | ⚠️ v0.1 (cloud only) | Sparse-only rerank added v0.1.4 |
+| Multivector search | `multivector` | ❌ | ⚠️ v0.1 | Go supports the ColBERT multivector path for cloud rerank collections, not a general multivector search surface |
+| Rerank (cross-encoder) | `rerank` / Fastembed | ✅ v1.0 (local FastEmbed post-processing) | ⚠️ v0.1 (cloud only) | Go supports cloud rerank queries, but local/external rerank is not implemented |
 | Relevance feedback | `feedback` query | ❌ | ❌ | Gap |
 
 ### Recommend
@@ -87,14 +87,14 @@
 
 | Feature | Qdrant API | Python `qql-cli` | Go `qql-go` | Notes |
 |---|---|---|---|---|
-| Keyword index | `create_payload_index` | ❌ | ✅ v0.1 | Go supports advanced keyword params via `WITH { is_tenant, on_disk, enable_hnsw }` |
-| Integer index | `create_payload_index` | ❌ | ✅ v0.1 | |
-| Float index | `create_payload_index` | ❌ | ✅ v0.1 | |
-| Bool index | `create_payload_index` | ❌ | ✅ v0.1 | |
-| Full-text index | `create_payload_index` (text) | ❌ | ✅ v0.1 | Go supports tokenizer and text index tuning via `WITH { ... }` |
-| Geo index | `create_payload_index` (geo) | ❌ | ❌ | |
-| Datetime index | `create_payload_index` (datetime) | ❌ | ✅ v0.1 | |
-| UUID index | `create_payload_index` (uuid) | ❌ | ✅ v0.1 | |
+| Keyword index | `create_payload_index` | ✅ v2.4.1 | ✅ v0.1 | Both support keyword indexes; both support advanced keyword params via `WITH { is_tenant, on_disk, enable_hnsw }` |
+| Integer index | `create_payload_index` | ✅ v2.4.1 | ✅ v0.1 | |
+| Float index | `create_payload_index` | ✅ v2.4.1 | ✅ v0.1 | |
+| Bool index | `create_payload_index` | ✅ v2.4.1 | ✅ v0.1 | |
+| Full-text index | `create_payload_index` (text) | ✅ v2.4.1 | ✅ v0.1 | Both support text tokenizer/index tuning via `WITH { ... }` |
+| Geo index | `create_payload_index` (geo) | ✅ v2.4.1 | ✅ v0.1 | Basic geo index support in both |
+| Datetime index | `create_payload_index` (datetime) | ✅ v2.4.1 | ✅ v0.1 | |
+| UUID index | `create_payload_index` (uuid) | ✅ v2.4.1 | ✅ v0.1 | Both support advanced UUID params via `WITH { is_tenant, on_disk, enable_hnsw }` |
 
 ### Filtering
 
@@ -123,16 +123,16 @@
 
 | QQL Version | Minimum Qdrant | Recommended Qdrant | Tested Qdrant Versions |
 |---|---|---|---|
-| Python 1.4.0 | 1.13.0 | 1.13.x | 1.13.0 |
+| Python 2.4.1 | 1.13.0 | 1.13.x | 1.13.0 |
 | Go 0.1.7 | 1.13.0 | 1.13.x | 1.13.0 |
 
 ### Language Support
 
 | QQL Version | Python `qql-cli` | Go `qql-go` | Feature Parity |
 |---|---|---|---|
-| Current | 2.3.0 | 0.1.7 | ~95% |
-| Target (Phase 1) | 2.3.0 | 0.2.0 | ~95% |
-| Target (Phase 2) | 1.6.0 | 0.3.0 | ~98% |
+| Current | 2.4.1 | 0.1.7 | ~98% |
+| Target (Phase 1) | 2.4.1 | 0.2.0 | ~98% |
+| Target (Phase 2) | 2.4.1 | 0.3.0 | ~99% |
 
 ---
 
@@ -143,7 +143,7 @@
 | Dense insert/search | ✅ | ✅ | ✅ |
 | Hybrid insert/search | ✅ | ✅ | ✅ |
 | Sparse-only search | ✅ | ✅ | ✅ |
-| Rerank | ✅ (Python: local) | ✅ (Python only) | ❌ (Go) |
+| Rerank | ✅ (Python and Go) | ✅ (Python only) | ✅ (Python only) |
 | Recommend | ✅ | ✅ | ✅ |
 
 ---
@@ -152,8 +152,9 @@
 
 | Issue | Python | Go | Tracking |
 |---|---|---|---|
-| README shows `DELETE BY FILTER` but only ID deletion is implemented | Affected | Not affected — Go supports field deletion | #TBD |
 | Local rerank not available in Go | N/A | Affected | #TBD |
+| Sparse BM25 implementation differs | Python uses FastEmbed `SparseTextEmbedding("Qdrant/bm25")` | Go uses repo-local sparse weighting plus Qdrant sparse `idf` modifier | #TBD |
+| Go-only rerank collection topology | Python reranks locally without a ColBERT multivector collection | Go uses `HYBRID RERANK` / ColBERT multivector collections for cloud rerank | #TBD |
 | `qql-go` has no programmatic API equivalent to Python's `run_query()` | N/A | Affected | #TBD |
 
 ---
