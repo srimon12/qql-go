@@ -405,9 +405,13 @@ func (p *Parser) parseHnswConfigBlock() (*ast.CollectionConfig, error) {
 			return nil, errors.NewQQLSyntaxError("Unknown HNSW parameter '"+key+"'. Expected: m, ef_construct, full_scan_threshold, max_indexing_threads, on_disk, payload_m, inline_storage", p.peek().Pos)
 		}
 	}
+	mVal := collectionPositiveUint64(config, "m")
+	if mVal != nil && *mVal < 4 {
+		return nil, errors.NewQQLSyntaxError("m must be >= 4", p.peek().Pos)
+	}
 	return &ast.CollectionConfig{
 		Hnsw: &ast.HnswRuntimeConfig{
-			M:                  collectionHnswM(config, "m"),
+			M:                  mVal,
 			EfConstruct:        collectionPositiveUint64(config, "ef_construct"),
 			FullScanThreshold:  collectionNonNegativeUint64(config, "full_scan_threshold"),
 			MaxIndexingThreads: collectionPositiveUint64(config, "max_indexing_threads"),
@@ -521,25 +525,6 @@ func collectionPositiveUint64(config map[string]interface{}, key string) *uint64
 		}
 	}
 	return nil
-}
-
-func collectionHnswM(config map[string]interface{}, key string) *uint64 {
-	val := collectionPositiveUint64(config, key)
-	if val == nil {
-		return nil
-	}
-	return val
-}
-
-func collectionMinUint64(config map[string]interface{}, key string, min uint64) *uint64 {
-	val := collectionPositiveUint64(config, key)
-	if val == nil {
-		return nil
-	}
-	if *val < min {
-		return nil
-	}
-	return val
 }
 
 func collectionNonNegativeUint64(config map[string]interface{}, key string) *uint64 {
