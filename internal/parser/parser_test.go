@@ -178,10 +178,14 @@ func TestParseCreate(t *testing.T) {
 		},
 		{
 			name:  "create with payload hnsw",
-			input: "CREATE COLLECTION mycollection HNSW {payload_m: 16}",
+			input: "CREATE COLLECTION mycollection WITH HNSW {payload_m: 16}",
 			want: &ast.CreateCollectionStmt{
 				Collection: "mycollection",
-				PayloadM:   uint64Ptr(16),
+				Config: &ast.CollectionConfig{
+					Hnsw: &ast.HnswRuntimeConfig{
+						PayloadM: uint64Ptr(16),
+					},
+				},
 			},
 		},
 	}
@@ -215,7 +219,13 @@ func TestParseCreate(t *testing.T) {
 					assert.Nil(t, stmt.Quantization.Quantile)
 				}
 			}
-			assert.Equal(t, tt.want.PayloadM, stmt.PayloadM)
+			if tt.want.Config != nil {
+				require.NotNil(t, stmt.Config)
+				if tt.want.Config.Hnsw != nil {
+					require.NotNil(t, stmt.Config.Hnsw)
+					assert.Equal(t, tt.want.Config.Hnsw.PayloadM, stmt.Config.Hnsw.PayloadM)
+				}
+			}
 		})
 	}
 }

@@ -30,6 +30,8 @@ func (p *Parser) Parse(tokens []lexer.Token) (ast.ASTNode, error) {
 		node, err = p.parseInsert()
 	case lexer.TokenKindCreate:
 		node, err = p.parseCreate()
+	case lexer.TokenKindAlter:
+		node, err = p.parseAlter()
 	case lexer.TokenKindDrop:
 		node, err = p.parseDrop()
 	case lexer.TokenKindShow:
@@ -177,8 +179,6 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 	hybrid := false
 	rerank := false
 	var model *string
-	var quantization *ast.QuantizationConfig
-	var payloadM *uint64
 	if p.peek().Kind == lexer.TokenKindHybrid {
 		p.advance()
 		hybrid = true
@@ -207,65 +207,391 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 			}
 		}
 	}
-	seenQuantize := false
-	seenHnsw := false
-	for p.peek().Kind == lexer.TokenKindQuantize || p.peek().Kind == lexer.TokenKindHnsw {
-		if p.peek().Kind == lexer.TokenKindQuantize {
-			if seenQuantize {
-				return nil, errors.NewQQLSyntaxError("QUANTIZE clause may only appear once", p.peek().Pos)
-			}
-			p.advance()
-			var err error
-			quantization, err = p.parseQuantizeClause()
-			if err != nil {
-				return nil, err
-			}
-			seenQuantize = true
-			continue
-		}
-		if seenHnsw {
-			return nil, errors.NewQQLSyntaxError("HNSW clause may only appear once", p.peek().Pos)
-		}
-		p.advance()
-		value, err := p.parseCollectionHnswClause()
-		if err != nil {
-			return nil, err
-		}
-		payloadM = &value
-		seenHnsw = true
+
+	config, err := p.parseCollectionConfigBlocks(false)
+	if err != nil {
+		return nil, err
 	}
+	quantization, err := p.parseOptionalCreateQuantization()
+	if err != nil {
+		return nil, err
+	}
+
 	return &ast.CreateCollectionStmt{
 		Collection:   collection,
 		Hybrid:       hybrid,
 		Rerank:       rerank,
 		Model:        model,
 		Quantization: quantization,
-		PayloadM:     payloadM,
+		Config:       config,
 	}, nil
 }
 
-func (p *Parser) parseCollectionHnswClause() (uint64, error) {
-	config, err := p.parseDict()
+func (p *Parser) parseAlter() (*ast.AlterCollectionStmt, error) {
+	p.advance()
+	if _, err := p.expect(lexer.TokenKindCollection); err != nil {
+		return nil, err
+	}
+	collection, err := p.parseIdentifier()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	if len(config) == 0 {
-		return 0, errors.NewQQLSyntaxError("HNSW clause requires payload_m", p.peek().Pos)
+	config, err := p.parseCollectionConfigBlocks(true)
+	if err != nil {
+		return nil, err
 	}
-	for key := range config {
-		if toLower(key) != "payload_m" {
-			return 0, errors.NewQQLSyntaxError("Unknown HNSW parameter '"+key+"'. Expected: payload_m", p.peek().Pos)
+	quantization, err := p.parseOptionalAlterQuantization()
+	if err != nil {
+		return nil, err
+	}
+	if config == nil && quantization == nil {
+		return nil, errors.NewQQLSyntaxError(
+			"ALTER COLLECTION requires at least one WITH HNSW/VECTORS/OPTIMIZERS/PARAMS clause or QUANTIZE clause",
+			p.peek().Pos,
+		)
+	}
+	return &ast.AlterCollectionStmt{
+		Collection:   collection,
+		Config:       config,
+		Quantization: quantization,
+	}, nil
+}
+
+func (p *Parser) parseCollectionConfigBlocks(forAlter bool) (*ast.CollectionConfig, error) {
+	var config *ast.CollectionConfig
+	for p.peek().Kind == lexer.TokenKindWith {
+		p.advance()
+		block, err := p.parseCollectionConfigClause(forAlter)
+		if err != nil {
+			return nil, err
+		}
+		if config == nil {
+			config = block
+		} else {
+			merged, err := mergeCollectionConfig(config, block)
+			if err != nil {
+				return nil, err
+			}
+			config = merged
 		}
 	}
-	rawValue, ok := config["payload_m"]
-	if !ok {
-		return 0, errors.NewQQLSyntaxError("HNSW clause requires payload_m", p.peek().Pos)
+	return config, nil
+}
+
+func (p *Parser) parseOptionalCreateQuantization() (*ast.QuantizationConfig, error) {
+	if p.peek().Kind != lexer.TokenKindQuantize {
+		return nil, nil
 	}
-	value, ok := rawValue.(int)
-	if !ok || value <= 0 {
-		return 0, errors.NewQQLSyntaxError("payload_m must be a positive integer", p.peek().Pos)
+	p.advance()
+	return p.parseQuantizeClause()
+}
+
+func (p *Parser) parseOptionalAlterQuantization() (*ast.QuantizationUpdate, error) {
+	if p.peek().Kind != lexer.TokenKindQuantize {
+		return nil, nil
 	}
-	return uint64(value), nil
+	p.advance()
+	if p.peek().Kind == lexer.TokenKindDisabled {
+		p.advance()
+		return &ast.QuantizationUpdate{Disabled: true}, nil
+	}
+	config, err := p.parseQuantizeClause()
+	if err != nil {
+		return nil, err
+	}
+	return &ast.QuantizationUpdate{Config: config}, nil
+}
+
+func mergeCollectionConfig(current, new *ast.CollectionConfig) (*ast.CollectionConfig, error) {
+	vectors, err := mergeVectorsConfig(current.Vectors, new.Vectors)
+	if err != nil {
+		return nil, err
+	}
+	hnsw, err := mergeHnswConfig(current.Hnsw, new.Hnsw)
+	if err != nil {
+		return nil, err
+	}
+	optimizers, err := mergeOptimizersConfig(current.Optimizers, new.Optimizers)
+	if err != nil {
+		return nil, err
+	}
+	params, err := mergeParamsConfig(current.Params, new.Params)
+	if err != nil {
+		return nil, err
+	}
+	return &ast.CollectionConfig{
+		Vectors:    vectors,
+		Hnsw:       hnsw,
+		Optimizers: optimizers,
+		Params:     params,
+	}, nil
+}
+
+func mergeVectorsConfig(current, new *ast.VectorsConfig) (*ast.VectorsConfig, error) {
+	if new == nil {
+		return current, nil
+	}
+	if current == nil {
+		return new, nil
+	}
+	return nil, fmt.Errorf("VECTORS clause may only appear once")
+}
+
+func mergeHnswConfig(current, new *ast.HnswRuntimeConfig) (*ast.HnswRuntimeConfig, error) {
+	if new == nil {
+		return current, nil
+	}
+	if current == nil {
+		return new, nil
+	}
+	return nil, fmt.Errorf("HNSW clause may only appear once")
+}
+
+func mergeOptimizersConfig(current, new *ast.OptimizersRuntimeConfig) (*ast.OptimizersRuntimeConfig, error) {
+	if new == nil {
+		return current, nil
+	}
+	if current == nil {
+		return new, nil
+	}
+	return nil, fmt.Errorf("OPTIMIZERS clause may only appear once")
+}
+
+func mergeParamsConfig(current, new *ast.CollectionParamsConfig) (*ast.CollectionParamsConfig, error) {
+	if new == nil {
+		return current, nil
+	}
+	if current == nil {
+		return new, nil
+	}
+	return nil, fmt.Errorf("PARAMS clause may only appear once")
+}
+
+func (p *Parser) parseCollectionConfigClause(forAlter bool) (*ast.CollectionConfig, error) {
+	tok := p.peek()
+	if tok.Kind == lexer.TokenKindHnsw {
+		p.advance()
+		return p.parseHnswConfigBlock()
+	}
+	if tok.Kind == lexer.TokenKindVectors {
+		p.advance()
+		return p.parseVectorsConfigBlock()
+	}
+	if tok.Kind == lexer.TokenKindOptimizers {
+		p.advance()
+		return p.parseOptimizersConfigBlock()
+	}
+	if tok.Kind == lexer.TokenKindParams {
+		p.advance()
+		return p.parseCollectionParamsConfigBlock(forAlter)
+	}
+	return nil, errors.NewQQLSyntaxError(
+		"Expected HNSW, VECTORS, OPTIMIZERS, or PARAMS after WITH, got '"+tok.Value+"'",
+		tok.Pos,
+	)
+}
+
+func (p *Parser) parseHnswConfigBlock() (*ast.CollectionConfig, error) {
+	config, err := p.parseDict()
+	if err != nil {
+		return nil, err
+	}
+	for key := range config {
+		lower := toLower(key)
+		switch lower {
+		case "m", "ef_construct", "full_scan_threshold", "max_indexing_threads", "on_disk", "payload_m", "inline_storage":
+			continue
+		default:
+			return nil, errors.NewQQLSyntaxError("Unknown HNSW parameter '"+key+"'. Expected: m, ef_construct, full_scan_threshold, max_indexing_threads, on_disk, payload_m, inline_storage", p.peek().Pos)
+		}
+	}
+	return &ast.CollectionConfig{
+		Hnsw: &ast.HnswRuntimeConfig{
+			M:                  collectionHnswM(config, "m"),
+			EfConstruct:        collectionPositiveUint64(config, "ef_construct"),
+			FullScanThreshold:  collectionNonNegativeUint64(config, "full_scan_threshold"),
+			MaxIndexingThreads: collectionPositiveUint64(config, "max_indexing_threads"),
+			OnDisk:             collectionBool(config, "on_disk"),
+			PayloadM:           collectionPositiveUint64(config, "payload_m"),
+			InlineStorage:      collectionBool(config, "inline_storage"),
+		},
+	}, nil
+}
+
+func (p *Parser) parseVectorsConfigBlock() (*ast.CollectionConfig, error) {
+	config, err := p.parseDict()
+	if err != nil {
+		return nil, err
+	}
+	for key := range config {
+		if toLower(key) != "on_disk" {
+			return nil, errors.NewQQLSyntaxError("Unknown VECTORS parameter '"+key+"'. Expected: on_disk", p.peek().Pos)
+		}
+	}
+	return &ast.CollectionConfig{
+		Vectors: &ast.VectorsConfig{
+			OnDisk: collectionBool(config, "on_disk"),
+		},
+	}, nil
+}
+
+func (p *Parser) parseOptimizersConfigBlock() (*ast.CollectionConfig, error) {
+	config, err := p.parseDict()
+	if err != nil {
+		return nil, err
+	}
+	for key := range config {
+		lower := toLower(key)
+		switch lower {
+		case "deleted_threshold", "vacuum_min_vector_number", "default_segment_number", "max_segment_size", "memmap_threshold", "indexing_threshold", "flush_interval_sec", "max_optimization_threads", "prevent_unoptimized":
+			continue
+		default:
+			return nil, errors.NewQQLSyntaxError("Unknown OPTIMIZERS parameter '"+key+"'. Expected: deleted_threshold, vacuum_min_vector_number, default_segment_number, max_segment_size, memmap_threshold, indexing_threshold, flush_interval_sec, max_optimization_threads, prevent_unoptimized", p.peek().Pos)
+		}
+	}
+	return &ast.CollectionConfig{
+		Optimizers: &ast.OptimizersRuntimeConfig{
+			DeletedThreshold:       collectionFloatRange(config, "deleted_threshold", 0.0, 1.0),
+			VacuumMinVectorNumber:  collectionPositiveUint64(config, "vacuum_min_vector_number"),
+			DefaultSegmentNumber:   collectionPositiveUint64(config, "default_segment_number"),
+			MaxSegmentSize:         collectionPositiveUint64(config, "max_segment_size"),
+			MemmapThreshold:        collectionNonNegativeUint64(config, "memmap_threshold"),
+			IndexingThreshold:      collectionNonNegativeUint64(config, "indexing_threshold"),
+			FlushIntervalSec:       collectionPositiveUint64(config, "flush_interval_sec"),
+			MaxOptimizationThreads: collectionMaxOptimizationThreads(config, "max_optimization_threads"),
+			PreventUnoptimized:     collectionBool(config, "prevent_unoptimized"),
+		},
+	}, nil
+}
+
+func (p *Parser) parseCollectionParamsConfigBlock(forAlter bool) (*ast.CollectionConfig, error) {
+	config, err := p.parseDict()
+	if err != nil {
+		return nil, err
+	}
+	for key := range config {
+		lower := toLower(key)
+		switch lower {
+		case "replication_factor", "write_consistency_factor", "read_fan_out_factor", "read_fan_out_delay_ms", "on_disk_payload":
+			continue
+		default:
+			return nil, errors.NewQQLSyntaxError("Unknown PARAMS parameter '"+key+"'. Expected: replication_factor, write_consistency_factor, read_fan_out_factor, read_fan_out_delay_ms, on_disk_payload", p.peek().Pos)
+		}
+	}
+	if !forAlter {
+		if _, hasReadFanOut := config["read_fan_out_factor"]; hasReadFanOut {
+			return nil, errors.NewQQLSyntaxError("WITH PARAMS { read_fan_out_factor, read_fan_out_delay_ms } is supported only for ALTER COLLECTION", p.peek().Pos)
+		}
+		if _, hasReadFanOutDelay := config["read_fan_out_delay_ms"]; hasReadFanOutDelay {
+			return nil, errors.NewQQLSyntaxError("WITH PARAMS { read_fan_out_factor, read_fan_out_delay_ms } is supported only for ALTER COLLECTION", p.peek().Pos)
+		}
+	}
+	return &ast.CollectionConfig{
+		Params: &ast.CollectionParamsConfig{
+			ReplicationFactor:      collectionPositiveUint64(config, "replication_factor"),
+			WriteConsistencyFactor: collectionPositiveUint64(config, "write_consistency_factor"),
+			ReadFanOutFactor:       collectionPositiveUint64(config, "read_fan_out_factor"),
+			ReadFanOutDelayMs:      collectionNonNegativeUint64(config, "read_fan_out_delay_ms"),
+			OnDiskPayload:          collectionBool(config, "on_disk_payload"),
+		},
+	}, nil
+}
+
+func collectionBool(config map[string]interface{}, key string) *bool {
+	for k, v := range config {
+		if toLower(k) == key {
+			if b, ok := v.(bool); ok {
+				return &b
+			}
+			// This shouldn't happen at runtime since parseDict validates types
+			return nil
+		}
+	}
+	return nil
+}
+
+func collectionPositiveUint64(config map[string]interface{}, key string) *uint64 {
+	for k, v := range config {
+		if toLower(k) == key {
+			if num, ok := v.(int); ok && num > 0 {
+				val := uint64(num)
+				return &val
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+func collectionHnswM(config map[string]interface{}, key string) *uint64 {
+	val := collectionPositiveUint64(config, key)
+	if val == nil {
+		return nil
+	}
+	return val
+}
+
+func collectionMinUint64(config map[string]interface{}, key string, min uint64) *uint64 {
+	val := collectionPositiveUint64(config, key)
+	if val == nil {
+		return nil
+	}
+	if *val < min {
+		return nil
+	}
+	return val
+}
+
+func collectionNonNegativeUint64(config map[string]interface{}, key string) *uint64 {
+	for k, v := range config {
+		if toLower(k) == key {
+			if num, ok := v.(int); ok && num >= 0 {
+				val := uint64(num)
+				return &val
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+func collectionFloatRange(config map[string]interface{}, key string, min, max float64) *float64 {
+	for k, v := range config {
+		if toLower(k) == key {
+			switch typed := v.(type) {
+			case int:
+				f := float64(typed)
+				if f >= min && f <= max {
+					return &f
+				}
+			case float64:
+				if typed >= min && typed <= max {
+					return &typed
+				}
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+func collectionMaxOptimizationThreads(config map[string]interface{}, key string) interface{} {
+	for k, v := range config {
+		if toLower(k) == key {
+			switch typed := v.(type) {
+			case int:
+				if typed > 0 {
+					return typed
+				}
+			case string:
+				if toLower(typed) == "auto" {
+					return "auto"
+				}
+			}
+			return nil
+		}
+	}
+	return nil
 }
 
 func (p *Parser) parseQuantizeClause() (*ast.QuantizationConfig, error) {

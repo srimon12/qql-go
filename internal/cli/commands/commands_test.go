@@ -337,13 +337,72 @@ func TestCreateCollectionIncludesPayloadM(t *testing.T) {
 
 	resp, err := exec.doCreateCollection(&ast.CreateCollectionStmt{
 		Collection: "docs",
-		PayloadM:   uint64Ptr(24),
+		Config: &ast.CollectionConfig{
+			Hnsw: &ast.HnswRuntimeConfig{
+				PayloadM: uint64Ptr(24),
+			},
+		},
 	})
 	require.NoError(t, err)
 	require.True(t, resp.OK)
 	require.Len(t, client.createRequests, 1)
 	require.NotNil(t, client.createRequests[0].GetHnswConfig())
 	require.Equal(t, uint64(24), client.createRequests[0].GetHnswConfig().GetPayloadM())
+}
+
+func TestAlterCollectionPassesConfigBlocks(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	exec := NewExecutor(client, &config.Config{})
+
+	resp, err := exec.doAlterCollection(&ast.AlterCollectionStmt{
+		Collection: "docs",
+		Config: &ast.CollectionConfig{
+			Vectors:    &ast.VectorsConfig{OnDisk: boolPtr(true)},
+			Hnsw:       &ast.HnswRuntimeConfig{FullScanThreshold: uint64Ptr(5000)},
+			Optimizers: &ast.OptimizersRuntimeConfig{IndexingThreshold: uint64Ptr(10000)},
+			Params:     &ast.CollectionParamsConfig{OnDiskPayload: boolPtr(false), ReadFanOutFactor: uint64Ptr(4)},
+		},
+		Quantization: &ast.QuantizationUpdate{
+			Config: &ast.QuantizationConfig{Type: ast.QuantizationTypeBinary},
+		},
+	})
+	require.NoError(t, err)
+	require.True(t, resp.OK)
+	require.Len(t, client.updateRequests, 1)
+	req := client.updateRequests[0]
+
+	vsMap := req.VectorsConfig.GetParamsMap().GetMap()
+	require.NotNil(t, vsMap)
+	require.True(t, vsMap[""].GetOnDisk())
+
+	require.NotNil(t, req.HnswConfig)
+	require.Equal(t, uint64(5000), req.HnswConfig.GetFullScanThreshold())
+
+	require.NotNil(t, req.OptimizersConfig)
+	require.Equal(t, uint64(10000), req.OptimizersConfig.GetIndexingThreshold())
+
+	require.NotNil(t, req.Params)
+	require.False(t, req.Params.GetOnDiskPayload())
+	require.Equal(t, uint32(4), req.Params.GetReadFanOutFactor())
+
+	require.NotNil(t, req.QuantizationConfig)
+	require.NotNil(t, req.QuantizationConfig.GetBinary())
+}
+
+func TestAlterCollectionCanDisableQuantization(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	exec := NewExecutor(client, &config.Config{})
+
+	resp, err := exec.doAlterCollection(&ast.AlterCollectionStmt{
+		Collection:   "docs",
+		Quantization: &ast.QuantizationUpdate{Disabled: true},
+	})
+	require.NoError(t, err)
+	require.True(t, resp.OK)
+	require.Len(t, client.updateRequests, 1)
+	require.NotNil(t, client.updateRequests[0].QuantizationConfig.GetDisabled())
 }
 
 func TestDoCreateIndexSupportsKeywordOptions(t *testing.T) {
@@ -1029,20 +1088,21 @@ func TestBuildInsertVectorsLocalModeRejectsRerank(t *testing.T) {
 }
 
 type fakeQdrantClient struct {
-	mu                 sync.Mutex
-	exists             bool
-	info               *qdrant.CollectionInfo
-	createRequests     []*qdrant.CreateCollection
-	fieldIndexRequests []*qdrant.CreateFieldIndexCollection
-	upserts            []*qdrant.UpsertPoints
-	queryRequests      []*qdrant.QueryPoints
-	groupRequests      []*qdrant.QueryPointGroups
-	groupResults       []*qdrant.PointGroup
-	updateVectors      []*qdrant.UpdatePointVectors
-	setPayloads        []*qdrant.SetPayloadPoints
-	scrollRecords      []*qdrant.RetrievedPoint
-	scrollOffset       *qdrant.PointId
-	getRecords         []*qdrant.RetrievedPoint
+	mu                  sync.Mutex
+	exists              bool
+	info                *qdrant.CollectionInfo
+	createRequests      []*qdrant.CreateCollection
+	updateRequests      []*qdrant.UpdateCollection
+	fieldIndexRequests  []*qdrant.CreateFieldIndexCollection
+	upserts             []*qdrant.UpsertPoints
+	queryRequests       []*qdrant.QueryPoints
+	groupRequests       []*qdrant.QueryPointGroups
+	groupResults        []*qdrant.PointGroup
+	updateVectors       []*qdrant.UpdatePointVectors
+	setPayloads         []*qdrant.SetPayloadPoints
+	scrollRecords       []*qdrant.RetrievedPoint
+	scrollOffset        *qdrant.PointId
+	getRecords          []*qdrant.RetrievedPoint
 }
 
 func newFakeQdrantClient() *fakeQdrantClient { return &fakeQdrantClient{} }
@@ -1071,6 +1131,12 @@ func (f *fakeQdrantClient) CreateCollection(_ context.Context, req *qdrant.Creat
 			},
 		},
 	}
+	return nil
+}
+func (f *fakeQdrantClient) UpdateCollection(_ context.Context, req *qdrant.UpdateCollection) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.updateRequests = append(f.updateRequests, req)
 	return nil
 }
 func (f *fakeQdrantClient) DeleteCollection(context.Context, string) error { return nil }

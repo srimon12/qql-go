@@ -58,6 +58,7 @@ type qdrantClient interface {
 	CollectionExists(context.Context, string) (bool, error)
 	GetCollectionInfo(context.Context, string) (*qdrant.CollectionInfo, error)
 	CreateCollection(context.Context, *qdrant.CreateCollection) error
+	UpdateCollection(context.Context, *qdrant.UpdateCollection) error
 	DeleteCollection(context.Context, string) error
 	Upsert(context.Context, *qdrant.UpsertPoints) (*qdrant.UpdateResult, error)
 	Query(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error)
@@ -180,6 +181,8 @@ func (e *Executor) ExecuteResult(query string) (*ExecResponse, error) {
 		return e.doShowCollection(n)
 	case *ast.CreateCollectionStmt:
 		return e.doCreateCollection(n)
+	case *ast.AlterCollectionStmt:
+		return e.doAlterCollection(n)
 	case *ast.DropCollectionStmt:
 		return e.doDropCollection(n)
 	case *ast.InsertStmt:
@@ -242,8 +245,10 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		if n.Model != nil && *n.Model != "" {
 			plan.WriteString(fmt.Sprintf("Model: %s\n", *n.Model))
 		}
-		if n.PayloadM != nil {
-			plan.WriteString(fmt.Sprintf("HNSW payload_m: %d\n", *n.PayloadM))
+		if n.Config != nil {
+			if n.Config.Hnsw != nil && n.Config.Hnsw.PayloadM != nil {
+				plan.WriteString(fmt.Sprintf("HNSW payload_m: %d\n", *n.Config.Hnsw.PayloadM))
+			}
 		}
 		if n.Quantization != nil {
 			plan.WriteString(fmt.Sprintf("Quantization: %s\n", n.Quantization.Type))
@@ -265,6 +270,30 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			plan.WriteString("Type: DENSE\n")
 		}
 		plan.WriteString("Action: Create new collection\n")
+	case *ast.AlterCollectionStmt:
+		plan.WriteString(fmt.Sprintf("Statement: ALTER COLLECTION %s\n", n.Collection))
+		if n.Config != nil {
+			if n.Config.Hnsw != nil {
+				plan.WriteString("Alteration: HNSW config\n")
+			}
+			if n.Config.Vectors != nil {
+				plan.WriteString("Alteration: Vectors config\n")
+			}
+			if n.Config.Optimizers != nil {
+				plan.WriteString("Alteration: Optimizers config\n")
+			}
+			if n.Config.Params != nil {
+				plan.WriteString("Alteration: Params config\n")
+			}
+		}
+		if n.Quantization != nil {
+			if n.Quantization.Disabled {
+				plan.WriteString("Alteration: Disable quantization\n")
+			} else {
+				plan.WriteString(fmt.Sprintf("Alteration: %s quantization\n", n.Quantization.Config.Type))
+			}
+		}
+		plan.WriteString("Action: Alter existing collection\n")
 	case *ast.DropCollectionStmt:
 		plan.WriteString(fmt.Sprintf("Statement: DROP COLLECTION %s\n", n.Collection))
 		plan.WriteString("Action: Delete collection and all points\n")
@@ -537,7 +566,14 @@ func formatCollectionDiagnostics(data map[string]any) string {
 			if vname == "" {
 				label = "  Vector"
 			}
-			fmt.Fprintf(&b, "%s        : %v dims, %v distance\n", label, vconf["size"], vconf["distance"])
+			fmt.Fprintf(&b, "%s        : %v dims, %v distance", label, vconf["size"], vconf["distance"])
+			if onDisk, ok := vconf["on_disk"]; ok && onDisk != nil {
+				fmt.Fprintf(&b, ", on_disk=%v", onDisk)
+			}
+			if inlineStorage, ok := vconf["hnsw_inline_storage"]; ok && inlineStorage != nil {
+				fmt.Fprintf(&b, ", hnsw_inline_storage=%v", inlineStorage)
+			}
+			b.WriteString("\n")
 		}
 	}
 
@@ -568,6 +604,9 @@ func formatCollectionDiagnostics(data map[string]any) string {
 		if v, ok := hnsw["payload_m"]; ok && v != nil {
 			fmt.Fprintf(&b, "  HNSW payload_m       : %v\n", v)
 		}
+		if v, ok := hnsw["inline_storage"]; ok && v != nil {
+			fmt.Fprintf(&b, "  HNSW inline_storage  : %v\n", v)
+		}
 	}
 
 	if schema, ok := data["payload_schema"].(map[string]any); ok && len(schema) > 0 {
@@ -593,8 +632,17 @@ func formatCollectionDiagnostics(data map[string]any) string {
 
 	if sh, ok := data["sharding"].(map[string]any); ok {
 		fmt.Fprintf(&b, "  Shards               : %v\n", sh["shard_number"])
-		fmt.Fprintf(&b, "  Replicas             : %v\n", sh["replication_factor"])
+		fmt.Fprintf(&b, "  Replication factor   : %v\n", sh["replication_factor"])
 		fmt.Fprintf(&b, "  Write consistency    : %v\n", sh["write_consistency_factor"])
+		if v, ok := sh["read_fan_out_factor"]; ok && v != nil {
+			fmt.Fprintf(&b, "  Read fan-out factor  : %v\n", v)
+		}
+		if v, ok := sh["read_fan_out_delay_ms"]; ok && v != nil {
+			fmt.Fprintf(&b, "  Read fan-out delay ms: %v\n", v)
+		}
+		if v, ok := sh["on_disk_payload"]; ok && v != nil {
+			fmt.Fprintf(&b, "  On-disk payload      : %v\n", v)
+		}
 	}
 
 	return b.String()
@@ -614,16 +662,30 @@ func (e *Executor) extractCollectionDiagnostics(
 	if vectorsConfig != nil {
 		if paramsMap := vectorsConfig.GetParamsMap(); paramsMap != nil {
 			for vname, vconfig := range paramsMap.GetMap() {
-				vectorDetails[vname] = map[string]any{
+				entry := map[string]any{
 					"size":     vconfig.Size,
 					"distance": vconfig.Distance.String(),
 				}
+				if vconfig.OnDisk != nil {
+					entry["on_disk"] = vconfig.GetOnDisk()
+				}
+				if vconfig.HnswConfig != nil && vconfig.HnswConfig.InlineStorage != nil {
+					entry["hnsw_inline_storage"] = vconfig.HnswConfig.GetInlineStorage()
+				}
+				vectorDetails[vname] = entry
 			}
 		} else if singleParams := vectorsConfig.GetParams(); singleParams != nil {
-			vectorDetails[""] = map[string]any{
+			entry := map[string]any{
 				"size":     singleParams.Size,
 				"distance": singleParams.Distance.String(),
 			}
+			if singleParams.OnDisk != nil {
+				entry["on_disk"] = singleParams.GetOnDisk()
+			}
+			if singleParams.HnswConfig != nil && singleParams.HnswConfig.InlineStorage != nil {
+				entry["hnsw_inline_storage"] = singleParams.HnswConfig.GetInlineStorage()
+			}
+			vectorDetails[""] = entry
 		}
 	}
 
@@ -675,6 +737,9 @@ func (e *Executor) extractCollectionDiagnostics(
 		if hnswConfig.PayloadM != nil {
 			hnsw["payload_m"] = hnswConfig.GetPayloadM()
 		}
+		if hnswConfig.InlineStorage != nil {
+			hnsw["inline_storage"] = hnswConfig.GetInlineStorage()
+		}
 	}
 
 	// Payload schema / indexes
@@ -691,9 +756,12 @@ func (e *Executor) extractCollectionDiagnostics(
 	writeConsistencyFactor := params.GetWriteConsistencyFactor()
 
 	sharding := map[string]any{
-		"shard_number":             params.ShardNumber,
-		"replication_factor":       replicationFactor,
-		"write_consistency_factor": writeConsistencyFactor,
+		"shard_number":              params.ShardNumber,
+		"replication_factor":        replicationFactor,
+		"write_consistency_factor":  writeConsistencyFactor,
+		"read_fan_out_factor":       params.GetReadFanOutFactor(),
+		"read_fan_out_delay_ms":     params.GetReadFanOutDelayMs(),
+		"on_disk_payload":           params.GetOnDiskPayload(),
 	}
 
 	var pointsCountVal any
@@ -866,9 +934,20 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 		CollectionName: n.Collection,
 		VectorsConfig:  qdrant.NewVectorsConfigMap(collectionVectorParams(denseSize, n.Rerank)),
 	}
-	if n.PayloadM != nil {
-		collection.HnswConfig = &qdrant.HnswConfigDiff{
-			PayloadM: qdrant.PtrOf(*n.PayloadM),
+	if n.Config != nil {
+		if n.Config.Vectors != nil && n.Config.Vectors.OnDisk != nil {
+			for _, v := range collection.GetVectorsConfig().GetParamsMap().GetMap() {
+				v.OnDisk = n.Config.Vectors.OnDisk
+			}
+		}
+		if n.Config.Hnsw != nil {
+			collection.HnswConfig = buildHnswConfigDiff(n.Config.Hnsw)
+		}
+		if n.Config.Optimizers != nil {
+			collection.OptimizersConfig = buildOptimizersConfigDiff(n.Config.Optimizers)
+		}
+		if n.Config.Params != nil {
+			applyCollectionParamsCreate(n.Config.Params, collection)
 		}
 	}
 	if n.Quantization != nil {
@@ -912,6 +991,75 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 			"hybrid":     n.Hybrid,
 			"rerank":     n.Rerank,
 			"dense_size": denseSize,
+		},
+	}, nil
+}
+
+func (e *Executor) doAlterCollection(n *ast.AlterCollectionStmt) (*ExecResponse, error) {
+	ctx := context.Background()
+
+	exists, err := e.client.CollectionExists(ctx, n.Collection)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check collection: %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("collection '%s' does not exist", n.Collection)
+	}
+
+	req := &qdrant.UpdateCollection{
+		CollectionName: n.Collection,
+	}
+	if n.Config != nil {
+		if n.Config.Vectors != nil && n.Config.Vectors.OnDisk != nil {
+			denseName := ""
+			info, err := e.client.GetCollectionInfo(ctx, n.Collection)
+			if err == nil {
+				vectors := info.GetConfig().GetParams().GetVectorsConfig()
+				if vectors != nil {
+					if paramsMap := vectors.GetParamsMap(); paramsMap != nil {
+						for vname := range paramsMap.GetMap() {
+							if vname != sparseVectorName && vname != rerankVectorName {
+								denseName = vname
+								break
+							}
+						}
+					}
+				}
+			}
+			req.VectorsConfig = &qdrant.VectorsConfigDiff{
+				Config: &qdrant.VectorsConfigDiff_ParamsMap{
+					ParamsMap: &qdrant.VectorParamsDiffMap{
+						Map: map[string]*qdrant.VectorParamsDiff{
+							denseName: {OnDisk: n.Config.Vectors.OnDisk},
+						},
+					},
+				},
+			}
+		}
+		if n.Config.Hnsw != nil {
+			req.HnswConfig = buildHnswConfigDiff(n.Config.Hnsw)
+		}
+		if n.Config.Optimizers != nil {
+			req.OptimizersConfig = buildOptimizersConfigDiff(n.Config.Optimizers)
+		}
+		if n.Config.Params != nil {
+			req.Params = buildCollectionParamsDiff(n.Config.Params)
+		}
+	}
+	if n.Quantization != nil {
+		req.QuantizationConfig = buildAlterQuantizationConfig(n.Quantization)
+	}
+
+	if err := e.client.UpdateCollection(ctx, req); err != nil {
+		return nil, fmt.Errorf("failed to alter collection: %w", err)
+	}
+
+	return &ExecResponse{
+		OK:        true,
+		Operation: "alter_collection",
+		Message:   fmt.Sprintf("Collection '%s' altered", n.Collection),
+		Data: map[string]any{
+			"collection": n.Collection,
 		},
 	}, nil
 }
@@ -1633,6 +1781,171 @@ func buildQuantizationConfig(cfg *ast.QuantizationConfig) (*qdrant.QuantizationC
 	default:
 		return nil, nil
 	}
+}
+
+func buildHnswConfigDiff(cfg *ast.HnswRuntimeConfig) *qdrant.HnswConfigDiff {
+	if cfg == nil {
+		return nil
+	}
+	diff := &qdrant.HnswConfigDiff{}
+	if cfg.M != nil {
+		diff.M = cfg.M
+	}
+	if cfg.EfConstruct != nil {
+		diff.EfConstruct = cfg.EfConstruct
+	}
+	if cfg.FullScanThreshold != nil {
+		diff.FullScanThreshold = cfg.FullScanThreshold
+	}
+	if cfg.MaxIndexingThreads != nil {
+		diff.MaxIndexingThreads = cfg.MaxIndexingThreads
+	}
+	if cfg.OnDisk != nil {
+		diff.OnDisk = cfg.OnDisk
+	}
+	if cfg.PayloadM != nil {
+		diff.PayloadM = cfg.PayloadM
+	}
+	if cfg.InlineStorage != nil {
+		diff.InlineStorage = cfg.InlineStorage
+	}
+	return diff
+}
+
+func buildOptimizersConfigDiff(cfg *ast.OptimizersRuntimeConfig) *qdrant.OptimizersConfigDiff {
+	if cfg == nil {
+		return nil
+	}
+	diff := &qdrant.OptimizersConfigDiff{}
+	if cfg.DeletedThreshold != nil {
+		diff.DeletedThreshold = cfg.DeletedThreshold
+	}
+	if cfg.VacuumMinVectorNumber != nil {
+		diff.VacuumMinVectorNumber = cfg.VacuumMinVectorNumber
+	}
+	if cfg.DefaultSegmentNumber != nil {
+		diff.DefaultSegmentNumber = cfg.DefaultSegmentNumber
+	}
+	if cfg.MaxSegmentSize != nil {
+		diff.MaxSegmentSize = cfg.MaxSegmentSize
+	}
+	if cfg.MemmapThreshold != nil {
+		diff.MemmapThreshold = cfg.MemmapThreshold
+	}
+	if cfg.IndexingThreshold != nil {
+		diff.IndexingThreshold = cfg.IndexingThreshold
+	}
+	if cfg.FlushIntervalSec != nil {
+		diff.FlushIntervalSec = cfg.FlushIntervalSec
+	}
+	if cfg.PreventUnoptimized != nil {
+		diff.PreventUnoptimized = cfg.PreventUnoptimized
+	}
+	if cfg.MaxOptimizationThreads != nil {
+		switch v := cfg.MaxOptimizationThreads.(type) {
+		case int:
+			diff.MaxOptimizationThreads = &qdrant.MaxOptimizationThreads{
+				Variant: &qdrant.MaxOptimizationThreads_Value{
+					Value: uint64(v),
+				},
+			}
+		case string:
+			if toLowerStr(v) == "auto" {
+				diff.MaxOptimizationThreads = &qdrant.MaxOptimizationThreads{
+					Variant: &qdrant.MaxOptimizationThreads_Setting_{
+						Setting: qdrant.MaxOptimizationThreads_Auto,
+					},
+				}
+			}
+		}
+	}
+	return diff
+}
+
+func applyCollectionParamsCreate(cfg *ast.CollectionParamsConfig, req *qdrant.CreateCollection) {
+	if cfg.ReplicationFactor != nil {
+		req.ReplicationFactor = qdrant.PtrOf(uint32(*cfg.ReplicationFactor))
+	}
+	if cfg.WriteConsistencyFactor != nil {
+		req.WriteConsistencyFactor = qdrant.PtrOf(uint32(*cfg.WriteConsistencyFactor))
+	}
+	if cfg.OnDiskPayload != nil {
+		req.OnDiskPayload = cfg.OnDiskPayload
+	}
+}
+
+func buildCollectionParamsDiff(cfg *ast.CollectionParamsConfig) *qdrant.CollectionParamsDiff {
+	if cfg == nil {
+		return nil
+	}
+	diff := &qdrant.CollectionParamsDiff{}
+	if cfg.ReplicationFactor != nil {
+		diff.ReplicationFactor = qdrant.PtrOf(uint32(*cfg.ReplicationFactor))
+	}
+	if cfg.WriteConsistencyFactor != nil {
+		diff.WriteConsistencyFactor = qdrant.PtrOf(uint32(*cfg.WriteConsistencyFactor))
+	}
+	if cfg.ReadFanOutFactor != nil {
+		diff.ReadFanOutFactor = qdrant.PtrOf(uint32(*cfg.ReadFanOutFactor))
+	}
+	if cfg.ReadFanOutDelayMs != nil {
+		diff.ReadFanOutDelayMs = cfg.ReadFanOutDelayMs
+	}
+	if cfg.OnDiskPayload != nil {
+		diff.OnDiskPayload = cfg.OnDiskPayload
+	}
+	return diff
+}
+
+func buildAlterQuantizationConfig(update *ast.QuantizationUpdate) *qdrant.QuantizationConfigDiff {
+	if update == nil {
+		return nil
+	}
+	if update.Disabled {
+		return &qdrant.QuantizationConfigDiff{
+			Quantization: &qdrant.QuantizationConfigDiff_Disabled{
+				Disabled: &qdrant.Disabled{},
+			},
+		}
+	}
+	if update.Config != nil {
+		cfg, _ := buildQuantizationConfig(update.Config)
+		if cfg != nil {
+			switch cfg.Quantization.(type) {
+			case *qdrant.QuantizationConfig_Scalar:
+				return &qdrant.QuantizationConfigDiff{
+					Quantization: &qdrant.QuantizationConfigDiff_Scalar{
+						Scalar: cfg.GetScalar(),
+					},
+				}
+			case *qdrant.QuantizationConfig_Binary:
+				return &qdrant.QuantizationConfigDiff{
+					Quantization: &qdrant.QuantizationConfigDiff_Binary{
+						Binary: cfg.GetBinary(),
+					},
+				}
+			case *qdrant.QuantizationConfig_Product:
+				return &qdrant.QuantizationConfigDiff{
+					Quantization: &qdrant.QuantizationConfigDiff_Product{
+						Product: cfg.GetProduct(),
+					},
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func toLowerStr(s string) string {
+	result := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 32
+		}
+		result[i] = c
+	}
+	return string(result)
 }
 
 func (e *Executor) ensureCollectionForInsert(ctx context.Context, collection string, model *string, requestedHybrid bool) (bool, error) {

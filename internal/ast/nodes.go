@@ -17,13 +17,65 @@ type InsertBulkStmt struct {
 	SparseModel *string
 }
 
+type VectorsConfig struct {
+	OnDisk *bool
+}
+
+type HnswRuntimeConfig struct {
+	M                  *uint64
+	EfConstruct        *uint64
+	FullScanThreshold  *uint64
+	MaxIndexingThreads *uint64
+	OnDisk             *bool
+	PayloadM           *uint64
+	InlineStorage      *bool
+}
+
+type OptimizersRuntimeConfig struct {
+	DeletedThreshold          *float64
+	VacuumMinVectorNumber     *uint64
+	DefaultSegmentNumber      *uint64
+	MaxSegmentSize            *uint64
+	MemmapThreshold           *uint64
+	IndexingThreshold         *uint64
+	FlushIntervalSec          *uint64
+	MaxOptimizationThreads    interface{} // int or "auto" string
+	PreventUnoptimized        *bool
+}
+
+type CollectionParamsConfig struct {
+	ReplicationFactor       *uint64
+	WriteConsistencyFactor  *uint64
+	ReadFanOutFactor        *uint64
+	ReadFanOutDelayMs       *uint64
+	OnDiskPayload           *bool
+}
+
+type CollectionConfig struct {
+	Vectors    *VectorsConfig
+	Hnsw       *HnswRuntimeConfig
+	Optimizers *OptimizersRuntimeConfig
+	Params     *CollectionParamsConfig
+}
+
+type QuantizationUpdate struct {
+	Disabled bool
+	Config   *QuantizationConfig
+}
+
 type CreateCollectionStmt struct {
 	Collection   string
 	Hybrid       bool
 	Rerank       bool
 	Model        *string
 	Quantization *QuantizationConfig
-	PayloadM     *uint64
+	Config       *CollectionConfig
+}
+
+type AlterCollectionStmt struct {
+	Collection   string
+	Config       *CollectionConfig
+	Quantization *QuantizationUpdate
 }
 
 type QuantizationType string
@@ -137,6 +189,7 @@ type ASTNode interface {
 func (InsertStmt) isASTNode()           {}
 func (InsertBulkStmt) isASTNode()       {}
 func (CreateCollectionStmt) isASTNode() {}
+func (AlterCollectionStmt) isASTNode()  {}
 func (DropCollectionStmt) isASTNode()   {}
 func (ShowCollectionsStmt) isASTNode()  {}
 func (ShowCollectionStmt) isASTNode()   {}

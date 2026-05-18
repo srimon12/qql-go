@@ -24,14 +24,19 @@
 |---|---|---|---|---|
 | Create collection | `create_collection` | ✅ v1.0 | ✅ v0.1 | Go auto-creates on insert; Python supports explicit create and insert-time create paths |
 | Create with custom distance | `distance: DOT / EUCLID / MANHATTAN / COSINE` | ❌ | ❌ | Locked to COSINE |
-| Create with custom HNSW | `hnsw_config` | ❌ | ❌ | |
 | Create with quantization | `quantization_config` | ✅ v1.4 | ✅ v0.1.4 | `QUANTIZE SCALAR|BINARY|PRODUCT|TURBO` |
-| Create with on-disk payload | `on_disk_payload` | ❌ | ❌ | |
+| Create with on-disk payload | `on_disk_payload` | ❌ | ✅ v0.1.8 | Go supports via `WITH PARAMS { on_disk_payload: true }` |
+| Create with HNSW config | `hnsw_config` | ✅ v2.4.1 | ✅ v0.1.8 | Go and Python now support `WITH HNSW { ... }` block |
+| Create with optimizer config | `optimizers_config` | ✅ v2.4.1 | ✅ v0.1.8 | Via `WITH OPTIMIZERS { ... }` block |
+| Create with vectors config | `vectors_config` | ✅ v2.4.1 | ✅ v0.1.8 | Via `WITH VECTORS { on_disk: true }` |
+| Create with collection params | `CollectionParams` | ✅ v2.4.1 | ✅ v0.1.8 | Via `WITH PARAMS { replication_factor, write_consistency_factor, on_disk_payload }` |
+| Alter collection | `update_collection` | ✅ v2.4.1 | ✅ v0.1.8 | `ALTER COLLECTION ... WITH ... QUANTIZE` |
+| Alter with quantization disable | `Disabled.DISABLED` | ✅ v2.4.1 | ✅ v0.1.8 | `QUANTIZE DISABLED` |
 | Create with sparse vectors | `sparse_vectors_config` | ✅ v1.0 | ✅ v0.1 | Via `HYBRID` |
 | Create with multivectors | `multivector_config` | ❌ | ⚠️ v0.1 | Go supports `CREATE COLLECTION ... HYBRID RERANK` with a ColBERT multivector; Python has no equivalent collection topology |
 | Drop collection | `delete_collection` | ✅ v1.0 | ✅ v0.1 | |
 | List collections | `get_collections` | ✅ v1.0 | ✅ v0.1 | `SHOW COLLECTIONS` |
-| Collection info | `get_collection` | ✅ v2.4.1 | ✅ v0.1.5 | Both support `SHOW COLLECTION <name>` |
+| Collection info | `get_collection` | ✅ v2.4.1 | ✅ v0.1.8 | Both support `SHOW COLLECTION <name>`. Go now shows per-vector on_disk, hnsw inline_storage, read_fan_out_factor, on_disk_payload |
 | Collection aliases | `create_alias` / `delete_alias` | ❌ | ❌ | |
 | Collection snapshots | `create_snapshot` | ❌ | ❌ | |
 
@@ -124,7 +129,7 @@
 | QQL Version | Minimum Qdrant | Recommended Qdrant | Tested Qdrant Versions |
 |---|---|---|---|
 | Python 2.4.1 | 1.13.0 | 1.13.x | 1.13.0 |
-| Go 0.1.7 | 1.13.0 | 1.13.x | 1.13.0 |
+| Go 0.1.8 | 1.13.0 | 1.13.x | 1.13.0 |
 
 ### Language Support
 
@@ -156,6 +161,11 @@
 | Sparse BM25 implementation differs | Python uses FastEmbed `SparseTextEmbedding("Qdrant/bm25")` | Go uses repo-local sparse weighting plus Qdrant sparse `idf` modifier | #TBD |
 | Go-only rerank collection topology | Python reranks locally without a ColBERT multivector collection | Go uses `HYBRID RERANK` / ColBERT multivector collections for cloud rerank | #TBD |
 | `qql-go` has no programmatic API equivalent to Python's `run_query()` | N/A | Affected | #TBD |
+| `CREATE COLLECTION ... HNSW {...}` (without WITH) | No longer valid syntax | No longer valid syntax | ✅ Fixed — both now require `WITH HNSW { ... }` |
+| ALTER COLLECTION support | ✅ v2.4.1 | ✅ v0.1.8 | ✅ Now at parity |
+| SHOW COLLECTION shows outdated diagnostics | ✅ v2.4.1 | ✅ v0.1.8 | ✅ Now at parity (on_disk, inline_storage, read_fan_out, on_disk_payload) |
+| Dumper omits quantization and config blocks | ✅ v2.4.1 | ✅ v0.1.8 | ✅ Now at parity |
+| Comment stripping breaks `--` inside strings | ✅ v2.4.1 | ✅ v0.1.8 | ✅ Now at parity |
 
 ---
 
