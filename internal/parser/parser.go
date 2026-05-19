@@ -384,6 +384,10 @@ func (p *Parser) parseHnswConfigBlock() (*ast.CollectionConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	fullScanThreshold, err := collectionNonNegativeUint64(config, "full_scan_threshold", p.peek().Pos)
+	if err != nil {
+		return nil, err
+	}
 	maxIndexingThreads, err := collectionPositiveUint64(config, "max_indexing_threads", p.peek().Pos)
 	if err != nil {
 		return nil, err
@@ -396,7 +400,7 @@ func (p *Parser) parseHnswConfigBlock() (*ast.CollectionConfig, error) {
 		Hnsw: &ast.HnswRuntimeConfig{
 			M:                  mVal,
 			EfConstruct:        efConstruct,
-			FullScanThreshold:  collectionNonNegativeUint64(config, "full_scan_threshold"),
+			FullScanThreshold:  fullScanThreshold,
 			MaxIndexingThreads: maxIndexingThreads,
 			OnDisk:             collectionBool(config, "on_disk"),
 			PayloadM:           payloadM,
@@ -490,14 +494,22 @@ func (p *Parser) parseOptimizersConfigBlock() (*ast.CollectionConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	memmapThreshold, err := collectionNonNegativeUint64(config, "memmap_threshold", p.peek().Pos)
+	if err != nil {
+		return nil, err
+	}
+	indexingThreshold, err := collectionNonNegativeUint64(config, "indexing_threshold", p.peek().Pos)
+	if err != nil {
+		return nil, err
+	}
 	return &ast.CollectionConfig{
 		Optimizers: &ast.OptimizersRuntimeConfig{
 			DeletedThreshold:       collectionFloatRange(config, "deleted_threshold", 0.0, 1.0),
 			VacuumMinVectorNumber:  vacuumMinVectorNumber,
 			DefaultSegmentNumber:   defaultSegmentNumber,
 			MaxSegmentSize:         maxSegmentSize,
-			MemmapThreshold:        collectionNonNegativeUint64(config, "memmap_threshold"),
-			IndexingThreshold:      collectionNonNegativeUint64(config, "indexing_threshold"),
+			MemmapThreshold:        memmapThreshold,
+			IndexingThreshold:      indexingThreshold,
 			FlushIntervalSec:       flushIntervalSec,
 			MaxOptimizationThreads: collectionMaxOptimizationThreads(config, "max_optimization_threads"),
 			PreventUnoptimized:     collectionBool(config, "prevent_unoptimized"),
@@ -541,12 +553,16 @@ func (p *Parser) parseCollectionParamsConfigBlock(forAlter bool) (*ast.Collectio
 	if err != nil {
 		return nil, err
 	}
+	readFanOutDelayMs, err := collectionNonNegativeUint64(config, "read_fan_out_delay_ms", p.peek().Pos)
+	if err != nil {
+		return nil, err
+	}
 	return &ast.CollectionConfig{
 		Params: &ast.CollectionParamsConfig{
 			ReplicationFactor:      replicationFactor,
 			WriteConsistencyFactor: writeConsistencyFactor,
 			ReadFanOutFactor:       readFanOutFactor,
-			ReadFanOutDelayMs:      collectionNonNegativeUint64(config, "read_fan_out_delay_ms"),
+			ReadFanOutDelayMs:      readFanOutDelayMs,
 			OnDiskPayload:          collectionBool(config, "on_disk_payload"),
 		},
 	}, nil
@@ -576,16 +592,16 @@ func collectionPositiveUint64(config map[string]interface{}, key string, pos int
 	return nil, errors.NewQQLSyntaxError(key+" must be a positive integer", pos)
 }
 
-func collectionNonNegativeUint64(config map[string]interface{}, key string) *uint64 {
+func collectionNonNegativeUint64(config map[string]interface{}, key string, pos int) (*uint64, error) {
 	v, ok := collectionValue(config, key)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	if num, ok := v.(int); ok && num >= 0 {
 		val := uint64(num)
-		return &val
+		return &val, nil
 	}
-	return nil
+	return nil, errors.NewQQLSyntaxError(key+" must be a non-negative integer", pos)
 }
 
 func collectionFloatRange(config map[string]interface{}, key string, min, max float64) *float64 {

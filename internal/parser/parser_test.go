@@ -277,6 +277,21 @@ func TestParseCollectionConfigRejectsNonPositiveValues(t *testing.T) {
 			input: "CREATE COLLECTION docs WITH PARAMS { replication_factor: 0 }",
 			want:  "replication_factor must be a positive integer",
 		},
+		{
+			name:  "hnsw full scan threshold negative",
+			input: "CREATE COLLECTION docs WITH HNSW { full_scan_threshold: -1 }",
+			want:  "full_scan_threshold must be a non-negative integer",
+		},
+		{
+			name:  "optimizer indexing threshold negative",
+			input: "CREATE COLLECTION docs WITH OPTIMIZERS { indexing_threshold: -1 }",
+			want:  "indexing_threshold must be a non-negative integer",
+		},
+		{
+			name:  "alter read fan out delay negative",
+			input: "ALTER COLLECTION docs WITH PARAMS { read_fan_out_delay_ms: -1 }",
+			want:  "read_fan_out_delay_ms must be a non-negative integer",
+		},
 	}
 
 	for _, tt := range tests {
