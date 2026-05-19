@@ -756,12 +756,12 @@ func (e *Executor) extractCollectionDiagnostics(
 	writeConsistencyFactor := params.GetWriteConsistencyFactor()
 
 	sharding := map[string]any{
-		"shard_number":              params.ShardNumber,
-		"replication_factor":        replicationFactor,
-		"write_consistency_factor":  writeConsistencyFactor,
-		"read_fan_out_factor":       params.GetReadFanOutFactor(),
-		"read_fan_out_delay_ms":     params.GetReadFanOutDelayMs(),
-		"on_disk_payload":           params.GetOnDiskPayload(),
+		"shard_number":             params.ShardNumber,
+		"replication_factor":       replicationFactor,
+		"write_consistency_factor": writeConsistencyFactor,
+		"read_fan_out_factor":      params.GetReadFanOutFactor(),
+		"read_fan_out_delay_ms":    params.GetReadFanOutDelayMs(),
+		"on_disk_payload":          params.GetOnDiskPayload(),
 	}
 
 	var pointsCountVal any
@@ -1011,29 +1011,39 @@ func (e *Executor) doAlterCollection(n *ast.AlterCollectionStmt) (*ExecResponse,
 	}
 	if n.Config != nil {
 		if n.Config.Vectors != nil && n.Config.Vectors.OnDisk != nil {
-			denseName := ""
 			info, err := e.client.GetCollectionInfo(ctx, n.Collection)
-			if err == nil {
-				vectors := info.GetConfig().GetParams().GetVectorsConfig()
-				if vectors != nil {
-					if paramsMap := vectors.GetParamsMap(); paramsMap != nil {
-						for vname := range paramsMap.GetMap() {
-							if vname != sparseVectorName && vname != rerankVectorName {
-								denseName = vname
-								break
-							}
+			if err != nil {
+				return nil, fmt.Errorf("failed to get collection info: %w", err)
+			}
+			vectors := info.GetConfig().GetParams().GetVectorsConfig()
+			if vectors == nil {
+				return nil, fmt.Errorf("collection '%s' has no dense vectors to alter", n.Collection)
+			}
+			if vectors.GetParams() != nil {
+				req.VectorsConfig = &qdrant.VectorsConfigDiff{
+					Config: &qdrant.VectorsConfigDiff_Params{
+						Params: &qdrant.VectorParamsDiff{OnDisk: n.Config.Vectors.OnDisk},
+					},
+				}
+			} else {
+				diffMap := map[string]*qdrant.VectorParamsDiff{}
+				if paramsMap := vectors.GetParamsMap(); paramsMap != nil {
+					for vname := range paramsMap.GetMap() {
+						if vname != sparseVectorName && vname != rerankVectorName {
+							diffMap[vname] = &qdrant.VectorParamsDiff{OnDisk: n.Config.Vectors.OnDisk}
 						}
 					}
 				}
-			}
-			req.VectorsConfig = &qdrant.VectorsConfigDiff{
-				Config: &qdrant.VectorsConfigDiff_ParamsMap{
-					ParamsMap: &qdrant.VectorParamsDiffMap{
-						Map: map[string]*qdrant.VectorParamsDiff{
-							denseName: {OnDisk: n.Config.Vectors.OnDisk},
+				if len(diffMap) == 0 {
+					return nil, fmt.Errorf("collection '%s' has no dense vectors to alter", n.Collection)
+				}
+				req.VectorsConfig = &qdrant.VectorsConfigDiff{
+					Config: &qdrant.VectorsConfigDiff_ParamsMap{
+						ParamsMap: &qdrant.VectorParamsDiffMap{
+							Map: diffMap,
 						},
 					},
-				},
+				}
 			}
 		}
 		if n.Config.Hnsw != nil {
@@ -1047,7 +1057,11 @@ func (e *Executor) doAlterCollection(n *ast.AlterCollectionStmt) (*ExecResponse,
 		}
 	}
 	if n.Quantization != nil {
-		req.QuantizationConfig = buildAlterQuantizationConfig(n.Quantization)
+		var err error
+		req.QuantizationConfig, err = buildAlterQuantizationConfig(n.Quantization)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if err := e.client.UpdateCollection(ctx, req); err != nil {
@@ -1897,19 +1911,22 @@ func buildCollectionParamsDiff(cfg *ast.CollectionParamsConfig) *qdrant.Collecti
 	return diff
 }
 
-func buildAlterQuantizationConfig(update *ast.QuantizationUpdate) *qdrant.QuantizationConfigDiff {
+func buildAlterQuantizationConfig(update *ast.QuantizationUpdate) (*qdrant.QuantizationConfigDiff, error) {
 	if update == nil {
-		return nil
+		return nil, nil
 	}
 	if update.Disabled {
 		return &qdrant.QuantizationConfigDiff{
 			Quantization: &qdrant.QuantizationConfigDiff_Disabled{
 				Disabled: &qdrant.Disabled{},
 			},
-		}
+		}, nil
 	}
 	if update.Config != nil {
-		cfg, _ := buildQuantizationConfig(update.Config)
+		cfg, err := buildQuantizationConfig(update.Config)
+		if err != nil {
+			return nil, err
+		}
 		if cfg != nil {
 			switch cfg.Quantization.(type) {
 			case *qdrant.QuantizationConfig_Scalar:
@@ -1917,23 +1934,29 @@ func buildAlterQuantizationConfig(update *ast.QuantizationUpdate) *qdrant.Quanti
 					Quantization: &qdrant.QuantizationConfigDiff_Scalar{
 						Scalar: cfg.GetScalar(),
 					},
-				}
+				}, nil
 			case *qdrant.QuantizationConfig_Binary:
 				return &qdrant.QuantizationConfigDiff{
 					Quantization: &qdrant.QuantizationConfigDiff_Binary{
 						Binary: cfg.GetBinary(),
 					},
-				}
+				}, nil
 			case *qdrant.QuantizationConfig_Product:
 				return &qdrant.QuantizationConfigDiff{
 					Quantization: &qdrant.QuantizationConfigDiff_Product{
 						Product: cfg.GetProduct(),
 					},
-				}
+				}, nil
+			case *qdrant.QuantizationConfig_Turboquant:
+				return &qdrant.QuantizationConfigDiff{
+					Quantization: &qdrant.QuantizationConfigDiff_Turboquant{
+						Turboquant: cfg.GetTurboquant(),
+					},
+				}, nil
 			}
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 func toLowerStr(s string) string {

@@ -321,6 +321,16 @@ func buildDumpCreateLine(collection string, hybrid bool, info *qdrant.Collection
 		if optimizerConfig.FlushIntervalSec != nil {
 			optParts = append(optParts, fmt.Sprintf("flush_interval_sec: %d", *optimizerConfig.FlushIntervalSec))
 		}
+		if optimizerConfig.MaxOptimizationThreads != nil {
+			switch optimizerConfig.MaxOptimizationThreads.GetVariant().(type) {
+			case *qdrant.MaxOptimizationThreads_Value:
+				optParts = append(optParts, fmt.Sprintf("max_optimization_threads: %d", optimizerConfig.MaxOptimizationThreads.GetValue()))
+			case *qdrant.MaxOptimizationThreads_Setting_:
+				if optimizerConfig.MaxOptimizationThreads.GetSetting() == qdrant.MaxOptimizationThreads_Auto {
+					optParts = append(optParts, "max_optimization_threads: 'auto'")
+				}
+			}
+		}
 		if optimizerConfig.PreventUnoptimized != nil {
 			optParts = append(optParts, fmt.Sprintf("prevent_unoptimized: %v", *optimizerConfig.PreventUnoptimized))
 		}
@@ -332,22 +342,20 @@ func buildDumpCreateLine(collection string, hybrid bool, info *qdrant.Collection
 	}
 
 	// PARAMS
-	if params.GetReplicationFactor() != 0 || params.GetWriteConsistencyFactor() != 0 {
-		var paramParts []string
-		if rf := params.GetReplicationFactor(); rf != 0 {
-			paramParts = append(paramParts, fmt.Sprintf("replication_factor: %d", rf))
-		}
-		if wcf := params.GetWriteConsistencyFactor(); wcf != 0 {
-			paramParts = append(paramParts, fmt.Sprintf("write_consistency_factor: %d", wcf))
-		}
-		if params.GetOnDiskPayload() {
-			paramParts = append(paramParts, "on_disk_payload: true")
-		}
-		if len(paramParts) > 0 {
-			b.WriteString(" WITH PARAMS { ")
-			b.WriteString(strings.Join(paramParts, ", "))
-			b.WriteString(" }")
-		}
+	var paramParts []string
+	if rf := params.GetReplicationFactor(); rf != 0 {
+		paramParts = append(paramParts, fmt.Sprintf("replication_factor: %d", rf))
+	}
+	if wcf := params.GetWriteConsistencyFactor(); wcf != 0 {
+		paramParts = append(paramParts, fmt.Sprintf("write_consistency_factor: %d", wcf))
+	}
+	if params.GetOnDiskPayload() {
+		paramParts = append(paramParts, "on_disk_payload: true")
+	}
+	if len(paramParts) > 0 {
+		b.WriteString(" WITH PARAMS { ")
+		b.WriteString(strings.Join(paramParts, ", "))
+		b.WriteString(" }")
 	}
 
 	// Quantization
@@ -378,7 +386,7 @@ func buildDumpCreateLine(collection string, hybrid bool, info *qdrant.Collection
 			turbo := qc.GetTurboquant()
 			b.WriteString(" QUANTIZE TURBO")
 			if turbo.Bits != nil {
-				b.WriteString(fmt.Sprintf(" BITS %v", turbo.Bits))
+				b.WriteString(fmt.Sprintf(" BITS %g", turboBitsValue(*turbo.Bits)))
 			}
 			if turbo.GetAlwaysRam() {
 				b.WriteString(" ALWAYS RAM")
@@ -387,6 +395,21 @@ func buildDumpCreateLine(collection string, hybrid bool, info *qdrant.Collection
 	}
 
 	return b.String()
+}
+
+func turboBitsValue(bits qdrant.TurboQuantBitSize) float64 {
+	switch bits {
+	case qdrant.TurboQuantBitSize_Bits1:
+		return 1
+	case qdrant.TurboQuantBitSize_Bits1_5:
+		return 1.5
+	case qdrant.TurboQuantBitSize_Bits2:
+		return 2
+	case qdrant.TurboQuantBitSize_Bits4:
+		return 4
+	default:
+		return float64(bits)
+	}
 }
 
 func indent(value, prefix string) string {

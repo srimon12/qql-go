@@ -225,9 +225,38 @@ func TestParseCreate(t *testing.T) {
 					require.NotNil(t, stmt.Config.Hnsw)
 					assert.Equal(t, tt.want.Config.Hnsw.PayloadM, stmt.Config.Hnsw.PayloadM)
 				}
+			} else {
+				assert.Nil(t, stmt.Config)
 			}
 		})
 	}
+}
+
+func TestParseCreateRejectsAlterOnlyParamsCaseInsensitive(t *testing.T) {
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize("CREATE COLLECTION docs WITH PARAMS { Read_Fan_Out_Factor: 4 }")
+	require.NoError(t, err)
+
+	p := NewParser()
+	_, err = p.Parse(tokens)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "supported only for ALTER COLLECTION")
+}
+
+func TestParseCollectionConfigCaseVariantKeysAreDeterministic(t *testing.T) {
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize("CREATE COLLECTION docs WITH HNSW { M: 32, m: 16 }")
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+	stmt, ok := node.(*ast.CreateCollectionStmt)
+	require.True(t, ok)
+	require.NotNil(t, stmt.Config)
+	require.NotNil(t, stmt.Config.Hnsw)
+	require.NotNil(t, stmt.Config.Hnsw.M)
+	require.Equal(t, uint64(16), *stmt.Config.Hnsw.M)
 }
 
 func TestParseCreateQuantizeErrors(t *testing.T) {

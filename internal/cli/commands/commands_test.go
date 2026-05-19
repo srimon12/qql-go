@@ -353,6 +353,15 @@ func TestCreateCollectionIncludesPayloadM(t *testing.T) {
 func TestAlterCollectionPassesConfigBlocks(t *testing.T) {
 	client := newFakeQdrantClient()
 	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
+					denseVectorName: {Size: denseVectorSize, Distance: qdrant.Distance_Cosine},
+				}),
+			},
+		},
+	}
 	exec := NewExecutor(client, &config.Config{})
 
 	resp, err := exec.doAlterCollection(&ast.AlterCollectionStmt{
@@ -374,7 +383,7 @@ func TestAlterCollectionPassesConfigBlocks(t *testing.T) {
 
 	vsMap := req.VectorsConfig.GetParamsMap().GetMap()
 	require.NotNil(t, vsMap)
-	require.True(t, vsMap[""].GetOnDisk())
+	require.True(t, vsMap[denseVectorName].GetOnDisk())
 
 	require.NotNil(t, req.HnswConfig)
 	require.Equal(t, uint64(5000), req.HnswConfig.GetFullScanThreshold())
@@ -388,6 +397,84 @@ func TestAlterCollectionPassesConfigBlocks(t *testing.T) {
 
 	require.NotNil(t, req.QuantizationConfig)
 	require.NotNil(t, req.QuantizationConfig.GetBinary())
+}
+
+func TestAlterCollectionVectorsOnDiskAppliesToAllDenseVectors(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
+					"text":           {Size: denseVectorSize, Distance: qdrant.Distance_Cosine},
+					"image":          {Size: denseVectorSize, Distance: qdrant.Distance_Cosine},
+					rerankVectorName: {Size: rerankVectorSize, Distance: qdrant.Distance_Cosine},
+				}),
+				SparseVectorsConfig: qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
+					sparseVectorName: {},
+				}),
+			},
+		},
+	}
+	exec := NewExecutor(client, &config.Config{})
+
+	_, err := exec.doAlterCollection(&ast.AlterCollectionStmt{
+		Collection: "docs",
+		Config: &ast.CollectionConfig{
+			Vectors: &ast.VectorsConfig{OnDisk: boolPtr(true)},
+		},
+	})
+	require.NoError(t, err)
+
+	vsMap := client.updateRequests[0].VectorsConfig.GetParamsMap().GetMap()
+	require.Len(t, vsMap, 2)
+	require.True(t, vsMap["text"].GetOnDisk())
+	require.True(t, vsMap["image"].GetOnDisk())
+	require.NotContains(t, vsMap, sparseVectorName)
+	require.NotContains(t, vsMap, rerankVectorName)
+}
+
+func TestAlterCollectionCanSetTurboQuantization(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	exec := NewExecutor(client, &config.Config{})
+
+	resp, err := exec.doAlterCollection(&ast.AlterCollectionStmt{
+		Collection: "docs",
+		Quantization: &ast.QuantizationUpdate{
+			Config: &ast.QuantizationConfig{
+				Type:      ast.QuantizationTypeTurbo,
+				TurboBits: float64Ptr(2.0),
+				AlwaysRAM: true,
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.True(t, resp.OK)
+	require.Len(t, client.updateRequests, 1)
+	turbo := client.updateRequests[0].QuantizationConfig.GetTurboquant()
+	require.NotNil(t, turbo)
+	require.True(t, turbo.GetAlwaysRam())
+	require.Equal(t, qdrant.TurboQuantBitSize_Bits2, turbo.GetBits())
+}
+
+func TestAlterCollectionRejectsInvalidTurboQuantization(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	exec := NewExecutor(client, &config.Config{})
+
+	_, err := exec.doAlterCollection(&ast.AlterCollectionStmt{
+		Collection: "docs",
+		Quantization: &ast.QuantizationUpdate{
+			Config: &ast.QuantizationConfig{
+				Type:      ast.QuantizationTypeTurbo,
+				TurboBits: float64Ptr(3.0),
+			},
+		},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported TURBO bit depth")
+	require.Empty(t, client.updateRequests)
 }
 
 func TestAlterCollectionCanDisableQuantization(t *testing.T) {
@@ -1088,21 +1175,21 @@ func TestBuildInsertVectorsLocalModeRejectsRerank(t *testing.T) {
 }
 
 type fakeQdrantClient struct {
-	mu                  sync.Mutex
-	exists              bool
-	info                *qdrant.CollectionInfo
-	createRequests      []*qdrant.CreateCollection
-	updateRequests      []*qdrant.UpdateCollection
-	fieldIndexRequests  []*qdrant.CreateFieldIndexCollection
-	upserts             []*qdrant.UpsertPoints
-	queryRequests       []*qdrant.QueryPoints
-	groupRequests       []*qdrant.QueryPointGroups
-	groupResults        []*qdrant.PointGroup
-	updateVectors       []*qdrant.UpdatePointVectors
-	setPayloads         []*qdrant.SetPayloadPoints
-	scrollRecords       []*qdrant.RetrievedPoint
-	scrollOffset        *qdrant.PointId
-	getRecords          []*qdrant.RetrievedPoint
+	mu                 sync.Mutex
+	exists             bool
+	info               *qdrant.CollectionInfo
+	createRequests     []*qdrant.CreateCollection
+	updateRequests     []*qdrant.UpdateCollection
+	fieldIndexRequests []*qdrant.CreateFieldIndexCollection
+	upserts            []*qdrant.UpsertPoints
+	queryRequests      []*qdrant.QueryPoints
+	groupRequests      []*qdrant.QueryPointGroups
+	groupResults       []*qdrant.PointGroup
+	updateVectors      []*qdrant.UpdatePointVectors
+	setPayloads        []*qdrant.SetPayloadPoints
+	scrollRecords      []*qdrant.RetrievedPoint
+	scrollOffset       *qdrant.PointId
+	getRecords         []*qdrant.RetrievedPoint
 }
 
 func newFakeQdrantClient() *fakeQdrantClient { return &fakeQdrantClient{} }

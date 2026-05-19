@@ -135,7 +135,7 @@
 
 | QQL Version | Python `qql-cli` | Go `qql-go` | Feature Parity |
 |---|---|---|---|
-| Current | 2.4.1 | 0.1.7 | ~98% |
+| Current | 2.4.1 | 0.1.8 | ~98% |
 | Target (Phase 1) | 2.4.1 | 0.2.0 | ~98% |
 | Target (Phase 2) | 2.4.1 | 0.3.0 | ~99% |
 
@@ -163,7 +163,7 @@
 | `qql-go` has no programmatic API equivalent to Python's `run_query()` | N/A | Affected | #TBD |
 | `CREATE COLLECTION ... HNSW {...}` (without WITH) | No longer valid syntax | No longer valid syntax | ✅ Fixed — both now require `WITH HNSW { ... }` |
 | ALTER COLLECTION support | ✅ v2.4.1 | ✅ v0.1.8 | ✅ Now at parity |
-| SHOW COLLECTION shows outdated diagnostics | ✅ v2.4.1 | ✅ v0.1.8 | ✅ Now at parity (on_disk, inline_storage, read_fan_out, on_disk_payload) |
+| SHOW COLLECTION shows outdated diagnostics | ✅ v2.4.1 | ✅ v0.1.8 | ✅ Now at parity (on_disk, inline_storage, read_fan_out_factor, on_disk_payload) |
 | Dumper omits quantization and config blocks | ✅ v2.4.1 | ✅ v0.1.8 | ✅ Now at parity |
 | Comment stripping breaks `--` inside strings | ✅ v2.4.1 | ✅ v0.1.8 | ✅ Now at parity |
 

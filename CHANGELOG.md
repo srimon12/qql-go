@@ -6,7 +6,12 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 ## [Unreleased]
 
-- No unreleased changes yet.
+### Fixed
+
+- `ALTER COLLECTION ... WITH VECTORS { on_disk: ... }` now updates unnamed vectors and every named dense vector instead of only the first discovered dense vector.
+- `ALTER COLLECTION ... QUANTIZE TURBO` now applies the Turbo quantization diff and reports invalid Turbo bit depths instead of silently dropping the update.
+- Collection dumps now preserve `max_optimization_threads`, `on_disk_payload`, and Turbo bit values in generated `CREATE COLLECTION` statements.
+- Collection config parsing is now deterministic for case-variant keys and rejects create-time `read_fan_out_factor` / `read_fan_out_delay_ms` case-insensitively.
 
 ## [0.1.7] - 2026-05-17
 

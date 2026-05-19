@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 
 	"github.com/srimon12/qql-go/internal/ast"
@@ -493,10 +494,7 @@ func (p *Parser) parseCollectionParamsConfigBlock(forAlter bool) (*ast.Collectio
 		}
 	}
 	if !forAlter {
-		if _, hasReadFanOut := config["read_fan_out_factor"]; hasReadFanOut {
-			return nil, errors.NewQQLSyntaxError("WITH PARAMS { read_fan_out_factor, read_fan_out_delay_ms } is supported only for ALTER COLLECTION", p.peek().Pos)
-		}
-		if _, hasReadFanOutDelay := config["read_fan_out_delay_ms"]; hasReadFanOutDelay {
+		if configHasKey(config, "read_fan_out_factor") || configHasKey(config, "read_fan_out_delay_ms") {
 			return nil, errors.NewQQLSyntaxError("WITH PARAMS { read_fan_out_factor, read_fan_out_delay_ms } is supported only for ALTER COLLECTION", p.peek().Pos)
 		}
 	}
@@ -512,81 +510,98 @@ func (p *Parser) parseCollectionParamsConfigBlock(forAlter bool) (*ast.Collectio
 }
 
 func collectionBool(config map[string]interface{}, key string) *bool {
-	for k, v := range config {
-		if toLower(k) == key {
-			if b, ok := v.(bool); ok {
-				return &b
-			}
-			// This shouldn't happen at runtime since parseDict validates types
-			return nil
-		}
+	v, ok := collectionValue(config, key)
+	if !ok {
+		return nil
 	}
+	if b, ok := v.(bool); ok {
+		return &b
+	}
+	// This shouldn't happen at runtime since parseDict validates types
 	return nil
 }
 
 func collectionPositiveUint64(config map[string]interface{}, key string) *uint64 {
-	for k, v := range config {
-		if toLower(k) == key {
-			if num, ok := v.(int); ok && num > 0 {
-				val := uint64(num)
-				return &val
-			}
-			return nil
-		}
+	v, ok := collectionValue(config, key)
+	if !ok {
+		return nil
+	}
+	if num, ok := v.(int); ok && num > 0 {
+		val := uint64(num)
+		return &val
 	}
 	return nil
 }
 
 func collectionNonNegativeUint64(config map[string]interface{}, key string) *uint64 {
-	for k, v := range config {
-		if toLower(k) == key {
-			if num, ok := v.(int); ok && num >= 0 {
-				val := uint64(num)
-				return &val
-			}
-			return nil
-		}
+	v, ok := collectionValue(config, key)
+	if !ok {
+		return nil
+	}
+	if num, ok := v.(int); ok && num >= 0 {
+		val := uint64(num)
+		return &val
 	}
 	return nil
 }
 
 func collectionFloatRange(config map[string]interface{}, key string, min, max float64) *float64 {
-	for k, v := range config {
-		if toLower(k) == key {
-			switch typed := v.(type) {
-			case int:
-				f := float64(typed)
-				if f >= min && f <= max {
-					return &f
-				}
-			case float64:
-				if typed >= min && typed <= max {
-					return &typed
-				}
-			}
-			return nil
+	v, ok := collectionValue(config, key)
+	if !ok {
+		return nil
+	}
+	switch typed := v.(type) {
+	case int:
+		f := float64(typed)
+		if f >= min && f <= max {
+			return &f
+		}
+	case float64:
+		if typed >= min && typed <= max {
+			return &typed
 		}
 	}
 	return nil
 }
 
 func collectionMaxOptimizationThreads(config map[string]interface{}, key string) interface{} {
-	for k, v := range config {
-		if toLower(k) == key {
-			switch typed := v.(type) {
-			case int:
-				if typed > 0 {
-					return typed
-				}
-			case string:
-				if toLower(typed) == "auto" {
-					return "auto"
-				}
-			}
-			return nil
+	v, ok := collectionValue(config, key)
+	if !ok {
+		return nil
+	}
+	switch typed := v.(type) {
+	case int:
+		if typed > 0 {
+			return typed
+		}
+	case string:
+		if toLower(typed) == "auto" {
+			return "auto"
 		}
 	}
 	return nil
+}
+
+func collectionValue(config map[string]interface{}, key string) (interface{}, bool) {
+	if v, ok := config[key]; ok {
+		return v, true
+	}
+	var matches []string
+	for k := range config {
+		if toLower(k) == key {
+			matches = append(matches, k)
+		}
+	}
+	if len(matches) == 0 {
+		return nil, false
+	}
+	sort.Strings(matches)
+	return config[matches[0]], true
+}
+
+func configHasKey(config map[string]interface{}, key string) bool {
+	_, ok := collectionValue(config, key)
+	return ok
 }
 
 func (p *Parser) validateHnswValue(key string, raw interface{}) error {

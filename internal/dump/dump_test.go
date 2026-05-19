@@ -12,11 +12,15 @@ import (
 
 type fakeClient struct {
 	hybrid bool
+	info   *qdrant.CollectionInfo
 	points [][]*qdrant.RetrievedPoint
 }
 
 func (f *fakeClient) CollectionExists(context.Context, string) (bool, error) { return true, nil }
 func (f *fakeClient) GetCollectionInfo(context.Context, string) (*qdrant.CollectionInfo, error) {
+	if f.info != nil {
+		return f.info, nil
+	}
 	info := &qdrant.CollectionInfo{
 		Config: &qdrant.CollectionConfig{
 			Params: &qdrant.CollectionParams{
@@ -91,6 +95,52 @@ func TestCollection(t *testing.T) {
 	require.Contains(t, text, "INSERT BULK INTO COLLECTION docs VALUES [")
 	require.Contains(t, text, "USING HYBRID")
 	require.Contains(t, text, "'id': '123e4567-e89b-12d3-a456-426614174000'")
+}
+
+func TestCollectionDumpsRuntimeConfigBlocks(t *testing.T) {
+	client := &fakeClient{
+		info: &qdrant.CollectionInfo{
+			Config: &qdrant.CollectionConfig{
+				Params: &qdrant.CollectionParams{
+					VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
+						"dense": {Size: 3, Distance: qdrant.Distance_Cosine, OnDisk: qdrant.PtrOf(true)},
+					}),
+					OnDiskPayload: true,
+				},
+				OptimizerConfig: &qdrant.OptimizersConfigDiff{
+					MaxOptimizationThreads: &qdrant.MaxOptimizationThreads{
+						Variant: &qdrant.MaxOptimizationThreads_Value{Value: 3},
+					},
+				},
+				QuantizationConfig: qdrant.NewQuantizationTurbo(&qdrant.TurboQuantization{
+					Bits:      qdrant.TurboQuantBitSize_Bits1_5.Enum(),
+					AlwaysRam: qdrant.PtrOf(true),
+				}),
+			},
+		},
+		points: [][]*qdrant.RetrievedPoint{
+			{
+				{
+					Id: qdrant.NewIDNum(1),
+					Payload: qdrant.NewValueMap(map[string]any{
+						"text": "hello",
+					}),
+				},
+			},
+		},
+	}
+
+	outputPath := filepath.Join(t.TempDir(), "dump.qql")
+	_, _, err := Collection(context.Background(), client, "docs", outputPath, 50)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(outputPath)
+	require.NoError(t, err)
+	text := string(data)
+	require.Contains(t, text, "WITH VECTORS { on_disk: true }")
+	require.Contains(t, text, "WITH OPTIMIZERS { max_optimization_threads: 3 }")
+	require.Contains(t, text, "WITH PARAMS { on_disk_payload: true }")
+	require.Contains(t, text, "QUANTIZE TURBO BITS 1.5 ALWAYS RAM")
 }
 
 func TestCollectionRejectsInvalidBatchSize(t *testing.T) {
