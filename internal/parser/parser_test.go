@@ -178,10 +178,14 @@ func TestParseCreate(t *testing.T) {
 		},
 		{
 			name:  "create with payload hnsw",
-			input: "CREATE COLLECTION mycollection HNSW {payload_m: 16}",
+			input: "CREATE COLLECTION mycollection WITH HNSW {payload_m: 16}",
 			want: &ast.CreateCollectionStmt{
 				Collection: "mycollection",
-				PayloadM:   uint64Ptr(16),
+				Config: &ast.CollectionConfig{
+					Hnsw: &ast.HnswRuntimeConfig{
+						PayloadM: uint64Ptr(16),
+					},
+				},
 			},
 		},
 	}
@@ -215,7 +219,90 @@ func TestParseCreate(t *testing.T) {
 					assert.Nil(t, stmt.Quantization.Quantile)
 				}
 			}
-			assert.Equal(t, tt.want.PayloadM, stmt.PayloadM)
+			if tt.want.Config != nil {
+				require.NotNil(t, stmt.Config)
+				if tt.want.Config.Hnsw != nil {
+					require.NotNil(t, stmt.Config.Hnsw)
+					assert.Equal(t, tt.want.Config.Hnsw.PayloadM, stmt.Config.Hnsw.PayloadM)
+				} else {
+					assert.Nil(t, stmt.Config.Hnsw)
+				}
+			} else {
+				assert.Nil(t, stmt.Config)
+			}
+		})
+	}
+}
+
+func TestParseCreateRejectsAlterOnlyParamsCaseInsensitive(t *testing.T) {
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize("CREATE COLLECTION docs WITH PARAMS { Read_Fan_Out_Factor: 4 }")
+	require.NoError(t, err)
+
+	p := NewParser()
+	_, err = p.Parse(tokens)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "supported only for ALTER COLLECTION")
+}
+
+func TestParseCollectionConfigCaseVariantKeysAreDeterministic(t *testing.T) {
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize("CREATE COLLECTION docs WITH HNSW { M: 32, m: 16 }")
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+	stmt, ok := node.(*ast.CreateCollectionStmt)
+	require.True(t, ok)
+	require.NotNil(t, stmt.Config)
+	require.NotNil(t, stmt.Config.Hnsw)
+	require.NotNil(t, stmt.Config.Hnsw.M)
+	require.Equal(t, uint64(16), *stmt.Config.Hnsw.M)
+}
+
+func TestParseCollectionConfigRejectsNonPositiveValues(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "hnsw m zero",
+			input: "CREATE COLLECTION docs WITH HNSW { m: 0 }",
+			want:  "m must be a positive integer",
+		},
+		{
+			name:  "params replication factor zero",
+			input: "CREATE COLLECTION docs WITH PARAMS { replication_factor: 0 }",
+			want:  "replication_factor must be a positive integer",
+		},
+		{
+			name:  "hnsw full scan threshold negative",
+			input: "CREATE COLLECTION docs WITH HNSW { full_scan_threshold: -1 }",
+			want:  "full_scan_threshold must be a non-negative integer",
+		},
+		{
+			name:  "optimizer indexing threshold negative",
+			input: "CREATE COLLECTION docs WITH OPTIMIZERS { indexing_threshold: -1 }",
+			want:  "indexing_threshold must be a non-negative integer",
+		},
+		{
+			name:  "alter read fan out delay negative",
+			input: "ALTER COLLECTION docs WITH PARAMS { read_fan_out_delay_ms: -1 }",
+			want:  "read_fan_out_delay_ms must be a non-negative integer",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.input)
+			require.NoError(t, err)
+
+			_, err = NewParser().Parse(tokens)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tt.want)
 		})
 	}
 }

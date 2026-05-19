@@ -27,7 +27,12 @@ const (
 	TokenKindAlways
 	TokenKindRam
 	TokenKindHnsw
+	TokenKindVectors
+	TokenKindOptimizers
+	TokenKindParams
+	TokenKindDisabled
 	TokenKindCreate
+	TokenKindAlter
 	TokenKindDrop
 	TokenKindShow
 	TokenKindCollections
@@ -121,7 +126,12 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindAlways:      "ALWAYS",
 	TokenKindRam:         "RAM",
 	TokenKindHnsw:        "HNSW",
+	TokenKindVectors:     "VECTORS",
+	TokenKindOptimizers:  "OPTIMIZERS",
+	TokenKindParams:      "PARAMS",
+	TokenKindDisabled:    "DISABLED",
 	TokenKindCreate:      "CREATE",
+	TokenKindAlter:       "ALTER",
 	TokenKindDrop:        "DROP",
 	TokenKindShow:        "SHOW",
 	TokenKindCollections: "COLLECTIONS",

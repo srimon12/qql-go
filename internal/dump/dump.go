@@ -51,11 +51,14 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("-- QQL dump for %s\n", collection))
 	builder.WriteString(fmt.Sprintf("-- Points: %d\n\n", total))
-	if hybrid {
-		builder.WriteString(fmt.Sprintf("CREATE COLLECTION %s HYBRID\n\n", collection))
-	} else {
-		builder.WriteString(fmt.Sprintf("CREATE COLLECTION %s\n\n", collection))
+
+	info, err := client.GetCollectionInfo(ctx, collection)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get collection info: %w", err)
 	}
+	createLine := buildDumpCreateLine(collection, hybrid, info)
+	builder.WriteString(createLine)
+	builder.WriteString("\n\n")
 
 	written := 0
 	skipped := 0
@@ -230,6 +233,183 @@ func escapeString(value string) string {
 	value = strings.ReplaceAll(value, "\\", "\\\\")
 	value = strings.ReplaceAll(value, "'", "\\'")
 	return value
+}
+
+func buildDumpCreateLine(collection string, hybrid bool, info *qdrant.CollectionInfo) string {
+	var b strings.Builder
+	b.WriteString("CREATE COLLECTION ")
+	b.WriteString(collection)
+	if hybrid {
+		b.WriteString(" HYBRID")
+	}
+
+	config := info.GetConfig()
+	params := config.GetParams()
+
+	// VECTORS
+	if vectorsCfg := params.GetVectorsConfig(); vectorsCfg != nil {
+		if paramsMap := vectorsCfg.GetParamsMap(); paramsMap != nil {
+			for _, vconfig := range paramsMap.GetMap() {
+				if vconfig.OnDisk != nil && vconfig.GetOnDisk() {
+					b.WriteString(" WITH VECTORS { on_disk: true }")
+					break
+				}
+			}
+		} else if single := vectorsCfg.GetParams(); single != nil {
+			if single.OnDisk != nil && single.GetOnDisk() {
+				b.WriteString(" WITH VECTORS { on_disk: true }")
+			}
+		}
+	}
+
+	// HNSW
+	hnswConfig := config.GetHnswConfig()
+	if hnswConfig != nil {
+		var hnswParts []string
+		addIfSet := func(name string, getter func() uint64) {
+			val := getter()
+			if val != 0 {
+				hnswParts = append(hnswParts, fmt.Sprintf("%s: %d", name, val))
+			}
+		}
+		addIfSet("m", hnswConfig.GetM)
+		addIfSet("ef_construct", hnswConfig.GetEfConstruct)
+		if hnswConfig.FullScanThreshold != nil {
+			hnswParts = append(hnswParts, fmt.Sprintf("full_scan_threshold: %d", hnswConfig.GetFullScanThreshold()))
+		}
+		if hnswConfig.MaxIndexingThreads != nil {
+			hnswParts = append(hnswParts, fmt.Sprintf("max_indexing_threads: %d", hnswConfig.GetMaxIndexingThreads()))
+		}
+		if hnswConfig.OnDisk != nil {
+			hnswParts = append(hnswParts, fmt.Sprintf("on_disk: %v", hnswConfig.GetOnDisk()))
+		}
+		if hnswConfig.PayloadM != nil {
+			hnswParts = append(hnswParts, fmt.Sprintf("payload_m: %d", hnswConfig.GetPayloadM()))
+		}
+		if hnswConfig.InlineStorage != nil {
+			hnswParts = append(hnswParts, fmt.Sprintf("inline_storage: %v", hnswConfig.GetInlineStorage()))
+		}
+		if len(hnswParts) > 0 {
+			b.WriteString(" WITH HNSW { ")
+			b.WriteString(strings.Join(hnswParts, ", "))
+			b.WriteString(" }")
+		}
+	}
+
+	// OPTIMIZERS
+	optimizerConfig := config.GetOptimizerConfig()
+	if optimizerConfig != nil {
+		var optParts []string
+		if optimizerConfig.DeletedThreshold != nil {
+			optParts = append(optParts, fmt.Sprintf("deleted_threshold: %v", *optimizerConfig.DeletedThreshold))
+		}
+		if optimizerConfig.VacuumMinVectorNumber != nil {
+			optParts = append(optParts, fmt.Sprintf("vacuum_min_vector_number: %d", *optimizerConfig.VacuumMinVectorNumber))
+		}
+		if optimizerConfig.DefaultSegmentNumber != nil {
+			optParts = append(optParts, fmt.Sprintf("default_segment_number: %d", *optimizerConfig.DefaultSegmentNumber))
+		}
+		if optimizerConfig.MaxSegmentSize != nil {
+			optParts = append(optParts, fmt.Sprintf("max_segment_size: %d", *optimizerConfig.MaxSegmentSize))
+		}
+		if optimizerConfig.MemmapThreshold != nil {
+			optParts = append(optParts, fmt.Sprintf("memmap_threshold: %d", *optimizerConfig.MemmapThreshold))
+		}
+		if optimizerConfig.IndexingThreshold != nil {
+			optParts = append(optParts, fmt.Sprintf("indexing_threshold: %d", *optimizerConfig.IndexingThreshold))
+		}
+		if optimizerConfig.FlushIntervalSec != nil {
+			optParts = append(optParts, fmt.Sprintf("flush_interval_sec: %d", *optimizerConfig.FlushIntervalSec))
+		}
+		if optimizerConfig.MaxOptimizationThreads != nil {
+			switch optimizerConfig.MaxOptimizationThreads.GetVariant().(type) {
+			case *qdrant.MaxOptimizationThreads_Value:
+				optParts = append(optParts, fmt.Sprintf("max_optimization_threads: %d", optimizerConfig.MaxOptimizationThreads.GetValue()))
+			case *qdrant.MaxOptimizationThreads_Setting_:
+				if optimizerConfig.MaxOptimizationThreads.GetSetting() == qdrant.MaxOptimizationThreads_Auto {
+					optParts = append(optParts, "max_optimization_threads: 'auto'")
+				}
+			}
+		}
+		if optimizerConfig.PreventUnoptimized != nil {
+			optParts = append(optParts, fmt.Sprintf("prevent_unoptimized: %v", *optimizerConfig.PreventUnoptimized))
+		}
+		if len(optParts) > 0 {
+			b.WriteString(" WITH OPTIMIZERS { ")
+			b.WriteString(strings.Join(optParts, ", "))
+			b.WriteString(" }")
+		}
+	}
+
+	// PARAMS
+	var paramParts []string
+	if rf := params.GetReplicationFactor(); rf != 0 {
+		paramParts = append(paramParts, fmt.Sprintf("replication_factor: %d", rf))
+	}
+	if wcf := params.GetWriteConsistencyFactor(); wcf != 0 {
+		paramParts = append(paramParts, fmt.Sprintf("write_consistency_factor: %d", wcf))
+	}
+	if params.GetOnDiskPayload() {
+		paramParts = append(paramParts, "on_disk_payload: true")
+	}
+	if len(paramParts) > 0 {
+		b.WriteString(" WITH PARAMS { ")
+		b.WriteString(strings.Join(paramParts, ", "))
+		b.WriteString(" }")
+	}
+
+	// Quantization
+	if qc := config.GetQuantizationConfig(); qc != nil {
+		switch qc.Quantization.(type) {
+		case *qdrant.QuantizationConfig_Scalar:
+			scalar := qc.GetScalar()
+			b.WriteString(" QUANTIZE SCALAR")
+			if scalar.Quantile != nil {
+				b.WriteString(fmt.Sprintf(" QUANTILE %v", *scalar.Quantile))
+			}
+			if scalar.GetAlwaysRam() {
+				b.WriteString(" ALWAYS RAM")
+			}
+		case *qdrant.QuantizationConfig_Binary:
+			binary := qc.GetBinary()
+			b.WriteString(" QUANTIZE BINARY")
+			if binary.GetAlwaysRam() {
+				b.WriteString(" ALWAYS RAM")
+			}
+		case *qdrant.QuantizationConfig_Product:
+			product := qc.GetProduct()
+			b.WriteString(" QUANTIZE PRODUCT")
+			if product.GetAlwaysRam() {
+				b.WriteString(" ALWAYS RAM")
+			}
+		case *qdrant.QuantizationConfig_Turboquant:
+			turbo := qc.GetTurboquant()
+			b.WriteString(" QUANTIZE TURBO")
+			if turbo.Bits != nil {
+				b.WriteString(fmt.Sprintf(" BITS %g", turboBitsValue(*turbo.Bits)))
+			}
+			if turbo.GetAlwaysRam() {
+				b.WriteString(" ALWAYS RAM")
+			}
+		}
+	}
+
+	return b.String()
+}
+
+func turboBitsValue(bits qdrant.TurboQuantBitSize) float64 {
+	switch bits {
+	case qdrant.TurboQuantBitSize_Bits1:
+		return 1
+	case qdrant.TurboQuantBitSize_Bits1_5:
+		return 1.5
+	case qdrant.TurboQuantBitSize_Bits2:
+		return 2
+	case qdrant.TurboQuantBitSize_Bits4:
+		return 4
+	default:
+		return float64(bits)
+	}
 }
 
 func indent(value, prefix string) string {

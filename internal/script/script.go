@@ -13,14 +13,51 @@ type Executor interface {
 }
 
 func StripComments(text string) string {
-	lines := make([]string, 0, len(strings.Split(text, "\n")))
-	for _, line := range strings.Split(text, "\n") {
-		if idx := strings.Index(line, "--"); idx >= 0 {
-			line = line[:idx]
+	out := make([]byte, 0, len(text))
+	inString := false
+	var quoteChar byte
+	i := 0
+	n := len(text)
+
+	for i < n {
+		ch := text[i]
+
+		if inString {
+			out = append(out, ch)
+			if ch == '\\' && i+1 < n {
+				out = append(out, text[i+1])
+				i += 2
+				continue
+			}
+			if ch == quoteChar {
+				inString = false
+				quoteChar = 0
+			}
+			i++
+			continue
 		}
-		lines = append(lines, line)
+
+		if ch == '\'' || ch == '"' {
+			inString = true
+			quoteChar = ch
+			out = append(out, ch)
+			i++
+			continue
+		}
+
+		if ch == '-' && i+1 < n && text[i+1] == '-' {
+			i += 2
+			for i < n && text[i] != '\r' && text[i] != '\n' {
+				i++
+			}
+			continue
+		}
+
+		out = append(out, ch)
+		i++
 	}
-	return strings.Join(lines, "\n")
+
+	return string(out)
 }
 
 func SplitStatements(text string) ([]string, error) {
@@ -99,6 +136,7 @@ func isStatementStarter(kind lexer.TokenKind) bool {
 	switch kind {
 	case lexer.TokenKindInsert,
 		lexer.TokenKindCreate,
+		lexer.TokenKindAlter,
 		lexer.TokenKindDrop,
 		lexer.TokenKindShow,
 		lexer.TokenKindSearch,
