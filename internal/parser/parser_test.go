@@ -259,6 +259,37 @@ func TestParseCollectionConfigCaseVariantKeysAreDeterministic(t *testing.T) {
 	require.Equal(t, uint64(16), *stmt.Config.Hnsw.M)
 }
 
+func TestParseCollectionConfigRejectsNonPositiveValues(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "hnsw m zero",
+			input: "CREATE COLLECTION docs WITH HNSW { m: 0 }",
+			want:  "m must be a positive integer",
+		},
+		{
+			name:  "params replication factor zero",
+			input: "CREATE COLLECTION docs WITH PARAMS { replication_factor: 0 }",
+			want:  "replication_factor must be a positive integer",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.input)
+			require.NoError(t, err)
+
+			_, err = NewParser().Parse(tokens)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tt.want)
+		})
+	}
+}
+
 func TestParseCreateQuantizeErrors(t *testing.T) {
 	tests := []struct {
 		name  string

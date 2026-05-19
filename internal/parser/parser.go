@@ -373,18 +373,33 @@ func (p *Parser) parseHnswConfigBlock() (*ast.CollectionConfig, error) {
 			return nil, err
 		}
 	}
-	mVal := collectionPositiveUint64(config, "m")
+	mVal, err := collectionPositiveUint64(config, "m", p.peek().Pos)
+	if err != nil {
+		return nil, err
+	}
 	if mVal != nil && *mVal < 4 {
 		return nil, errors.NewQQLSyntaxError("m must be >= 4", p.peek().Pos)
+	}
+	efConstruct, err := collectionPositiveUint64(config, "ef_construct", p.peek().Pos)
+	if err != nil {
+		return nil, err
+	}
+	maxIndexingThreads, err := collectionPositiveUint64(config, "max_indexing_threads", p.peek().Pos)
+	if err != nil {
+		return nil, err
+	}
+	payloadM, err := collectionPositiveUint64(config, "payload_m", p.peek().Pos)
+	if err != nil {
+		return nil, err
 	}
 	return &ast.CollectionConfig{
 		Hnsw: &ast.HnswRuntimeConfig{
 			M:                  mVal,
-			EfConstruct:        collectionPositiveUint64(config, "ef_construct"),
+			EfConstruct:        efConstruct,
 			FullScanThreshold:  collectionNonNegativeUint64(config, "full_scan_threshold"),
-			MaxIndexingThreads: collectionPositiveUint64(config, "max_indexing_threads"),
+			MaxIndexingThreads: maxIndexingThreads,
 			OnDisk:             collectionBool(config, "on_disk"),
-			PayloadM:           collectionPositiveUint64(config, "payload_m"),
+			PayloadM:           payloadM,
 			InlineStorage:      collectionBool(config, "inline_storage"),
 		},
 	}, nil
@@ -459,15 +474,31 @@ func (p *Parser) parseOptimizersConfigBlock() (*ast.CollectionConfig, error) {
 			}
 		}
 	}
+	vacuumMinVectorNumber, err := collectionPositiveUint64(config, "vacuum_min_vector_number", p.peek().Pos)
+	if err != nil {
+		return nil, err
+	}
+	defaultSegmentNumber, err := collectionPositiveUint64(config, "default_segment_number", p.peek().Pos)
+	if err != nil {
+		return nil, err
+	}
+	maxSegmentSize, err := collectionPositiveUint64(config, "max_segment_size", p.peek().Pos)
+	if err != nil {
+		return nil, err
+	}
+	flushIntervalSec, err := collectionPositiveUint64(config, "flush_interval_sec", p.peek().Pos)
+	if err != nil {
+		return nil, err
+	}
 	return &ast.CollectionConfig{
 		Optimizers: &ast.OptimizersRuntimeConfig{
 			DeletedThreshold:       collectionFloatRange(config, "deleted_threshold", 0.0, 1.0),
-			VacuumMinVectorNumber:  collectionPositiveUint64(config, "vacuum_min_vector_number"),
-			DefaultSegmentNumber:   collectionPositiveUint64(config, "default_segment_number"),
-			MaxSegmentSize:         collectionPositiveUint64(config, "max_segment_size"),
+			VacuumMinVectorNumber:  vacuumMinVectorNumber,
+			DefaultSegmentNumber:   defaultSegmentNumber,
+			MaxSegmentSize:         maxSegmentSize,
 			MemmapThreshold:        collectionNonNegativeUint64(config, "memmap_threshold"),
 			IndexingThreshold:      collectionNonNegativeUint64(config, "indexing_threshold"),
-			FlushIntervalSec:       collectionPositiveUint64(config, "flush_interval_sec"),
+			FlushIntervalSec:       flushIntervalSec,
 			MaxOptimizationThreads: collectionMaxOptimizationThreads(config, "max_optimization_threads"),
 			PreventUnoptimized:     collectionBool(config, "prevent_unoptimized"),
 		},
@@ -498,11 +529,23 @@ func (p *Parser) parseCollectionParamsConfigBlock(forAlter bool) (*ast.Collectio
 			return nil, errors.NewQQLSyntaxError("WITH PARAMS { read_fan_out_factor, read_fan_out_delay_ms } is supported only for ALTER COLLECTION", p.peek().Pos)
 		}
 	}
+	replicationFactor, err := collectionPositiveUint64(config, "replication_factor", p.peek().Pos)
+	if err != nil {
+		return nil, err
+	}
+	writeConsistencyFactor, err := collectionPositiveUint64(config, "write_consistency_factor", p.peek().Pos)
+	if err != nil {
+		return nil, err
+	}
+	readFanOutFactor, err := collectionPositiveUint64(config, "read_fan_out_factor", p.peek().Pos)
+	if err != nil {
+		return nil, err
+	}
 	return &ast.CollectionConfig{
 		Params: &ast.CollectionParamsConfig{
-			ReplicationFactor:      collectionPositiveUint64(config, "replication_factor"),
-			WriteConsistencyFactor: collectionPositiveUint64(config, "write_consistency_factor"),
-			ReadFanOutFactor:       collectionPositiveUint64(config, "read_fan_out_factor"),
+			ReplicationFactor:      replicationFactor,
+			WriteConsistencyFactor: writeConsistencyFactor,
+			ReadFanOutFactor:       readFanOutFactor,
 			ReadFanOutDelayMs:      collectionNonNegativeUint64(config, "read_fan_out_delay_ms"),
 			OnDiskPayload:          collectionBool(config, "on_disk_payload"),
 		},
@@ -521,16 +564,16 @@ func collectionBool(config map[string]interface{}, key string) *bool {
 	return nil
 }
 
-func collectionPositiveUint64(config map[string]interface{}, key string) *uint64 {
+func collectionPositiveUint64(config map[string]interface{}, key string, pos int) (*uint64, error) {
 	v, ok := collectionValue(config, key)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	if num, ok := v.(int); ok && num > 0 {
 		val := uint64(num)
-		return &val
+		return &val, nil
 	}
-	return nil
+	return nil, errors.NewQQLSyntaxError(key+" must be a positive integer", pos)
 }
 
 func collectionNonNegativeUint64(config map[string]interface{}, key string) *uint64 {
