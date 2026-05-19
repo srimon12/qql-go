@@ -224,6 +224,8 @@ func TestParseCreate(t *testing.T) {
 				if tt.want.Config.Hnsw != nil {
 					require.NotNil(t, stmt.Config.Hnsw)
 					assert.Equal(t, tt.want.Config.Hnsw.PayloadM, stmt.Config.Hnsw.PayloadM)
+				} else {
+					assert.Nil(t, stmt.Config.Hnsw)
 				}
 			} else {
 				assert.Nil(t, stmt.Config)
