@@ -55,8 +55,8 @@ export MEDICAL_RAG_CHUNK_SIZE="200"
 2. Build a QQL seed file from the context and answer fields
 3. Create `medical_retrieval_ops`
 4. Insert the generated corpus
-5. Compare dense, sparse, hybrid RRF, hybrid DBSF, and exact retrieval on a benchmark question
+5. Compare dense, sparse, hybrid RRF, hybrid DBSF, exact retrieval, score-thresholded retrieval, and offset windows on a benchmark question
 6. Filter by tenant, active status, and high priority
-7. Group by medical specialty and diversify dense results with MMR
+7. Group by medical specialty, apply grouped score thresholds, and diversify dense results with MMR
 8. Select, recommend, scroll, and dump
 9. Run the generated benchmark pack across all retrieval modes

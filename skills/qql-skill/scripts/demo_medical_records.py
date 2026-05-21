@@ -12,7 +12,7 @@ BASE_STATEMENTS = [
     # Create a HYBRID collection with payload-aware HNSW and scalar quantization.
     (
         "create-collection",
-        f"CREATE COLLECTION {COLLECTION} HYBRID HNSW {{ payload_m: 16 }} QUANTIZE SCALAR QUANTILE 0.99 ALWAYS RAM",
+        f"CREATE COLLECTION {COLLECTION} HYBRID WITH HNSW {{ payload_m: 16 }} QUANTIZE SCALAR QUANTILE 0.99 ALWAYS RAM",
     ),
     # Create payload indexes for filtering
     (

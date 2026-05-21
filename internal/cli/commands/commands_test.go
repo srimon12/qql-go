@@ -1319,6 +1319,63 @@ func TestDoSearchUsesQueryGroupsForGroupedSearch(t *testing.T) {
 	require.Contains(t, resp.Message, "Found 1 group(s)")
 }
 
+func TestDoSearchForwardsSearchParityFields(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
+					denseVectorName: {Size: uint64(denseVectorSize), Distance: qdrant.Distance_Cosine},
+				}),
+			},
+		},
+	}
+	exec := NewExecutor(client, &config.Config{})
+
+	_, err := exec.doSearch(&ast.SearchStmt{
+		Collection:     "docs",
+		QueryText:      "vector database",
+		Limit:          5,
+		Offset:         10,
+		ScoreThreshold: float64Ptr(0.8),
+		LookupFrom:     "profiles",
+		LookupVector:   strPtr("preferences"),
+	})
+	require.NoError(t, err)
+	require.Len(t, client.queryRequests, 1)
+	req := client.queryRequests[0]
+	require.Equal(t, uint64(10), req.GetOffset())
+	require.InDelta(t, float32(0.8), req.GetScoreThreshold(), 0.0001)
+	require.NotNil(t, req.GetLookupFrom())
+	require.Equal(t, "profiles", req.GetLookupFrom().GetCollectionName())
+	require.Equal(t, "preferences", req.GetLookupFrom().GetVectorName())
+}
+
+func TestBuildGroupSearchRequestCarriesScoreThresholdAndLookup(t *testing.T) {
+	req := &qdrant.QueryPoints{
+		CollectionName: "docs",
+		Limit:          qdrant.PtrOf(uint64(5)),
+		Offset:         qdrant.PtrOf(uint64(10)),
+		ScoreThreshold: qdrant.PtrOf(float32(0.7)),
+		LookupFrom:     &qdrant.LookupLocation{CollectionName: "profiles", VectorName: strPtr("preferences")},
+		WithPayload:    qdrant.NewWithPayload(true),
+		WithVectors:    qdrant.NewWithVectors(false),
+	}
+
+	groupReq := buildGroupSearchRequest(&ast.SearchStmt{
+		Collection: "docs",
+		GroupBy:    "author",
+		GroupSize:  2,
+	}, req, nil)
+
+	require.Equal(t, "author", groupReq.GetGroupBy())
+	require.InDelta(t, float32(0.7), groupReq.GetScoreThreshold(), 0.0001)
+	require.NotNil(t, groupReq.GetLookupFrom())
+	require.Equal(t, "profiles", groupReq.GetLookupFrom().GetCollectionName())
+	require.Equal(t, "preferences", groupReq.GetLookupFrom().GetVectorName())
+}
+
 func TestDoSearchRejectsMMRWithHybrid(t *testing.T) {
 	client := newFakeQdrantClient()
 	client.exists = true

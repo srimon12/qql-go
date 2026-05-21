@@ -67,13 +67,15 @@ Run-Step "08-search-hybrid-rrf" "exec" "SEARCH $collection SIMILAR TO '$mainQuer
 Run-Step "09-search-hybrid-dbsf" "exec" "SEARCH $collection SIMILAR TO '$mainQuery' LIMIT 5 USING HYBRID FUSION 'dbsf'"
 Run-Step "10-search-exact" "exec" "SEARCH $collection SIMILAR TO '$mainQuery' LIMIT 5 EXACT"
 Run-Step "11-search-filtered-tenant" "exec" "SEARCH $collection SIMILAR TO '$mainQuery' LIMIT 5 WHERE tenant_id = '$mainTenant' AND case_status = '$mainStatus' AND case_priority = '$mainPriority' WITH { acorn: true }"
-Run-Step "12-search-grouped-specialty" "exec" "SEARCH $collection SIMILAR TO '$mainQuery' LIMIT 6 USING HYBRID GROUP BY specialty GROUP_SIZE 2"
-Run-Step "13-search-dense-mmr" "exec" "SEARCH $collection SIMILAR TO '$mainQuery' LIMIT 5 WITH { mmr_diversity: 0.5, mmr_candidates: 20 }"
-Run-Step "14-select-main" "exec" "SELECT * FROM $collection WHERE id = $mainId"
-Run-Step "15-recommend-related" "exec" "RECOMMEND FROM $collection POSITIVE IDS ($relatedId) LIMIT 5"
-Run-Step "16-scroll-tenant" "exec" "SCROLL FROM $collection WHERE tenant_id = '$mainTenant' LIMIT 5"
-(& qql-go dump --quiet --json $collection (Join-Path $artifacts "backup.qql")) | Set-Content -Path (Join-Path $artifacts "17-dump.json") -Encoding utf8
-(& uv run (Join-Path $demoRoot "run-benchmark.py") (Join-Path $generated "benchmark-questions.json")) | Set-Content -Path (Join-Path $artifacts "18-benchmark.json") -Encoding utf8
+Run-Step "12-search-score-threshold" "exec" "SEARCH $collection SIMILAR TO '$mainQuery' LIMIT 5 SCORE THRESHOLD 0.0 USING HYBRID"
+Run-Step "13-search-offset-window" "exec" "SEARCH $collection SIMILAR TO '$mainQuery' LIMIT 5 OFFSET 1 USING HYBRID"
+Run-Step "14-search-grouped-specialty" "exec" "SEARCH $collection SIMILAR TO '$mainQuery' LIMIT 6 SCORE THRESHOLD 0.0 USING HYBRID GROUP BY specialty GROUP_SIZE 2"
+Run-Step "15-search-dense-mmr" "exec" "SEARCH $collection SIMILAR TO '$mainQuery' LIMIT 5 WITH { mmr_diversity: 0.5, mmr_candidates: 20 }"
+Run-Step "16-select-main" "exec" "SELECT * FROM $collection WHERE id = $mainId"
+Run-Step "17-recommend-related" "exec" "RECOMMEND FROM $collection POSITIVE IDS ($relatedId) LIMIT 5"
+Run-Step "18-scroll-tenant" "exec" "SCROLL FROM $collection WHERE tenant_id = '$mainTenant' LIMIT 5"
+(& qql-go dump --quiet --json $collection (Join-Path $artifacts "backup.qql")) | Set-Content -Path (Join-Path $artifacts "19-dump.json") -Encoding utf8
+(& uv run (Join-Path $demoRoot "run-benchmark.py") (Join-Path $generated "benchmark-questions.json")) | Set-Content -Path (Join-Path $artifacts "20-benchmark.json") -Encoding utf8
 
 & (Join-Path $demoRoot "validate-artifacts.ps1") -EvalPath (Join-Path $generated "eval.json") -Artifacts $artifacts
 

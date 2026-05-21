@@ -41,7 +41,7 @@ const (
 	defaultInferenceMode    = "cloud"
 )
 
-var Version = "0.1.7"
+var Version = "0.2.0"
 
 type commandOutputMode struct {
 	json  bool
@@ -338,6 +338,19 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 	case *ast.SearchStmt:
 		plan.WriteString(fmt.Sprintf("Statement: SEARCH %s SIMILAR TO '%s' LIMIT %d\n",
 			n.Collection, n.QueryText, n.Limit))
+		if n.Offset > 0 {
+			plan.WriteString(fmt.Sprintf("Offset: %d\n", n.Offset))
+		}
+		if n.ScoreThreshold != nil {
+			plan.WriteString(fmt.Sprintf("Score threshold: %.4f\n", *n.ScoreThreshold))
+		}
+		if n.LookupFrom != "" {
+			plan.WriteString(fmt.Sprintf("Lookup from: %s", n.LookupFrom))
+			if n.LookupVector != nil && *n.LookupVector != "" {
+				plan.WriteString(fmt.Sprintf(" (vector: %s)", *n.LookupVector))
+			}
+			plan.WriteString("\n")
+		}
 		if n.Model != nil && *n.Model != "" {
 			plan.WriteString(fmt.Sprintf("Model: %s\n", *n.Model))
 		}
@@ -1421,6 +1434,21 @@ func (e *Executor) doSearch(n *ast.SearchStmt) (*ExecResponse, error) {
 		}
 	}
 
+	if n.Offset > 0 {
+		searchReq.Offset = qdrant.PtrOf(uint64(n.Offset))
+	}
+	if n.ScoreThreshold != nil {
+		searchReq.ScoreThreshold = qdrant.PtrOf(float32(*n.ScoreThreshold))
+	}
+	if n.LookupFrom != "" {
+		searchReq.LookupFrom = &qdrant.LookupLocation{
+			CollectionName: n.LookupFrom,
+		}
+		if n.LookupVector != nil && *n.LookupVector != "" {
+			searchReq.LookupFrom.VectorName = n.LookupVector
+		}
+	}
+
 	if n.GroupBy != "" {
 		groupReq := buildGroupSearchRequest(n, searchReq, filter)
 		results, err := e.client.QueryGroups(ctx, groupReq)
@@ -2262,6 +2290,8 @@ func buildGroupSearchRequest(n *ast.SearchStmt, req *qdrant.QueryPoints, filter 
 		GroupSize:      qdrant.PtrOf(groupSize),
 		GroupBy:        n.GroupBy,
 		WithPayload:    qdrant.NewWithPayload(true),
+		ScoreThreshold: req.ScoreThreshold,
+		LookupFrom:     req.LookupFrom,
 	}
 }
 

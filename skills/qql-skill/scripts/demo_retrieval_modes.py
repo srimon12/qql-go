@@ -102,7 +102,7 @@ EXAMPLES = [
             "LIMIT 5 WHERE tenant_id = 'tenant-a'"
         ),
         "setup": [
-            "CREATE COLLECTION tenant_docs HYBRID HNSW { payload_m: 16 }",
+            "CREATE COLLECTION tenant_docs HYBRID WITH HNSW { payload_m: 16 }",
             "CREATE INDEX ON COLLECTION tenant_docs FOR tenant_id TYPE keyword WITH { is_tenant: true, on_disk: true }",
         ],
         "requires_index": ["tenant_id"],

@@ -37,6 +37,24 @@ SEARCH articles SIMILAR TO 'transformer inference' LIMIT 10
 WHERE category = 'ml' AND year >= 2024
 ```
 
+## Search pagination and score threshold
+
+```sql
+SEARCH articles SIMILAR TO 'refund policy' LIMIT 10
+OFFSET 20
+SCORE THRESHOLD 0.8
+```
+
+`OFFSET` is for flat search results. Do not combine it with `GROUP BY`.
+
+## Cross-collection search lookup
+
+```sql
+SEARCH articles SIMILAR TO 'personalized refund policy' LIMIT 5
+LOOKUP FROM user_profiles VECTOR 'preferences'
+USING HYBRID
+```
+
 ## Hybrid search
 
 ```sql
@@ -91,6 +109,8 @@ GROUP BY category
 GROUP_SIZE 2
 ```
 
+Grouped search can use `SCORE THRESHOLD`, but not `OFFSET`.
+
 ## Grouped hybrid search with query-time params
 
 ```sql
@@ -117,7 +137,7 @@ WITH { hnsw_ef: 256 }
 ## Tenant-aware indexing and payload HNSW
 
 ```sql
-CREATE COLLECTION tenant_docs HYBRID HNSW { payload_m: 16 }
+CREATE COLLECTION tenant_docs HYBRID WITH HNSW { payload_m: 16 }
 CREATE INDEX ON COLLECTION tenant_docs FOR tenant_id TYPE keyword WITH { is_tenant: true, on_disk: true }
 ```
 
@@ -241,7 +261,7 @@ INSERT BULK INTO COLLECTION notes VALUES [
 ```sql
 CREATE COLLECTION notes
 CREATE COLLECTION notes HYBRID
-CREATE COLLECTION notes HYBRID HNSW { payload_m: 16 }
+CREATE COLLECTION notes HYBRID WITH HNSW { payload_m: 16 }
 CREATE COLLECTION notes USING MODEL 'sentence-transformers/all-MiniLM-L6-v2'
 CREATE COLLECTION notes QUANTIZE SCALAR
 CREATE COLLECTION notes QUANTIZE SCALAR QUANTILE 0.95 ALWAYS RAM

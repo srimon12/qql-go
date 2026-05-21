@@ -1,4 +1,4 @@
-CREATE COLLECTION retrieval_debug_runbook HYBRID HNSW { payload_m: 16 }
+CREATE COLLECTION retrieval_debug_runbook HYBRID WITH HNSW { payload_m: 16 }
 CREATE INDEX ON COLLECTION retrieval_debug_runbook FOR team TYPE keyword
 CREATE INDEX ON COLLECTION retrieval_debug_runbook FOR service TYPE keyword
 CREATE INDEX ON COLLECTION retrieval_debug_runbook FOR severity TYPE keyword

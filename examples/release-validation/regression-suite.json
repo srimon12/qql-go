@@ -20,6 +20,19 @@
       }
     },
     {
+      "id": "03b-explain-refund-window",
+      "command": "explain",
+      "statement": "SEARCH release_validation_docs SIMILAR TO 'refund policy' LIMIT 3 OFFSET 1 SCORE THRESHOLD 0.7 LOOKUP FROM profile_vectors VECTOR 'preferences' USING HYBRID",
+      "expect": {
+        "plan_contains": [
+          "Offset: 1",
+          "Score threshold: 0.7000",
+          "Lookup from: profile_vectors (vector: preferences)",
+          "Search: HYBRID"
+        ]
+      }
+    },
+    {
       "id": "04-hybrid-refund",
       "command": "exec",
       "statement": "SEARCH release_validation_docs SIMILAR TO 'refund policy for annual plan' LIMIT 3 USING HYBRID",

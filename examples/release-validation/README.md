@@ -30,6 +30,7 @@ You do not want CI to:
 - reads a checked-in regression suite
 - runs `SHOW`, `SEARCH`, and `EXPLAIN` checks
 - asserts result IDs, result counts, grouping, and plan text from JSON output
+- keeps a parser/explain check for `OFFSET`, `SCORE THRESHOLD`, and `LOOKUP FROM` so release validation tracks the current search surface without requiring an extra lookup collection
 - writes machine-readable artifacts for diffing and incident triage
 
 ## Files

@@ -15,7 +15,7 @@ BASE_STATEMENTS = [
     # Create collection with HYBRID vectors, payload-aware HNSW, and TURBO quantization.
     (
         "create-hybrid",
-        f"CREATE COLLECTION {COLLECTION} HYBRID HNSW {{ payload_m: 16 }} QUANTIZE TURBO BITS 2 ALWAYS RAM",
+        f"CREATE COLLECTION {COLLECTION} HYBRID WITH HNSW {{ payload_m: 16 }} QUANTIZE TURBO BITS 2 ALWAYS RAM",
     ),
     # Create payload indexes for filtering and tenant-style grouping.
     (

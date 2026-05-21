@@ -34,7 +34,7 @@ Examples that use text `INSERT` or `SEARCH ... SIMILAR TO ...` also need embeddi
 
 Use this when you want retrieval regression checks against an existing collection.
 
-It runs `SHOW`, `EXPLAIN`, and `SEARCH` checks against the dataset you already have, validates the JSON results, and fits naturally into CI without reseeding the corpus.
+It runs `SHOW`, `EXPLAIN`, and `SEARCH` checks against the dataset you already have, validates the JSON results, and fits naturally into CI without reseeding the corpus. The checked-in suite also exercises the current search syntax for offset windows, score thresholds, and lookup-from plans.
 
 Run:
 

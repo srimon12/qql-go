@@ -926,6 +926,66 @@ func (p *Parser) parseSearch() (*ast.SearchStmt, error) {
 		return nil, err
 	}
 
+	offset := 0
+	if p.peek().Kind == lexer.TokenKindOffset {
+		p.advance()
+		offsetTok := p.peek()
+		offset, err = parseIntToken(p.advance())
+		if err != nil {
+			return nil, err
+		}
+		if offset < 0 {
+			return nil, errors.NewQQLSyntaxError("OFFSET must be a non-negative integer", offsetTok.Pos)
+		}
+	}
+
+	var scoreThreshold *float64
+	if p.peek().Kind == lexer.TokenKindScore {
+		p.advance()
+		if _, err := p.expect(lexer.TokenKindThreshold); err != nil {
+			return nil, err
+		}
+		scoreTok := p.peek()
+		if scoreTok.Kind == lexer.TokenKindFloat {
+			p.advance()
+			f, err := parseFloatToken(scoreTok)
+			if err != nil {
+				return nil, err
+			}
+			scoreThreshold = &f
+		} else if scoreTok.Kind == lexer.TokenKindInteger {
+			p.advance()
+			v, err := parseIntToken(scoreTok)
+			if err != nil {
+				return nil, err
+			}
+			f := float64(v)
+			scoreThreshold = &f
+		} else {
+			return nil, errors.NewQQLSyntaxError("Expected float or integer for SCORE THRESHOLD, got '"+scoreTok.Value+"'", scoreTok.Pos)
+		}
+	}
+
+	var lookupFrom string
+	var lookupVector *string
+	if p.peek().Kind == lexer.TokenKindLookup {
+		p.advance()
+		if _, err := p.expect(lexer.TokenKindFrom); err != nil {
+			return nil, err
+		}
+		lookupFrom, err = p.parseIdentifier()
+		if err != nil {
+			return nil, err
+		}
+		if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && toUpper(p.peek().Value) == "VECTOR") {
+			p.advance()
+			lookupVector, err = p.parseStringPtr()
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	model, hybrid, sparseOnly, sparseModel, fusion, err := p.parseSearchEmbeddingOptions()
 	if err != nil {
 		return nil, err
@@ -989,6 +1049,9 @@ func (p *Parser) parseSearch() (*ast.SearchStmt, error) {
 			if rerank {
 				return nil, errors.NewQQLSyntaxError("GROUP BY and RERANK cannot be combined in the same SEARCH statement", p.peek().Pos)
 			}
+			if offset > 0 {
+				return nil, errors.NewQQLSyntaxError("OFFSET cannot be used with GROUP BY", p.peek().Pos)
+			}
 			seenGroup = true
 			p.advance()
 			if _, err := p.expect(lexer.TokenKindBy); err != nil {
@@ -1015,20 +1078,24 @@ func (p *Parser) parseSearch() (*ast.SearchStmt, error) {
 			}
 		default:
 			return &ast.SearchStmt{
-				Collection:  collection,
-				QueryText:   queryText,
-				Limit:       limit,
-				Model:       model,
-				Hybrid:      hybrid,
-				Fusion:      fusion,
-				SparseOnly:  sparseOnly,
-				SparseModel: sparseModel,
-				QueryFilter: queryFilter,
-				Rerank:      rerank,
-				RerankModel: rerankModel,
-				WithClause:  withClause,
-				GroupBy:     groupBy,
-				GroupSize:   groupSize,
+				Collection:     collection,
+				QueryText:      queryText,
+				Limit:          limit,
+				Model:          model,
+				Hybrid:         hybrid,
+				Fusion:         fusion,
+				SparseOnly:     sparseOnly,
+				SparseModel:    sparseModel,
+				QueryFilter:    queryFilter,
+				Rerank:         rerank,
+				RerankModel:    rerankModel,
+				WithClause:     withClause,
+				GroupBy:        groupBy,
+				GroupSize:      groupSize,
+				Offset:         offset,
+				ScoreThreshold: scoreThreshold,
+				LookupFrom:     lookupFrom,
+				LookupVector:   lookupVector,
 			}, nil
 		}
 	}
@@ -1120,6 +1187,9 @@ func (p *Parser) parseRecommend() (*ast.RecommendStmt, error) {
 		offset, err = parseIntToken(offsetTok)
 		if err != nil {
 			return nil, err
+		}
+		if offset < 0 {
+			return nil, errors.NewQQLSyntaxError("OFFSET must be a non-negative integer", offsetTok.Pos)
 		}
 	}
 	var scoreThreshold *float64
