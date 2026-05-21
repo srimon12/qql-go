@@ -105,8 +105,8 @@ BASE_STATEMENTS = [
         f"SEARCH {COLLECTION} SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 EXACT",
     ),
     (
-        "search-dense-mmr",
-        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency triage' LIMIT 3 WITH {{ mmr_diversity: 0.5, mmr_candidates: 20 }}",
+        "search-hybrid-mmr",
+        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency triage' LIMIT 3 USING HYBRID WITH {{ mmr_diversity: 0.5, mmr_candidates: 20 }}",
     ),
     # HYBRID search (dense + sparse fusion)
     (
@@ -161,8 +161,8 @@ BASE_STATEMENTS = [
         f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency' LIMIT 3 USING HYBRID GROUP BY specialty GROUP_SIZE 2",
     ),
     (
-        "grouped-dense-mmr",
-        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency' LIMIT 3 WITH {{ mmr_diversity: 0.35, mmr_candidates: 20 }} GROUP BY specialty GROUP_SIZE 2",
+        "grouped-hybrid-mmr",
+        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency' LIMIT 3 USING HYBRID WITH {{ mmr_diversity: 0.35, mmr_candidates: 20 }} GROUP BY specialty GROUP_SIZE 2",
     ),
     (
         "group-by-priority-with-params",

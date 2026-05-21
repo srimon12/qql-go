@@ -1500,9 +1500,6 @@ func validateSearchMMRUsage(n *ast.SearchStmt) error {
 	if !hasMMR(n.WithClause) {
 		return nil
 	}
-	if n.Hybrid {
-		return fmt.Errorf("MMR is not supported with USING HYBRID yet")
-	}
 	if n.SparseOnly {
 		return fmt.Errorf("MMR is not supported with USING SPARSE yet")
 	}
@@ -2168,7 +2165,7 @@ func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, de
 		if n.RerankModel != nil && *n.RerankModel != "" {
 			rerankModel = *n.RerankModel
 		}
-		prefetch, err := e.buildSearchPrefetches(ctx, n.QueryText, denseModel, sparseModel, limit, params)
+		prefetch, err := e.buildSearchPrefetches(ctx, n.QueryText, denseModel, sparseModel, limit, params, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -2176,7 +2173,7 @@ func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, de
 	}
 
 	if n.Hybrid {
-		prefetch, err := e.buildSearchPrefetches(ctx, n.QueryText, denseModel, sparseModel, limit, params)
+		prefetch, err := e.buildSearchPrefetches(ctx, n.QueryText, denseModel, sparseModel, limit, params, n.WithClause)
 		if err != nil {
 			return nil, err
 		}
@@ -2234,11 +2231,12 @@ func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, de
 	}, nil
 }
 
-func (e *Executor) buildSearchPrefetches(ctx context.Context, queryText, denseModel, sparseModel string, limit uint64, params *qdrant.SearchParams) ([]*qdrant.PrefetchQuery, error) {
+func (e *Executor) buildSearchPrefetches(ctx context.Context, queryText, denseModel, sparseModel string, limit uint64, params *qdrant.SearchParams, withClause *ast.SearchWith) ([]*qdrant.PrefetchQuery, error) {
 	denseQuery := qdrant.NewQueryDocument(&qdrant.Document{
 		Text:  queryText,
 		Model: denseModel,
 	})
+	var mmrNearest *qdrant.VectorInput
 	sparseQuery := qdrant.NewQueryDocument(&qdrant.Document{
 		Text:  queryText,
 		Model: sparseModel,
@@ -2253,8 +2251,23 @@ func (e *Executor) buildSearchPrefetches(ctx context.Context, queryText, denseMo
 			return nil, fmt.Errorf("failed to embed search query: %w", err)
 		}
 		denseQuery = qdrant.NewQueryDense(denseVector)
+		if hasMMR(withClause) {
+			mmrNearest = qdrant.NewVectorInputDense(denseVector)
+		}
 		sv := sparse.BuildQuery(queryText)
 		sparseQuery = qdrant.NewQuerySparse(sv.Indices, sv.Values)
+	} else if hasMMR(withClause) {
+		mmrNearest = qdrant.NewVectorInputDocument(&qdrant.Document{
+			Text:  queryText,
+			Model: denseModel,
+		})
+	}
+
+	if hasMMR(withClause) {
+		denseQuery = qdrant.NewQueryMMR(mmrNearest, &qdrant.Mmr{
+			Diversity:       float32PtrFromFloat64(withClause.MmrDiversity),
+			CandidatesLimit: uint32PtrFromInt(withClause.MmrCandidates),
+		})
 	}
 
 	return []*qdrant.PrefetchQuery{

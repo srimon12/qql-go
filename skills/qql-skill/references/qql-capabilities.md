@@ -258,7 +258,7 @@ Use them for:
 - exact recall baselines
 - query-time recall tuning
 - filtered-query experiments
-- semantic diversity in dense search results
+- semantic diversity in dense search results or the dense leg of hybrid search
 
 ## Filters
 
@@ -293,5 +293,5 @@ Supported logical composition:
 - Use payload indexes before relying on `WHERE`.
 - Rerank is **cloud-only**.
 - Hybrid collections use named vectors: `dense` and `sparse`.
-- MMR currently supports dense `SEARCH` and dense grouped `SEARCH` only.
+- MMR currently supports dense `SEARCH`, `USING HYBRID`, and their grouped variants.
 - Stay inside the implemented syntax. Do not invent clauses because Qdrant supports them in principle.

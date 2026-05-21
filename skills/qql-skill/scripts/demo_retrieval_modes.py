@@ -61,11 +61,11 @@ EXAMPLES = [
         "requires_index": [],
     },
     {
-        "mode": "dense-mmr",
-        "when": "Use when dense search results are too redundant and you want semantic diversity in the top-k.",
+        "mode": "hybrid-mmr",
+        "when": "Use when hybrid search results are too redundant and you want semantic diversity on the dense leg before fusion.",
         "query": (
             "SEARCH articles SIMILAR TO 'vector database performance tuning' "
-            "LIMIT 10 WITH { mmr_diversity: 0.5, mmr_candidates: 25 }"
+            "LIMIT 10 USING HYBRID WITH { mmr_diversity: 0.5, mmr_candidates: 25 }"
         ),
         "setup": [],
         "requires_index": [],

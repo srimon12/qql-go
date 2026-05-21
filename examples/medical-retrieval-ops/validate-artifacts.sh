@@ -42,7 +42,7 @@ assert_jq "$ARTIFACTS/11-search-filtered-tenant.json" ".ok == true and .data.cou
 assert_jq "$ARTIFACTS/12-search-score-threshold.json" ".ok == true and .data.count >= 1" "score-thresholded hybrid search should return medical matches"
 assert_jq "$ARTIFACTS/13-search-offset-window.json" ".ok == true and .data.count >= 1" "offset hybrid search should return the next result window"
 assert_jq "$ARTIFACTS/14-search-grouped-specialty.json" ".ok == true and .data.group_by == \"specialty\" and ([.data.groups[].group_id] | index(\"$MAIN_SPECIALTY\")) != null" "grouped search should surface the specialty groups"
-assert_jq "$ARTIFACTS/15-search-dense-mmr.json" '.ok == true and .data.count >= 1' "dense MMR search should return diversified medical matches"
+assert_jq "$ARTIFACTS/15-search-hybrid-mmr.json" '.ok == true and .data.count >= 1' "hybrid MMR search should return diversified medical matches"
 assert_jq "$ARTIFACTS/16-select-main.json" '.ok == true and .data.payload.tenant_id == "'"$MAIN_TENANT"'" and .data.payload.case_priority == "'"$MAIN_PRIORITY"'" and .data.payload.case_status == "'"$MAIN_STATUS"'"' "selected document should preserve tenant and case metadata"
 assert_jq "$ARTIFACTS/17-recommend-related.json" '.ok == true and .data.count >= 1' "recommend should return related medical answers"
 assert_jq "$ARTIFACTS/18-scroll-tenant.json" ".ok == true and (.data.points | length) >= 1 and ([.data.points[].payload.tenant_id] | all(. == \"$MAIN_TENANT\"))" "tenant scroll should stay inside one tenant"

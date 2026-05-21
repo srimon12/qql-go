@@ -15,6 +15,7 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 - **SEARCH pagination** — `SEARCH ... LIMIT <n> OFFSET <n>` now forwards flat search offsets to Qdrant.
 - **SEARCH score thresholds** — `SEARCH ... SCORE THRESHOLD <float|int>` filters low-score dense, sparse, hybrid, and grouped search results.
 - **SEARCH cross-collection lookup** — `SEARCH ... LOOKUP FROM <collection> [VECTOR '<name>']` forwards Qdrant lookup location metadata across dense, sparse, hybrid, and grouped search paths.
+- **Hybrid MMR** — `SEARCH ... USING HYBRID WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }` now applies Qdrant native MMR to the dense prefetch before hybrid fusion.
 
 ### Changed
 
@@ -53,7 +54,7 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 ### Added
 
 - **Expanded query-time search params** — `WITH` now exposes `indexed_only` plus quantization search params (`ignore`, `rescore`, `oversampling`) for `SEARCH` and `RECOMMEND`.
-- **Native dense MMR** — `SEARCH ... WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }` now maps to Qdrant's native MMR path for dense search, including grouped dense search.
+- **Native MMR** — `SEARCH ... WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }` now maps to Qdrant's native MMR path for dense search and the dense leg of hybrid search, including grouped search.
 - **Rich payload indexing** — `CREATE INDEX` now supports advanced `keyword`, `uuid`, and `text` index options, including `is_tenant`, `on_disk`, `enable_hnsw`, tokenizer settings, phrase matching, and stopwords.
 - **Payload-aware HNSW config** — `CREATE COLLECTION ... HNSW { payload_m: <n> }` now exposes collection-level payload-aware HNSW tuning.
 

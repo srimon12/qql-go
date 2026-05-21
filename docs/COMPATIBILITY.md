@@ -69,7 +69,7 @@
 | Grouped search | `query_points_groups` | ✅ v2.3 | ✅ v0.1.5 | `GROUP BY ... [GROUP_SIZE ...]` |
 | Search pagination | `offset` | ✅ v2.5.0 | ✅ v0.2.0 | `OFFSET <n>`; not compatible with `GROUP BY` |
 | Batch search | `search_batch` | ❌ | ❌ | Gap |
-| MMR diversity | `diversity` param (v1.15+) | ✅ v1.0 | ✅ v0.1 | `WITH { mmr_diversity, mmr_candidates }` |
+| MMR diversity | `diversity` param (v1.15+) | ✅ v2.5.0 | ✅ v0.2.0 | `WITH { mmr_diversity, mmr_candidates }` for dense search and the dense leg of hybrid search |
 | Score boosting | `rescore` / `formula` | ❌ | ❌ | Gap |
 | Multivector search | `multivector` | ❌ | ⚠️ v0.1 | Go supports the ColBERT multivector path for cloud rerank collections, not a general multivector search surface |
 | Rerank (cross-encoder) | `rerank` / Fastembed | ✅ v1.0 (local FastEmbed post-processing) | ⚠️ v0.1 (cloud only) | Go supports cloud rerank queries, but local/external rerank is not implemented |

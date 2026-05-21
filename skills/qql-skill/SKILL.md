@@ -188,10 +188,10 @@ Use `WITH { hnsw_ef: ... }` when recall needs tuning without changing collection
 
 Use `WITH { acorn: true }` only when filtered-query recall is the actual problem.
 
-Use `WITH { mmr_diversity: ..., mmr_candidates: ... }` when the user wants semantic diversity inside the top-k dense results.
+Use `WITH { mmr_diversity: ..., mmr_candidates: ... }` when the user wants semantic diversity inside dense results or the dense leg of hybrid retrieval.
 
-MMR currently works for dense `SEARCH` and dense `SEARCH ... GROUP BY`.
-Do not suggest it for `USING HYBRID`, `USING SPARSE`, or `RECOMMEND`.
+MMR currently works for dense `SEARCH`, `USING HYBRID`, and their `GROUP BY` variants.
+Do not suggest it for `USING SPARSE` or `RECOMMEND`.
 
 ### Rerank
 

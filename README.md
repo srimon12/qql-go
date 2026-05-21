@@ -324,6 +324,7 @@ SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef: <n>, exact: true|false, acorn: true|false, indexed_only: true|false }
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { quantization: { ignore: true|false, rescore: true|false, oversampling: <n> } }
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }
+SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK
@@ -381,6 +382,7 @@ Hybrid search:
 
 - use `USING HYBRID` when exact terms and semantic similarity both matter; this uses `RRF` by default
 - use `FUSION 'dbsf'` when you want the DBSF hybrid fusion strategy instead of the default RRF
+- use `WITH { mmr_diversity, mmr_candidates }` with hybrid search when you want diversity on the dense leg before fusion
 - combine `GROUP BY` with hybrid search when you need grouped top results; do not combine grouped search with `OFFSET`
 - default sparse model: `qdrant/bm25`
 
@@ -408,7 +410,7 @@ Search-time tuning:
 - `WITH { acorn: true|false }`
 - `WITH { indexed_only: true|false }`
 - `WITH { quantization: { ignore, rescore, oversampling } }`
-- `WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }`
+- `WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }` for dense search and the dense leg of hybrid search
 
 ## Filter Syntax
 

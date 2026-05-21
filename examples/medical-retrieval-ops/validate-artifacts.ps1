@@ -69,8 +69,8 @@ $grouped = Read-Json (Join-Path $Artifacts "14-search-grouped-specialty.json")
 Assert-True ($grouped.ok -and $grouped.data.group_by -eq "specialty") "grouped search should stay grouped by specialty"
 Assert-True ($grouped.data.groups.group_id -contains $mainSpecialty) "grouped search should surface the specialty groups"
 
-$mmr = Read-Json (Join-Path $Artifacts "15-search-dense-mmr.json")
-Assert-True ($mmr.ok -and $mmr.data.count -ge 1) "dense MMR search should return diversified medical matches"
+$mmr = Read-Json (Join-Path $Artifacts "15-search-hybrid-mmr.json")
+Assert-True ($mmr.ok -and $mmr.data.count -ge 1) "hybrid MMR search should return diversified medical matches"
 
 $select = Read-Json (Join-Path $Artifacts "16-select-main.json")
 Assert-True $select.ok "selected document should exist by ID"

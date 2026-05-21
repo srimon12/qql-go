@@ -70,7 +70,7 @@ Run-Step "11-search-filtered-tenant" "exec" "SEARCH $collection SIMILAR TO '$mai
 Run-Step "12-search-score-threshold" "exec" "SEARCH $collection SIMILAR TO '$mainQuery' LIMIT 5 SCORE THRESHOLD 0.0 USING HYBRID"
 Run-Step "13-search-offset-window" "exec" "SEARCH $collection SIMILAR TO '$mainQuery' LIMIT 5 OFFSET 1 USING HYBRID"
 Run-Step "14-search-grouped-specialty" "exec" "SEARCH $collection SIMILAR TO '$mainQuery' LIMIT 6 SCORE THRESHOLD 0.0 USING HYBRID GROUP BY specialty GROUP_SIZE 2"
-Run-Step "15-search-dense-mmr" "exec" "SEARCH $collection SIMILAR TO '$mainQuery' LIMIT 5 WITH { mmr_diversity: 0.5, mmr_candidates: 20 }"
+Run-Step "15-search-hybrid-mmr" "exec" "SEARCH $collection SIMILAR TO '$mainQuery' LIMIT 5 USING HYBRID WITH { mmr_diversity: 0.5, mmr_candidates: 20 }"
 Run-Step "16-select-main" "exec" "SELECT * FROM $collection WHERE id = $mainId"
 Run-Step "17-recommend-related" "exec" "RECOMMEND FROM $collection POSITIVE IDS ($relatedId) LIMIT 5"
 Run-Step "18-scroll-tenant" "exec" "SCROLL FROM $collection WHERE tenant_id = '$mainTenant' LIMIT 5"

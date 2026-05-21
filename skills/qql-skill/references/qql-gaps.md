@@ -10,7 +10,7 @@ Use this file when a request sounds reasonable in Qdrant terms but is still outs
 - relevance feedback
 - multi-stage retrieval beyond the built-in hybrid and rerank paths
 - offset-style pagination for grouped search
-- MMR for `USING HYBRID`, `USING SPARSE`, or `RECOMMEND`
+- MMR for `USING SPARSE` or `RECOMMEND`
 - custom vector on-disk toggles
 - `CREATE COLLECTION` with custom vector sizes or distance metrics
 

@@ -14,11 +14,14 @@ Use these patterns as templates. Keep them short and adapt only what matters.
 SEARCH articles SIMILAR TO 'vector database performance tuning' LIMIT 5
 ```
 
-## Dense search with MMR
+## MMR diversity
 
 ```sql
 SEARCH articles SIMILAR TO 'vector database performance tuning' LIMIT 5
 WITH { mmr_diversity: 0.5, mmr_candidates: 25 }
+
+SEARCH articles SIMILAR TO 'vector database performance tuning' LIMIT 5
+USING HYBRID WITH { mmr_diversity: 0.5, mmr_candidates: 25 }
 ```
 
 ## Dense search with filter
@@ -377,7 +380,7 @@ SEARCH docs SIMILAR TO 'hello world' LIMIT 5 USING HYBRID
 - recall debugging -> `EXACT`
 - query-time recall tuning -> `WITH { hnsw_ef: ... }`
 - filtered recall concern -> `WITH { acorn: true }`
-- semantically diverse dense results -> `WITH { mmr_diversity: ..., mmr_candidates: ... }`
+- semantically diverse dense or hybrid results -> `WITH { mmr_diversity: ..., mmr_candidates: ... }`
 - right docs, wrong order -> `RERANK` (cloud only)
 - broader retrieval plus better ordering -> `USING HYBRID RERANK` (cloud only)
 - sparse retrieval plus better ordering -> `USING SPARSE RERANK` (cloud only)
