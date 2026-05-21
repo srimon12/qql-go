@@ -927,7 +927,9 @@ func (p *Parser) parseSearch() (*ast.SearchStmt, error) {
 	}
 
 	offset := 0
+	hasOffset := false
 	if p.peek().Kind == lexer.TokenKindOffset {
+		hasOffset = true
 		p.advance()
 		offsetTok := p.peek()
 		offset, err = parseIntToken(p.advance())
@@ -1049,7 +1051,7 @@ func (p *Parser) parseSearch() (*ast.SearchStmt, error) {
 			if rerank {
 				return nil, errors.NewQQLSyntaxError("GROUP BY and RERANK cannot be combined in the same SEARCH statement", p.peek().Pos)
 			}
-			if offset > 0 {
+			if hasOffset {
 				return nil, errors.NewQQLSyntaxError("OFFSET cannot be used with GROUP BY", p.peek().Pos)
 			}
 			seenGroup = true

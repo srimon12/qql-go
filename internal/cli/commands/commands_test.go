@@ -1356,7 +1356,6 @@ func TestBuildGroupSearchRequestCarriesScoreThresholdAndLookup(t *testing.T) {
 	req := &qdrant.QueryPoints{
 		CollectionName: "docs",
 		Limit:          qdrant.PtrOf(uint64(5)),
-		Offset:         qdrant.PtrOf(uint64(10)),
 		ScoreThreshold: qdrant.PtrOf(float32(0.7)),
 		LookupFrom:     &qdrant.LookupLocation{CollectionName: "profiles", VectorName: strPtr("preferences")},
 		WithPayload:    qdrant.NewWithPayload(true),

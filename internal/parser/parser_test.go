@@ -905,6 +905,11 @@ func TestParseSearch(t *testing.T) {
 			input:   "SEARCH notes SIMILAR TO 'hi' LIMIT 5 OFFSET 10 GROUP BY author",
 			wantErr: true,
 		},
+		{
+			name:    "search group by with zero offset raises error",
+			input:   "SEARCH notes SIMILAR TO 'hi' LIMIT 5 OFFSET 0 GROUP BY author",
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
