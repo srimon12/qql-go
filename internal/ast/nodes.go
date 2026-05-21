@@ -32,23 +32,23 @@ type HnswRuntimeConfig struct {
 }
 
 type OptimizersRuntimeConfig struct {
-	DeletedThreshold          *float64
-	VacuumMinVectorNumber     *uint64
-	DefaultSegmentNumber      *uint64
-	MaxSegmentSize            *uint64
-	MemmapThreshold           *uint64
-	IndexingThreshold         *uint64
-	FlushIntervalSec          *uint64
-	MaxOptimizationThreads    interface{} // int or "auto" string
-	PreventUnoptimized        *bool
+	DeletedThreshold       *float64
+	VacuumMinVectorNumber  *uint64
+	DefaultSegmentNumber   *uint64
+	MaxSegmentSize         *uint64
+	MemmapThreshold        *uint64
+	IndexingThreshold      *uint64
+	FlushIntervalSec       *uint64
+	MaxOptimizationThreads interface{} // int or "auto" string
+	PreventUnoptimized     *bool
 }
 
 type CollectionParamsConfig struct {
-	ReplicationFactor       *uint64
-	WriteConsistencyFactor  *uint64
-	ReadFanOutFactor        *uint64
-	ReadFanOutDelayMs       *uint64
-	OnDiskPayload           *bool
+	ReplicationFactor      *uint64
+	WriteConsistencyFactor *uint64
+	ReadFanOutFactor       *uint64
+	ReadFanOutDelayMs      *uint64
+	OnDiskPayload          *bool
 }
 
 type CollectionConfig struct {
@@ -118,20 +118,24 @@ type ScrollStmt struct {
 }
 
 type SearchStmt struct {
-	Collection  string
-	QueryText   string
-	Limit       int
-	Model       *string
-	Hybrid      bool
-	Fusion      *string
-	SparseOnly  bool
-	SparseModel *string
-	QueryFilter FilterExpr
-	Rerank      bool
-	RerankModel *string
-	WithClause  *SearchWith
-	GroupBy     string
-	GroupSize   int
+	Collection     string
+	QueryText      string
+	Limit          int
+	Model          *string
+	Hybrid         bool
+	Fusion         *string
+	SparseOnly     bool
+	SparseModel    *string
+	QueryFilter    FilterExpr
+	Rerank         bool
+	RerankModel    *string
+	WithClause     *SearchWith
+	GroupBy        string
+	GroupSize      int
+	Offset         int
+	ScoreThreshold *float64
+	LookupFrom     string
+	LookupVector   *string
 }
 
 type QuantizationSearchWith struct {

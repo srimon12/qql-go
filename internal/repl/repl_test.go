@@ -65,9 +65,17 @@ func captureREPL(t *testing.T, exec QueryExecutor, fn func(r *REPL)) (string, st
 
 	os.Stdout = stdoutW
 	os.Stderr = stderrW
-	defer func() {
-		os.Stdout = oldStdout
-		os.Stderr = oldStderr
+
+	stdoutCh := make(chan string, 1)
+	stderrCh := make(chan string, 1)
+
+	go func() {
+		data, _ := io.ReadAll(stdoutR)
+		stdoutCh <- string(data)
+	}()
+	go func() {
+		data, _ := io.ReadAll(stderrR)
+		stderrCh <- string(data)
 	}()
 
 	repl := NewREPL(&config.Config{URL: "http://localhost:6333"}, exec)
@@ -76,15 +84,10 @@ func captureREPL(t *testing.T, exec QueryExecutor, fn func(r *REPL)) (string, st
 	require.NoError(t, stdoutW.Close())
 	require.NoError(t, stderrW.Close())
 
-	stdout, err := io.ReadAll(stdoutR)
-	require.NoError(t, err)
-	stderr, err := io.ReadAll(stderrR)
-	require.NoError(t, err)
+	os.Stdout = oldStdout
+	os.Stderr = oldStderr
 
-	require.NoError(t, stdoutR.Close())
-	require.NoError(t, stderrR.Close())
-
-	return string(stdout), string(stderr)
+	return <-stdoutCh, <-stderrCh
 }
 
 func TestHandleCommandBuiltinCommands(t *testing.T) {

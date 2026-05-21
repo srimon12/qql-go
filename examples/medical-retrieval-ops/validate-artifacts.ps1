@@ -59,30 +59,36 @@ Assert-True ($exact.ok -and ($exact.data.results.id -contains $mainId)) "main do
 $filtered = Read-Json (Join-Path $Artifacts "11-search-filtered-tenant.json")
 Assert-True ($filtered.ok -and $filtered.data.count -ge 1 -and ($filtered.data.results.id -contains $mainId)) "tenant-filtered active high-priority search should keep the main document"
 
-$grouped = Read-Json (Join-Path $Artifacts "12-search-grouped-specialty.json")
+$threshold = Read-Json (Join-Path $Artifacts "12-search-score-threshold.json")
+Assert-True ($threshold.ok -and $threshold.data.count -ge 1) "score-thresholded hybrid search should return medical matches"
+
+$offset = Read-Json (Join-Path $Artifacts "13-search-offset-window.json")
+Assert-True ($offset.ok -and $offset.data.count -ge 1) "offset hybrid search should return the next result window"
+
+$grouped = Read-Json (Join-Path $Artifacts "14-search-grouped-specialty.json")
 Assert-True ($grouped.ok -and $grouped.data.group_by -eq "specialty") "grouped search should stay grouped by specialty"
 Assert-True ($grouped.data.groups.group_id -contains $mainSpecialty) "grouped search should surface the specialty groups"
 
-$mmr = Read-Json (Join-Path $Artifacts "13-search-dense-mmr.json")
-Assert-True ($mmr.ok -and $mmr.data.count -ge 1) "dense MMR search should return diversified medical matches"
+$mmr = Read-Json (Join-Path $Artifacts "15-search-hybrid-mmr.json")
+Assert-True ($mmr.ok -and $mmr.data.count -ge 1) "hybrid MMR search should return diversified medical matches"
 
-$select = Read-Json (Join-Path $Artifacts "14-select-main.json")
+$select = Read-Json (Join-Path $Artifacts "16-select-main.json")
 Assert-True $select.ok "selected document should exist by ID"
 Assert-True ($select.data.payload.tenant_id -eq $mainTenant) "selected document should preserve tenant metadata"
 Assert-True ($select.data.payload.case_priority -eq $mainPriority) "selected document should preserve priority metadata"
 Assert-True ($select.data.payload.case_status -eq $mainStatus) "selected document should preserve status metadata"
 
-$recommend = Read-Json (Join-Path $Artifacts "15-recommend-related.json")
+$recommend = Read-Json (Join-Path $Artifacts "17-recommend-related.json")
 Assert-True ($recommend.ok -and $recommend.data.count -ge 1) "recommend should return related medical answers"
 
-$scroll = Read-Json (Join-Path $Artifacts "16-scroll-tenant.json")
+$scroll = Read-Json (Join-Path $Artifacts "18-scroll-tenant.json")
 Assert-True ($scroll.ok -and $scroll.data.points.Count -ge 1) "tenant scroll should return related entries"
 Assert-True (-not ($scroll.data.points | Where-Object { $_.payload.tenant_id -ne $mainTenant })) "tenant scroll should stay inside one tenant"
 
-$dump = Read-Json (Join-Path $Artifacts "17-dump.json")
+$dump = Read-Json (Join-Path $Artifacts "19-dump.json")
 Assert-True $dump.ok "dump should succeed"
 
-$benchmark = Read-Json (Join-Path $Artifacts "18-benchmark.json")
+$benchmark = Read-Json (Join-Path $Artifacts "20-benchmark.json")
 Assert-True ($benchmark.modes.Count -ge 5) "benchmark should report all retrieval modes"
 
 Write-Host "Validated medical retrieval artifacts for question '$($eval.queries.main.question)' in $Artifacts" -ForegroundColor Green

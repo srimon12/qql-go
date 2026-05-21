@@ -243,6 +243,9 @@ func (r *REPL) printHelp() {
 
   \033[33mSEARCH\033[0m <name> \033[33mSIMILAR TO\033[0m '<text>' \033[33mLIMIT\033[0m <n>
 	  Semantic search by vector similarity.
+      Optional: \033[33mOFFSET\033[0m <n>
+      Optional: \033[33mSCORE THRESHOLD\033[0m <float|int>
+      Optional: \033[33mLOOKUP FROM\033[0m <collection> [\033[33mVECTOR\033[0m '<vector_name>']
       Optional: \033[33mUSING MODEL\033[0m '<model>'
 	  Optional: \033[33mUSING HYBRID\033[0m [\033[33mFUSION\033[0m 'rrf|dbsf'] [\033[33mDENSE MODEL\033[0m '<model>'] [\033[33mSPARSE MODEL\033[0m '<model>']
       Optional: \033[33mUSING SPARSE\033[0m [\033[33mMODEL\033[0m '<model>']
@@ -250,6 +253,21 @@ func (r *REPL) printHelp() {
       Optional: \033[33mRERANK\033[0m [\033[33mMODEL\033[0m '<model>']
       Optional: \033[33mEXACT\033[0m
       Optional: \033[33mWITH\033[0m { hnsw_ef: <int>, exact: <bool>, acorn: <bool>, indexed_only: <bool>, quantization: { ignore: <bool>, rescore: <bool>, oversampling: <n> }, mmr_diversity: <0..1>, mmr_candidates: <int> }
+      Optional: \033[33mGROUP BY\033[0m <field> [\033[33mGROUP_SIZE\033[0m <n>]
+                  Group results by a payload field value (default GROUP_SIZE: 3).
+                  OFFSET and RERANK cannot be combined with GROUP BY.
+
+  \033[33mRECOMMEND FROM\033[0m <name> \033[33mPOSITIVE IDS\033[0m (<id>, ...)
+      Find points similar to known examples.
+      Optional: \033[33mNEGATIVE IDS\033[0m (<id>, ...)
+      Optional: \033[33mSTRATEGY\033[0m 'average_vector|best_score|sum_scores'
+      Optional: \033[33mLOOKUP FROM\033[0m <collection> [\033[33mVECTOR\033[0m '<vector_name>']
+      Optional: \033[33mUSING\033[0m '<vector_name>'
+      Requires: \033[33mLIMIT\033[0m <n>
+      Optional: \033[33mOFFSET\033[0m <n>
+      Optional: \033[33mSCORE THRESHOLD\033[0m <float|int>
+      Optional: \033[33mWHERE\033[0m <filter>
+      Optional: \033[33mWITH\033[0m { hnsw_ef: <int>, exact: <bool>, acorn: <bool>, indexed_only: <bool>, quantization: { ignore: <bool>, rescore: <bool>, oversampling: <n> } }
 
   \033[33mSELECT\033[0m * \033[33mFROM\033[0m <name> \033[33mWHERE id =\033[0m '<id>|<int>'
       Retrieve a single point by ID.

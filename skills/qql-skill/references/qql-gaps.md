@@ -9,8 +9,8 @@ Use this file when a request sounds reasonable in Qdrant terms but is still outs
 - score boosting
 - relevance feedback
 - multi-stage retrieval beyond the built-in hybrid and rerank paths
-- offset-style search pagination
-- MMR for `USING HYBRID`, `USING SPARSE`, or `RECOMMEND`
+- offset-style pagination for grouped search
+- MMR for `USING SPARSE` or `RECOMMEND`
 - custom vector on-disk toggles
 - `CREATE COLLECTION` with custom vector sizes or distance metrics
 
@@ -28,6 +28,9 @@ Prefer plain language:
 - Need a single point by exact ID: use `SELECT * FROM <collection> WHERE id = ...`
 - Need to browse or export points page by page: use `SCROLL FROM <collection> ... LIMIT <n>`
 - Need recall tuning: use `WITH { hnsw_ef: ... }`
+- Need flat search pagination: use `SEARCH ... LIMIT <n> OFFSET <n>`
+- Need low-score filtering: use `SEARCH ... SCORE THRESHOLD <float|int>`
+- Need cross-collection search lookup: use `SEARCH ... LOOKUP FROM <collection> [VECTOR '<name>']`
 - Need keyword plus semantic retrieval: use `USING HYBRID`
 - Need hybrid DBSF fusion: use `USING HYBRID FUSION 'dbsf'`
 - Need better ordering: use `RERANK` (cloud only)

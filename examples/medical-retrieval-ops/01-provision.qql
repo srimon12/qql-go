@@ -1,4 +1,4 @@
-CREATE COLLECTION medical_retrieval_ops HYBRID HNSW { payload_m: 16 } QUANTIZE SCALAR QUANTILE 0.99 ALWAYS RAM
+CREATE COLLECTION medical_retrieval_ops HYBRID WITH HNSW { payload_m: 16 } QUANTIZE SCALAR QUANTILE 0.99 ALWAYS RAM
 CREATE INDEX ON COLLECTION medical_retrieval_ops FOR source_dataset TYPE keyword
 CREATE INDEX ON COLLECTION medical_retrieval_ops FOR tenant_id TYPE keyword WITH { is_tenant: true, on_disk: true }
 CREATE INDEX ON COLLECTION medical_retrieval_ops FOR specialty TYPE keyword

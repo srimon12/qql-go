@@ -1,6 +1,6 @@
 ---
 name: qql-skill
-description: "Use QQL to create collections, create payload indexes, insert documents (single or bulk), search with dense, sparse, hybrid, or grouped retrieval, recommend by example IDs, update vectors or payloads, use exact and query-time search params, explain plans, execute scripts, dump collections, and delete data. Use when Codex needs to write or review QQL statements for the Go CLI, choose between dense, sparse, hybrid, grouped, and reranked search, or explain what QQL can and cannot do in the current Go implementation."
+description: "Use QQL to create collections, create payload indexes, insert documents (single or bulk), search with dense, sparse, hybrid, grouped, paginated, score-thresholded, or lookup-from retrieval, recommend by example IDs, update vectors or payloads, use exact and query-time search params, explain plans, execute scripts, dump collections, and delete data. Use when Codex needs to write or review QQL statements for the Go CLI, choose between dense, sparse, hybrid, grouped, and reranked search, or explain what QQL can and cannot do in the current Go implementation."
 ---
 
 # QQL Skill
@@ -31,7 +31,7 @@ Supported syntax in this repo includes:
 - `CREATE COLLECTION <name> QUANTIZE BINARY [ALWAYS RAM]`
 - `CREATE COLLECTION <name> QUANTIZE PRODUCT [ALWAYS RAM]`
 - `CREATE COLLECTION <name> QUANTIZE TURBO [BITS <1|1.5|2|4>] [ALWAYS RAM]`
-- `CREATE COLLECTION <name> HNSW { payload_m: <n> }`
+- `CREATE COLLECTION <name> WITH HNSW { payload_m: <n> }`
 - `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE <kind>`
 - `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE keyword WITH { is_tenant, on_disk, enable_hnsw }`
 - `CREATE INDEX ON COLLECTION <name> FOR <field> TYPE uuid WITH { is_tenant, on_disk, enable_hnsw }`
@@ -49,6 +49,9 @@ Supported syntax in this repo includes:
 - keys inside `VALUES {...}` can be bare identifiers or quoted strings
 - explicit `id` inside `VALUES` is accepted (unsigned int or UUID string)
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n>`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> OFFSET <n>`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> SCORE THRESHOLD <float|int>`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> LOOKUP FROM <collection> [VECTOR '<name>']`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID FUSION 'rrf|dbsf'`
@@ -185,10 +188,10 @@ Use `WITH { hnsw_ef: ... }` when recall needs tuning without changing collection
 
 Use `WITH { acorn: true }` only when filtered-query recall is the actual problem.
 
-Use `WITH { mmr_diversity: ..., mmr_candidates: ... }` when the user wants semantic diversity inside the top-k dense results.
+Use `WITH { mmr_diversity: ..., mmr_candidates: ... }` when the user wants semantic diversity inside dense results or the dense leg of hybrid retrieval.
 
-MMR currently works for dense `SEARCH` and dense `SEARCH ... GROUP BY`.
-Do not suggest it for `USING HYBRID`, `USING SPARSE`, or `RECOMMEND`.
+MMR currently works for dense `SEARCH`, `USING HYBRID`, and their `GROUP BY` variants.
+Do not suggest it for `USING SPARSE` or `RECOMMEND`.
 
 ### Rerank
 
@@ -203,6 +206,8 @@ Use `GROUP BY` when the user wants the top matches grouped by a payload field in
 Use `GROUP_SIZE` to cap how many hits each group returns.
 
 Do not combine `GROUP BY` with `RERANK`.
+
+Do not combine `GROUP BY` with `OFFSET`.
 
 ### Point lookup
 

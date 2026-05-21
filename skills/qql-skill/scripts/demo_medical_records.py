@@ -12,7 +12,7 @@ BASE_STATEMENTS = [
     # Create a HYBRID collection with payload-aware HNSW and scalar quantization.
     (
         "create-collection",
-        f"CREATE COLLECTION {COLLECTION} HYBRID HNSW {{ payload_m: 16 }} QUANTIZE SCALAR QUANTILE 0.99 ALWAYS RAM",
+        f"CREATE COLLECTION {COLLECTION} HYBRID WITH HNSW {{ payload_m: 16 }} QUANTIZE SCALAR QUANTILE 0.99 ALWAYS RAM",
     ),
     # Create payload indexes for filtering
     (
@@ -126,8 +126,8 @@ BASE_STATEMENTS = [
         f"SEARCH {COLLECTION} SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 EXACT",
     ),
     (
-        "search-dense-mmr",
-        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency triage' LIMIT 3 WITH {{ mmr_diversity: 0.5, mmr_candidates: 20 }}",
+        "search-hybrid-mmr",
+        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency triage' LIMIT 3 USING HYBRID WITH {{ mmr_diversity: 0.5, mmr_candidates: 20 }}",
     ),
     # HYBRID with specialty filter
     (
@@ -154,8 +154,8 @@ BASE_STATEMENTS = [
         f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency' LIMIT 3 USING HYBRID GROUP BY specialty GROUP_SIZE 2",
     ),
     (
-        "grouped-dense-mmr",
-        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency' LIMIT 3 WITH {{ mmr_diversity: 0.35, mmr_candidates: 20 }} GROUP BY specialty GROUP_SIZE 2",
+        "grouped-hybrid-mmr",
+        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency' LIMIT 3 USING HYBRID WITH {{ mmr_diversity: 0.35, mmr_candidates: 20 }} GROUP BY specialty GROUP_SIZE 2",
     ),
     (
         "group-by-priority-with-params",

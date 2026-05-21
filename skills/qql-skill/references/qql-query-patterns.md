@@ -14,11 +14,14 @@ Use these patterns as templates. Keep them short and adapt only what matters.
 SEARCH articles SIMILAR TO 'vector database performance tuning' LIMIT 5
 ```
 
-## Dense search with MMR
+## MMR diversity
 
 ```sql
 SEARCH articles SIMILAR TO 'vector database performance tuning' LIMIT 5
 WITH { mmr_diversity: 0.5, mmr_candidates: 25 }
+
+SEARCH articles SIMILAR TO 'vector database performance tuning' LIMIT 5
+USING HYBRID WITH { mmr_diversity: 0.5, mmr_candidates: 25 }
 ```
 
 ## Dense search with filter
@@ -35,6 +38,24 @@ Then filter:
 ```sql
 SEARCH articles SIMILAR TO 'transformer inference' LIMIT 10
 WHERE category = 'ml' AND year >= 2024
+```
+
+## Search pagination and score threshold
+
+```sql
+SEARCH articles SIMILAR TO 'refund policy' LIMIT 10
+OFFSET 20
+SCORE THRESHOLD 0.8
+```
+
+`OFFSET` is for flat search results. Do not combine it with `GROUP BY`.
+
+## Cross-collection search lookup
+
+```sql
+SEARCH articles SIMILAR TO 'personalized refund policy' LIMIT 5
+LOOKUP FROM user_profiles VECTOR 'preferences'
+USING HYBRID
 ```
 
 ## Hybrid search
@@ -91,6 +112,8 @@ GROUP BY category
 GROUP_SIZE 2
 ```
 
+Grouped search can use `SCORE THRESHOLD`, but not `OFFSET`.
+
 ## Grouped hybrid search with query-time params
 
 ```sql
@@ -117,7 +140,7 @@ WITH { hnsw_ef: 256 }
 ## Tenant-aware indexing and payload HNSW
 
 ```sql
-CREATE COLLECTION tenant_docs HYBRID HNSW { payload_m: 16 }
+CREATE COLLECTION tenant_docs HYBRID WITH HNSW { payload_m: 16 }
 CREATE INDEX ON COLLECTION tenant_docs FOR tenant_id TYPE keyword WITH { is_tenant: true, on_disk: true }
 ```
 
@@ -241,7 +264,7 @@ INSERT BULK INTO COLLECTION notes VALUES [
 ```sql
 CREATE COLLECTION notes
 CREATE COLLECTION notes HYBRID
-CREATE COLLECTION notes HYBRID HNSW { payload_m: 16 }
+CREATE COLLECTION notes HYBRID WITH HNSW { payload_m: 16 }
 CREATE COLLECTION notes USING MODEL 'sentence-transformers/all-MiniLM-L6-v2'
 CREATE COLLECTION notes QUANTIZE SCALAR
 CREATE COLLECTION notes QUANTIZE SCALAR QUANTILE 0.95 ALWAYS RAM
@@ -357,7 +380,7 @@ SEARCH docs SIMILAR TO 'hello world' LIMIT 5 USING HYBRID
 - recall debugging -> `EXACT`
 - query-time recall tuning -> `WITH { hnsw_ef: ... }`
 - filtered recall concern -> `WITH { acorn: true }`
-- semantically diverse dense results -> `WITH { mmr_diversity: ..., mmr_candidates: ... }`
+- semantically diverse dense or hybrid results -> `WITH { mmr_diversity: ..., mmr_candidates: ... }`
 - right docs, wrong order -> `RERANK` (cloud only)
 - broader retrieval plus better ordering -> `USING HYBRID RERANK` (cloud only)
 - sparse retrieval plus better ordering -> `USING SPARSE RERANK` (cloud only)

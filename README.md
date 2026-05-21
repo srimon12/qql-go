@@ -12,7 +12,7 @@ Use `qql-go` when you need repeatable commands, stable JSON output, version-cont
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go 1.24+](https://img.shields.io/badge/Go-1.24%2B-00ADD8.svg)](https://go.dev/)
-[![Version](https://img.shields.io/badge/Version-0.1.7-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/Version-0.2.0-blue.svg)](VERSION)
 [![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/srimon12/qql-go/releases)
 
 ## What qql-go supports
@@ -26,6 +26,7 @@ Use `qql-go` when you need repeatable commands, stable JSON output, version-cont
 - vector and payload update
 - point retrieval and scroll pagination
 - dense, sparse, and hybrid retrieval
+- search pagination, score thresholds, and cross-collection lookup
 - grouped retrieval
 - recommendation by example IDs
 - rerank retrieval
@@ -104,7 +105,7 @@ curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | s
 Install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | VERSION=v0.1.7 sh
+curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | VERSION=v0.2.0 sh
 ```
 
 The Unix installer defaults to `~/.local/bin/qql-go`. Override with `INSTALL_DIR=/your/bin/path` when needed.
@@ -287,7 +288,7 @@ CREATE COLLECTION <name> QUANTIZE PRODUCT ALWAYS RAM
 CREATE COLLECTION <name> QUANTIZE TURBO
 CREATE COLLECTION <name> QUANTIZE TURBO BITS <1|1.5|2|4>
 CREATE COLLECTION <name> QUANTIZE TURBO BITS <1|1.5|2|4> ALWAYS RAM
-CREATE COLLECTION <name> HNSW { payload_m: <n> }
+CREATE COLLECTION <name> WITH HNSW { payload_m: <n> }
 DROP COLLECTION <name>
 SHOW COLLECTIONS
 SHOW COLLECTION <name>
@@ -309,6 +310,9 @@ INSERT BULK INTO COLLECTION <name> VALUES [{...}, {...}]
 INSERT BULK INTO COLLECTION <name> VALUES [{...}, {...}] USING HYBRID
 
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n>
+SEARCH <name> SIMILAR TO '<query>' LIMIT <n> OFFSET <n>
+SEARCH <name> SIMILAR TO '<query>' LIMIT <n> SCORE THRESHOLD <float|int>
+SEARCH <name> SIMILAR TO '<query>' LIMIT <n> LOOKUP FROM <collection> [VECTOR '<name>']
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING MODEL '<model>'
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID FUSION 'rrf|dbsf'
@@ -320,10 +324,12 @@ SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef: <n>, exact: true|false, acorn: true|false, indexed_only: true|false }
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { quantization: { ignore: true|false, rescore: true|false, oversampling: <n> } }
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }
+SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK
 SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE RERANK
+SEARCH <name> SIMILAR TO '<query>' LIMIT <n> GROUP BY <field> [GROUP_SIZE <n>]
 
 SELECT * FROM <name> WHERE id = '<uuid>'
 SELECT * FROM <name> WHERE id = <integer>
@@ -336,6 +342,8 @@ SCROLL FROM <name> WHERE <filter> AFTER <point_id> LIMIT <n>
 RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n>
 RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) NEGATIVE IDS (<id>, ...) LIMIT <n>
 RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) STRATEGY '<strategy>' LIMIT <n>
+RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> OFFSET <n>
+RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> SCORE THRESHOLD <float|int>
 RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LOOKUP FROM <collection> [VECTOR '<name>'] USING '<vector_name>' LIMIT <n>
 
 DELETE FROM <name> WHERE id = '<uuid>'
@@ -356,6 +364,9 @@ Dense search:
 
 - use plain `SEARCH`
 - use `USING MODEL '<model>'` when you want to pin the dense model
+- add `OFFSET <n>` for flat search pagination
+- add `SCORE THRESHOLD <float|int>` to drop low-score matches
+- add `LOOKUP FROM <collection> [VECTOR '<name>']` for cross-collection vector lookup
 - default dense model: `sentence-transformers/all-minilm-l6-v2`
 
 Collection quantization:
@@ -371,6 +382,8 @@ Hybrid search:
 
 - use `USING HYBRID` when exact terms and semantic similarity both matter; this uses `RRF` by default
 - use `FUSION 'dbsf'` when you want the DBSF hybrid fusion strategy instead of the default RRF
+- use `WITH { mmr_diversity, mmr_candidates }` with hybrid search when you want diversity on the dense leg before fusion
+- combine `GROUP BY` with hybrid search when you need grouped top results; do not combine grouped search with `OFFSET`
 - default sparse model: `qdrant/bm25`
 
 Sparse-only search:
@@ -397,7 +410,7 @@ Search-time tuning:
 - `WITH { acorn: true|false }`
 - `WITH { indexed_only: true|false }`
 - `WITH { quantization: { ignore, rescore, oversampling } }`
-- `WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }`
+- `WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }` for dense search and the dense leg of hybrid search
 
 ## Filter Syntax
 
@@ -488,7 +501,7 @@ Config is stored at:
 - [CONTRIBUTING.md](CONTRIBUTING.md) for contributors
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for maintainers and release workflow details
 - [CHANGELOG.md](CHANGELOG.md) for user-facing changes
-- [docs/releases/0.1.7.md](docs/releases/0.1.7.md) for the current release note
+- [docs/releases/0.2.0.md](docs/releases/0.2.0.md) for the current release note
 
 ## Project Layout
 

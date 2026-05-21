@@ -6,12 +6,29 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 ## [Unreleased]
 
+- No unreleased changes yet.
+
+## [0.2.0] - 2026-05-21
+
+### Added
+
+- **SEARCH pagination** — `SEARCH ... LIMIT <n> OFFSET <n>` now forwards flat search offsets to Qdrant.
+- **SEARCH score thresholds** — `SEARCH ... SCORE THRESHOLD <float|int>` filters low-score dense, sparse, hybrid, and grouped search results.
+- **SEARCH cross-collection lookup** — `SEARCH ... LOOKUP FROM <collection> [VECTOR '<name>']` forwards Qdrant lookup location metadata across dense, sparse, hybrid, and grouped search paths.
+- **Hybrid MMR** — `SEARCH ... USING HYBRID WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }` now applies Qdrant native MMR to the dense prefetch before hybrid fusion.
+
+### Changed
+
+- Compatibility docs, README syntax, examples, release-validation checks, and bundled `qql-skill` references now align with Python QQL `2.5.0` and Go `0.2.0`.
+- `GROUP BY` docs now call out that offset-style pagination is intentionally unsupported for grouped search.
+
 ### Fixed
 
 - `ALTER COLLECTION ... WITH VECTORS { on_disk: ... }` now updates unnamed vectors and every named dense vector instead of only the first discovered dense vector.
 - `ALTER COLLECTION ... QUANTIZE TURBO` now applies the Turbo quantization diff and reports invalid Turbo bit depths instead of silently dropping the update.
 - Collection dumps now preserve `max_optimization_threads`, `on_disk_payload`, and Turbo bit values in generated `CREATE COLLECTION` statements.
 - Collection config parsing is now deterministic for case-variant keys and rejects create-time `read_fan_out_factor` / `read_fan_out_delay_ms` case-insensitively.
+- `RECOMMEND ... SCORE THRESHOLD 1` accepts integer literals, matching the Python parser behavior.
 
 ## [0.1.7] - 2026-05-17
 
@@ -37,7 +54,7 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 ### Added
 
 - **Expanded query-time search params** — `WITH` now exposes `indexed_only` plus quantization search params (`ignore`, `rescore`, `oversampling`) for `SEARCH` and `RECOMMEND`.
-- **Native dense MMR** — `SEARCH ... WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }` now maps to Qdrant's native MMR path for dense search, including grouped dense search.
+- **Native MMR** — `SEARCH ... WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }` now maps to Qdrant's native MMR path for dense search and the dense leg of hybrid search, including grouped search.
 - **Rich payload indexing** — `CREATE INDEX` now supports advanced `keyword`, `uuid`, and `text` index options, including `is_tenant`, `on_disk`, `enable_hnsw`, tokenizer settings, phrase matching, and stopwords.
 - **Payload-aware HNSW config** — `CREATE COLLECTION ... HNSW { payload_m: <n> }` now exposes collection-level payload-aware HNSW tuning.
 

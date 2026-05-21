@@ -17,7 +17,7 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - `CREATE COLLECTION <name> QUANTIZE BINARY [ALWAYS RAM]`
 - `CREATE COLLECTION <name> QUANTIZE PRODUCT [ALWAYS RAM]`
 - `CREATE COLLECTION <name> QUANTIZE TURBO [BITS <1|1.5|2|4>] [ALWAYS RAM]`
-- `CREATE COLLECTION <name> HNSW { payload_m: <n> }`
+- `CREATE COLLECTION <name> WITH HNSW { payload_m: <n> }`
 - `SHOW COLLECTION <name>`
 - `SHOW COLLECTIONS`
 - `DROP COLLECTION <name>`
@@ -48,6 +48,9 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 ### Search
 
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n>`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> OFFSET <n>`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> SCORE THRESHOLD <float|int>`
+- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> LOOKUP FROM <collection> [VECTOR '<name>']`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING MODEL '<model>'`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID`
 - `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID FUSION 'rrf|dbsf'`
@@ -201,6 +204,8 @@ Use `GROUP BY` when the result needs grouped top matches by payload field.
 
 `GROUP BY` works with dense, sparse, hybrid, `WHERE`, and query-time params, but not with `RERANK`.
 
+`GROUP BY` does not support `OFFSET`; use flat search pagination when you need offset-style result windows.
+
 ### Collection quantization
 
 Use quantization at create time when memory footprint matters:
@@ -253,7 +258,7 @@ Use them for:
 - exact recall baselines
 - query-time recall tuning
 - filtered-query experiments
-- semantic diversity in dense search results
+- semantic diversity in dense search results or the dense leg of hybrid search
 
 ## Filters
 
@@ -288,5 +293,5 @@ Supported logical composition:
 - Use payload indexes before relying on `WHERE`.
 - Rerank is **cloud-only**.
 - Hybrid collections use named vectors: `dense` and `sparse`.
-- MMR currently supports dense `SEARCH` and dense grouped `SEARCH` only.
+- MMR currently supports dense `SEARCH`, `USING HYBRID`, and their grouped variants.
 - Stay inside the implemented syntax. Do not invent clauses because Qdrant supports them in principle.

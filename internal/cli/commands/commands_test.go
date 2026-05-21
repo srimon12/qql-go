@@ -126,10 +126,12 @@ func TestBuildSearchRequestAppliesWithClauseAndSparseOverride(t *testing.T) {
 		Hybrid:      true,
 		SparseModel: &sparseModel,
 		WithClause: &ast.SearchWith{
-			HnswEf:      128,
-			Exact:       true,
-			Acorn:       true,
-			IndexedOnly: true,
+			HnswEf:        128,
+			Exact:         true,
+			Acorn:         true,
+			IndexedOnly:   true,
+			MmrDiversity:  float64Ptr(0.5),
+			MmrCandidates: intPtr(50),
 			Quantization: &ast.QuantizationSearchWith{
 				Ignore:       boolPtr(true),
 				Rescore:      boolPtr(false),
@@ -156,7 +158,10 @@ func TestBuildSearchRequestAppliesWithClauseAndSparseOverride(t *testing.T) {
 	prefetch := req.GetPrefetch()
 	require.Len(t, prefetch, 2)
 	require.Equal(t, "custom-sparse", prefetch[0].GetQuery().GetNearest().GetDocument().GetModel())
-	require.Equal(t, "dense-model", prefetch[1].GetQuery().GetNearest().GetDocument().GetModel())
+	require.NotNil(t, prefetch[1].GetQuery().GetNearestWithMmr())
+	require.Equal(t, "dense-model", prefetch[1].GetQuery().GetNearestWithMmr().GetNearest().GetDocument().GetModel())
+	require.InDelta(t, 0.5, prefetch[1].GetQuery().GetNearestWithMmr().GetMmr().GetDiversity(), 0.0001)
+	require.Equal(t, uint32(50), prefetch[1].GetQuery().GetNearestWithMmr().GetMmr().GetCandidatesLimit())
 	require.NotNil(t, prefetch[0].GetParams())
 	require.Equal(t, uint64(128), prefetch[0].GetParams().GetHnswEf())
 }
@@ -190,8 +195,10 @@ func TestBuildGroupSearchRequestCarriesHybridPrefetchParamsAndCustomModels(t *te
 		Hybrid:      true,
 		SparseModel: &sparseModel,
 		WithClause: &ast.SearchWith{
-			HnswEf: 128,
-			Acorn:  true,
+			HnswEf:        128,
+			Acorn:         true,
+			MmrDiversity:  float64Ptr(0.4),
+			MmrCandidates: intPtr(25),
 		},
 		GroupBy:   "category",
 		GroupSize: 2,
@@ -212,7 +219,10 @@ func TestBuildGroupSearchRequestCarriesHybridPrefetchParamsAndCustomModels(t *te
 	require.Equal(t, uint64(2), groupReq.GetGroupSize())
 	require.Len(t, groupReq.GetPrefetch(), 2)
 	require.Equal(t, "custom-sparse", groupReq.GetPrefetch()[0].GetQuery().GetNearest().GetDocument().GetModel())
-	require.Equal(t, "dense-model", groupReq.GetPrefetch()[1].GetQuery().GetNearest().GetDocument().GetModel())
+	require.NotNil(t, groupReq.GetPrefetch()[1].GetQuery().GetNearestWithMmr())
+	require.Equal(t, "dense-model", groupReq.GetPrefetch()[1].GetQuery().GetNearestWithMmr().GetNearest().GetDocument().GetModel())
+	require.InDelta(t, 0.4, groupReq.GetPrefetch()[1].GetQuery().GetNearestWithMmr().GetMmr().GetDiversity(), 0.0001)
+	require.Equal(t, uint32(25), groupReq.GetPrefetch()[1].GetQuery().GetNearestWithMmr().GetMmr().GetCandidatesLimit())
 	require.Equal(t, uint64(128), groupReq.GetPrefetch()[0].GetParams().GetHnswEf())
 	require.NotNil(t, groupReq.GetPrefetch()[0].GetParams().GetAcorn())
 	require.True(t, groupReq.GetPrefetch()[0].GetParams().GetAcorn().GetEnable())
@@ -1319,13 +1329,72 @@ func TestDoSearchUsesQueryGroupsForGroupedSearch(t *testing.T) {
 	require.Contains(t, resp.Message, "Found 1 group(s)")
 }
 
-func TestDoSearchRejectsMMRWithHybrid(t *testing.T) {
+func TestDoSearchForwardsSearchParityFields(t *testing.T) {
+	client := newFakeQdrantClient()
+	client.exists = true
+	client.info = &qdrant.CollectionInfo{
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
+					denseVectorName: {Size: uint64(denseVectorSize), Distance: qdrant.Distance_Cosine},
+				}),
+			},
+		},
+	}
+	exec := NewExecutor(client, &config.Config{})
+
+	_, err := exec.doSearch(&ast.SearchStmt{
+		Collection:     "docs",
+		QueryText:      "vector database",
+		Limit:          5,
+		Offset:         10,
+		ScoreThreshold: float64Ptr(0.8),
+		LookupFrom:     "profiles",
+		LookupVector:   strPtr("preferences"),
+	})
+	require.NoError(t, err)
+	require.Len(t, client.queryRequests, 1)
+	req := client.queryRequests[0]
+	require.Equal(t, uint64(10), req.GetOffset())
+	require.InDelta(t, float32(0.8), req.GetScoreThreshold(), 0.0001)
+	require.NotNil(t, req.GetLookupFrom())
+	require.Equal(t, "profiles", req.GetLookupFrom().GetCollectionName())
+	require.Equal(t, "preferences", req.GetLookupFrom().GetVectorName())
+}
+
+func TestBuildGroupSearchRequestCarriesScoreThresholdAndLookup(t *testing.T) {
+	req := &qdrant.QueryPoints{
+		CollectionName: "docs",
+		Limit:          qdrant.PtrOf(uint64(5)),
+		ScoreThreshold: qdrant.PtrOf(float32(0.7)),
+		LookupFrom:     &qdrant.LookupLocation{CollectionName: "profiles", VectorName: strPtr("preferences")},
+		WithPayload:    qdrant.NewWithPayload(true),
+		WithVectors:    qdrant.NewWithVectors(false),
+	}
+
+	groupReq := buildGroupSearchRequest(&ast.SearchStmt{
+		Collection: "docs",
+		GroupBy:    "author",
+		GroupSize:  2,
+	}, req, nil)
+
+	require.Equal(t, "author", groupReq.GetGroupBy())
+	require.InDelta(t, float32(0.7), groupReq.GetScoreThreshold(), 0.0001)
+	require.NotNil(t, groupReq.GetLookupFrom())
+	require.Equal(t, "profiles", groupReq.GetLookupFrom().GetCollectionName())
+	require.Equal(t, "preferences", groupReq.GetLookupFrom().GetVectorName())
+}
+
+func TestDoSearchSupportsMMRWithHybrid(t *testing.T) {
 	client := newFakeQdrantClient()
 	client.exists = true
 	client.info = &qdrant.CollectionInfo{
 		Config: &qdrant.CollectionConfig{
 			Params: &qdrant.CollectionParams{
 				VectorsConfig: qdrant.NewVectorsConfigMap(collectionVectorParams(denseVectorSize, false)),
+				SparseVectorsConfig: qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
+					sparseVectorName: {},
+				}),
 			},
 		},
 	}
@@ -1338,8 +1407,12 @@ func TestDoSearchRejectsMMRWithHybrid(t *testing.T) {
 		Hybrid:     true,
 		WithClause: &ast.SearchWith{MmrDiversity: float64Ptr(0.5)},
 	})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "MMR is not supported with USING HYBRID yet")
+	require.NoError(t, err)
+	require.Len(t, client.queryRequests, 1)
+	prefetch := client.queryRequests[0].GetPrefetch()
+	require.Len(t, prefetch, 2)
+	require.NotNil(t, prefetch[1].GetQuery().GetNearestWithMmr())
+	require.InDelta(t, 0.5, prefetch[1].GetQuery().GetNearestWithMmr().GetMmr().GetDiversity(), 0.0001)
 }
 
 func TestDoSearchRejectsMMRWithSparse(t *testing.T) {
@@ -1422,7 +1495,7 @@ func TestBuildSearchPrefetchesLocalModeReturnsExplicitQueries(t *testing.T) {
 		EmbeddingDimension: 3,
 	})
 
-	prefetch, err := exec.buildSearchPrefetches(context.Background(), "hello world", "dense-model", "sparse-model", 5, nil)
+	prefetch, err := exec.buildSearchPrefetches(context.Background(), "hello world", "dense-model", "sparse-model", 5, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, prefetch, 2)
 
@@ -1445,7 +1518,7 @@ func TestBuildSearchPrefetchesLocalModePropagatesEmbeddingError(t *testing.T) {
 		EmbeddingDimension: 3,
 	})
 
-	_, err := exec.buildSearchPrefetches(context.Background(), "hello world", "dense-model", "sparse-model", 5, nil)
+	_, err := exec.buildSearchPrefetches(context.Background(), "hello world", "dense-model", "sparse-model", 5, nil, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to embed search query")
 }

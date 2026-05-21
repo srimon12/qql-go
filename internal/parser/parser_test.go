@@ -830,6 +830,86 @@ func TestParseSearch(t *testing.T) {
 			input:   "SEARCH mycollection SIMILAR TO 'query text' LIMIT 10 GROUP BY category GROUP_SIZE 0",
 			wantErr: true,
 		},
+		{
+			name:  "search with offset and score threshold",
+			input: "SEARCH notes SIMILAR TO 'hi' LIMIT 5 OFFSET 10 SCORE THRESHOLD 0.8",
+			want: &ast.SearchStmt{
+				Collection:     "notes",
+				QueryText:      "hi",
+				Limit:          5,
+				Offset:         10,
+				ScoreThreshold: float64Ptr(0.8),
+			},
+		},
+		{
+			name:  "search with integer score threshold",
+			input: "SEARCH notes SIMILAR TO 'hi' LIMIT 5 SCORE THRESHOLD 1",
+			want: &ast.SearchStmt{
+				Collection:     "notes",
+				QueryText:      "hi",
+				Limit:          5,
+				ScoreThreshold: float64Ptr(1.0),
+			},
+		},
+		{
+			name:  "search with lookup from",
+			input: "SEARCH notes SIMILAR TO 'hi' LIMIT 5 LOOKUP FROM other_coll",
+			want: &ast.SearchStmt{
+				Collection: "notes",
+				QueryText:  "hi",
+				Limit:      5,
+				LookupFrom: "other_coll",
+			},
+		},
+		{
+			name:  "search with lookup from and vector",
+			input: "SEARCH notes SIMILAR TO 'hi' LIMIT 5 LOOKUP FROM other_coll VECTOR 'my_vec'",
+			want: &ast.SearchStmt{
+				Collection:   "notes",
+				QueryText:    "hi",
+				Limit:        5,
+				LookupFrom:   "other_coll",
+				LookupVector: strPtr("my_vec"),
+			},
+		},
+		{
+			name:  "search with lookup before using model",
+			input: "SEARCH notes SIMILAR TO 'hi' LIMIT 5 LOOKUP FROM other_coll USING MODEL 'dense-model'",
+			want: &ast.SearchStmt{
+				Collection: "notes",
+				QueryText:  "hi",
+				Limit:      5,
+				LookupFrom: "other_coll",
+				Model:      strPtr("dense-model"),
+			},
+		},
+		{
+			name:  "search with offset score threshold and lookup",
+			input: "SEARCH notes SIMILAR TO 'hi' LIMIT 5 OFFSET 10 SCORE THRESHOLD 0.8 LOOKUP FROM other_coll",
+			want: &ast.SearchStmt{
+				Collection:     "notes",
+				QueryText:      "hi",
+				Limit:          5,
+				Offset:         10,
+				ScoreThreshold: float64Ptr(0.8),
+				LookupFrom:     "other_coll",
+			},
+		},
+		{
+			name:    "search with negative offset raises error",
+			input:   "SEARCH notes SIMILAR TO 'hi' LIMIT 5 OFFSET -1",
+			wantErr: true,
+		},
+		{
+			name:    "search group by with offset raises error",
+			input:   "SEARCH notes SIMILAR TO 'hi' LIMIT 5 OFFSET 10 GROUP BY author",
+			wantErr: true,
+		},
+		{
+			name:    "search group by with zero offset raises error",
+			input:   "SEARCH notes SIMILAR TO 'hi' LIMIT 5 OFFSET 0 GROUP BY author",
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -882,15 +962,26 @@ func TestParseSearch(t *testing.T) {
 			}
 			assert.Equal(t, tt.want.GroupBy, stmt.GroupBy)
 			assert.Equal(t, tt.want.GroupSize, stmt.GroupSize)
+			assert.Equal(t, tt.want.Offset, stmt.Offset)
+			if tt.want.ScoreThreshold != nil {
+				require.NotNil(t, stmt.ScoreThreshold)
+				assert.InDelta(t, *tt.want.ScoreThreshold, *stmt.ScoreThreshold, 0.0001)
+			}
+			assert.Equal(t, tt.want.LookupFrom, stmt.LookupFrom)
+			if tt.want.LookupVector != nil {
+				require.NotNil(t, stmt.LookupVector)
+				assert.Equal(t, *tt.want.LookupVector, *stmt.LookupVector)
+			}
 		})
 	}
 }
 
 func TestParseRecommend(t *testing.T) {
 	tests := []struct {
-		name  string
-		input string
-		want  *ast.RecommendStmt
+		name    string
+		input   string
+		want    *ast.RecommendStmt
+		wantErr bool
 	}{
 		{
 			name:  "basic recommend",
@@ -1012,6 +1103,11 @@ func TestParseRecommend(t *testing.T) {
 				QueryFilter:    &ast.CompareExpr{Field: "status", Op: "=", Value: "active"},
 			},
 		},
+		{
+			name:    "recommend with negative offset raises error",
+			input:   "RECOMMEND FROM notes POSITIVE IDS ('a') LIMIT 10 OFFSET -1",
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1022,6 +1118,10 @@ func TestParseRecommend(t *testing.T) {
 
 			p := NewParser()
 			node, err := p.Parse(tokens)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
 			require.NoError(t, err)
 
 			stmt, ok := node.(*ast.RecommendStmt)

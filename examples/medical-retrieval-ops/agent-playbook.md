@@ -9,9 +9,11 @@ qql-go doctor --quiet --json
 qql-go exec --quiet --json "SHOW COLLECTION medical_retrieval_ops"
 qql-go explain --quiet --json "SEARCH medical_retrieval_ops SIMILAR TO '<medical question>' LIMIT 5 USING HYBRID"
 qql-go exec --quiet --json "SEARCH medical_retrieval_ops SIMILAR TO '<medical question>' LIMIT 5 USING HYBRID"
+qql-go exec --quiet --json "SEARCH medical_retrieval_ops SIMILAR TO '<medical question>' LIMIT 5 SCORE THRESHOLD 0.6 USING HYBRID"
+qql-go exec --quiet --json "SEARCH medical_retrieval_ops SIMILAR TO '<medical question>' LIMIT 5 OFFSET 5 USING HYBRID"
 qql-go exec --quiet --json "SEARCH medical_retrieval_ops SIMILAR TO '<medical question>' LIMIT 5 USING SPARSE"
 qql-go exec --quiet --json "SEARCH medical_retrieval_ops SIMILAR TO '<medical question>' LIMIT 5 USING HYBRID WHERE specialty = '<expected specialty>'"
-qql-go exec --quiet --json "SEARCH medical_retrieval_ops SIMILAR TO '<medical question>' LIMIT 6 USING HYBRID GROUP BY specialty GROUP_SIZE 2"
+qql-go exec --quiet --json "SEARCH medical_retrieval_ops SIMILAR TO '<medical question>' LIMIT 6 SCORE THRESHOLD 0.5 USING HYBRID GROUP BY specialty GROUP_SIZE 2"
 qql-go exec --quiet --json "SELECT * FROM medical_retrieval_ops WHERE id = <best_result_id>"
 qql-go exec --quiet --json "RECOMMEND FROM medical_retrieval_ops POSITIVE IDS (<best_result_id>) LIMIT 5"
 ```
