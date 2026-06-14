@@ -14,18 +14,31 @@ type Embedder interface {
 
 // QueryState represents the transient state as a query traverses the execution DAG.
 type QueryState struct {
-	QueryText     string
-	Prefetches    []*qdrant.PrefetchQuery
-	TargetQuery   *qdrant.Query
-	Params        *qdrant.SearchParams
-	HasMMR        bool
-	MmrCandidates uint32
-	MmrDiversity  float32
-	LocalEmbed         bool
-	Embedder           Embedder
-	// CloudModelOptions carries provider API keys for Qdrant cloud inference
-	// e.g. {"openai-api-key": "sk-...", "openrouter-api-key": "or-..."}
-	CloudModelOptions  map[string]string
+	// --- Query construction (set by embed nodes) ---
+	QueryText   string
+	Prefetches  []*qdrant.PrefetchQuery
+	TargetQuery *qdrant.Query
+	Params      *qdrant.SearchParams
+
+	// --- Embedding strategy ---
+	HasMMR            bool
+	MmrCandidates     uint32
+	MmrDiversity      float32
+	LocalEmbed        bool
+	Embedder          Embedder
+	CloudModelOptions map[string]string
+
+	// --- Request assembly (set by executor before pipeline runs) ---
+	CollectionName string
+	Limit          uint64
+	Offset         uint64
+	QdrantFilter   *qdrant.Filter
+	ScoreThreshold *float32
+	LookupFrom     *qdrant.LookupLocation
+
+	// --- GroupBy ---
+	GroupBy   string
+	GroupSize uint64
 }
 
 // ExecutionNode defines a single step in the QQL Query Planner DAG.
@@ -54,4 +67,52 @@ func (p *QueryPipeline) Execute(ctx context.Context, state *QueryState) error {
 		}
 	}
 	return nil
+}
+
+// BuildFlatRequest assembles a complete QueryPoints request from the accumulated state.
+// Call this after Execute().
+func (p *QueryPipeline) BuildFlatRequest(state *QueryState) *qdrant.QueryPoints {
+	req := &qdrant.QueryPoints{
+		CollectionName: state.CollectionName,
+		Query:          state.TargetQuery,
+		Prefetch:       state.Prefetches,
+		Limit:          &state.Limit,
+		Params:         state.Params,
+		Filter:         state.QdrantFilter,
+	}
+	if state.Offset > 0 {
+		req.Offset = &state.Offset
+	}
+	if state.ScoreThreshold != nil {
+		req.ScoreThreshold = state.ScoreThreshold
+	}
+	if state.LookupFrom != nil {
+		req.LookupFrom = state.LookupFrom
+	}
+	return req
+}
+
+// BuildGroupedRequest assembles a complete QueryPointGroups request from the accumulated state.
+// Call this after Execute().
+func (p *QueryPipeline) BuildGroupedRequest(state *QueryState) *qdrant.QueryPointGroups {
+	flat := p.BuildFlatRequest(state)
+	return &qdrant.QueryPointGroups{
+		CollectionName: flat.CollectionName,
+		Query:          flat.Query,
+		Prefetch:       flat.Prefetch,
+		Limit:          flat.Limit,
+		GroupBy:        state.GroupBy,
+		GroupSize:      groupSizePtr(state.GroupSize),
+		Filter:         flat.Filter,
+		ScoreThreshold: flat.ScoreThreshold,
+		LookupFrom:     flat.LookupFrom,
+		Params:         flat.Params,
+	}
+}
+
+func groupSizePtr(n uint64) *uint64 {
+	if n == 0 {
+		return nil
+	}
+	return &n
 }

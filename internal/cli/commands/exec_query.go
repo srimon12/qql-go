@@ -13,35 +13,59 @@ import (
 func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 	ctx := context.Background()
 
-	// 1. Resolve Embedding Options
+	// 1. Resolve embedding options
 	denseVectorName := ""
 	if stmt.Using != nil {
 		denseVectorName = *stmt.Using
 	}
-	sparseVectorName := ""
-	if stmt.Hybrid {
-		sparseVectorName = denseVectorName
-	}
-	
+	sparseVectorName := denseVectorName
+
 	denseModel := ""
 	if stmt.Model != nil {
 		denseModel = *stmt.Model
 	}
 	var sparseModel *string
 	if stmt.Type == ast.QueryTypeHybrid {
-		sparseModelStr := denseModel
-		if denseModel != "" {
-			sparseModelStr += "-sparse" // Default inference convention
-		}
+		sparseModelStr := denseModel + "-sparse"
 		sparseModel = &sparseModelStr
 	}
 
+	// 2. Build filter (pure AST→protobuf conversion, no I/O)
+	var qdrantFilter *qdrant.Filter
+	if stmt.QueryFilter != nil {
+		var err error
+		qdrantFilter, err = filters.NewFilterConverter().BuildFilter(stmt.QueryFilter)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// 3. Populate QueryState with ALL request-level fields
 	state := &pipeline.QueryState{
 		Embedder:          e,
 		LocalEmbed:        e.usesLocalEmbeddings(),
 		Params:            searchParamsFromWithClause(stmt.WithClause),
 		HasMMR:            hasMMR(stmt.WithClause),
 		CloudModelOptions: e.cloudModelOptions(),
+		CollectionName:    stmt.Collection,
+		Limit:             uint64(stmt.Limit),
+		Offset:            uint64(stmt.Offset),
+		QdrantFilter:      qdrantFilter,
+	}
+	if stmt.ScoreThreshold != nil {
+		state.ScoreThreshold = qdrant.PtrOf(float32(*stmt.ScoreThreshold))
+	}
+	if stmt.LookupFrom != "" {
+		state.LookupFrom = &qdrant.LookupLocation{
+			CollectionName: stmt.LookupFrom,
+			VectorName:     stmt.LookupVector,
+		}
+	}
+	if stmt.GroupBy != nil {
+		state.GroupBy = *stmt.GroupBy
+	}
+	if stmt.GroupSize != nil {
+		state.GroupSize = uint64(*stmt.GroupSize)
 	}
 	if state.HasMMR {
 		if stmt.WithClause.MmrDiversity != nil {
@@ -52,22 +76,19 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 		}
 	}
 
-	// 2. Build Pipeline
+	// 4. Build & execute pipeline (only embeds transform; request assembly is in BuildXxxRequest)
 	execPipeline := pipeline.NewQueryPipeline()
 
 	switch stmt.Mode {
 	case ast.QueryModeNearest:
 		if stmt.QueryID != nil {
-			// For ID-based NEAREST, we use RecommendNode with single positive
-			execPipeline.Add(&pipeline.RecommendNode{
-				PositiveIDs: []any{stmt.QueryID},
-			})
+			execPipeline.Add(&pipeline.RecommendNode{PositiveIDs: []any{stmt.QueryID}})
 		} else {
 			if stmt.QueryText != nil {
 				state.QueryText = *stmt.QueryText
 			}
-
-			if stmt.Type == ast.QueryTypeHybrid {
+			switch stmt.Type {
+			case ast.QueryTypeHybrid:
 				execPipeline.Add(&pipeline.DenseEmbedNode{
 					Model:      denseModel,
 					VectorName: denseVectorName,
@@ -85,19 +106,17 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 					fusionMode = *stmt.Fusion
 				}
 				execPipeline.Add(&pipeline.FusionNode{Mode: fusionMode})
-			} else if stmt.Type == ast.QueryTypeSparse {
+			case ast.QueryTypeSparse:
 				execPipeline.Add(&pipeline.SparseEmbedNode{
 					Model:      denseModel,
 					VectorName: sparseVectorName,
 					Limit:      uint64(stmt.Limit),
-					AsPrefetch: false,
 				})
-			} else {
+			default:
 				execPipeline.Add(&pipeline.DenseEmbedNode{
 					Model:      denseModel,
 					VectorName: denseVectorName,
 					Limit:      uint64(stmt.Limit),
-					AsPrefetch: false,
 				})
 			}
 		}
@@ -112,25 +131,16 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 	case ast.QueryModeContext:
 		pairs := make([]pipeline.ContextPair, len(stmt.ContextPairs))
 		for i, p := range stmt.ContextPairs {
-			pairs[i] = pipeline.ContextPair{
-				Positive: p.Positive,
-				Negative: p.Negative,
-			}
+			pairs[i] = pipeline.ContextPair{Positive: p.Positive, Negative: p.Negative}
 		}
 		execPipeline.Add(&pipeline.ContextNode{Pairs: pairs})
 
 	case ast.QueryModeDiscover:
 		pairs := make([]pipeline.ContextPair, len(stmt.ContextPairs))
 		for i, p := range stmt.ContextPairs {
-			pairs[i] = pipeline.ContextPair{
-				Positive: p.Positive,
-				Negative: p.Negative,
-			}
+			pairs[i] = pipeline.ContextPair{Positive: p.Positive, Negative: p.Negative}
 		}
-		execPipeline.Add(&pipeline.DiscoverNode{
-			Target: stmt.Target,
-			Pairs:  pairs,
-		})
+		execPipeline.Add(&pipeline.DiscoverNode{Target: stmt.Target, Pairs: pairs})
 	}
 
 	if stmt.Rerank {
@@ -138,93 +148,22 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 		if stmt.RerankModel != nil {
 			rerankModel = *stmt.RerankModel
 		}
-		execPipeline.Add(&pipeline.RerankNode{
-			Model: rerankModel,
-			Limit: uint64(stmt.Limit),
-		})
+		execPipeline.Add(&pipeline.RerankNode{Model: rerankModel, Limit: uint64(stmt.Limit)})
 	}
 
-	// 3. Execute Pipeline
 	if err := execPipeline.Execute(ctx, state); err != nil {
 		return nil, err
 	}
 
-	// 4. Build Request
-	req := &qdrant.QueryPoints{
-		CollectionName: stmt.Collection,
-		Query:          state.TargetQuery,
-		Prefetch:       state.Prefetches,
-		Limit:          qdrant.PtrOf(uint64(stmt.Limit)),
-		Offset:         qdrant.PtrOf(uint64(stmt.Offset)),
-		Params:         state.Params,
+	// 5. Pipeline owns request construction — executor just calls Qdrant
+	if state.GroupBy != "" {
+		return e.executeGroupedQuery(ctx, execPipeline, state)
 	}
-	
-	if stmt.QueryFilter != nil {
-		filter, err := filters.NewFilterConverter().BuildFilter(stmt.QueryFilter)
-		if err != nil {
-			return nil, err
-		}
-		req.Filter = filter
-	}
-	
-	if stmt.ScoreThreshold != nil {
-		req.ScoreThreshold = qdrant.PtrOf(float32(*stmt.ScoreThreshold))
-	}
-	
-	if stmt.LookupFrom != "" {
-		req.LookupFrom = &qdrant.LookupLocation{
-			CollectionName: stmt.LookupFrom,
-			VectorName:     stmt.LookupVector,
-		}
-	}
+	return e.executeFlatQuery(ctx, execPipeline, state)
+}
 
-	if stmt.GroupBy != nil {
-		groupReq := &qdrant.QueryPointGroups{
-			CollectionName: stmt.Collection,
-			Query:          state.TargetQuery,
-			Prefetch:       state.Prefetches,
-			Limit:          qdrant.PtrOf(uint64(stmt.Limit)),
-			GroupBy:        *stmt.GroupBy,
-			Filter:         req.Filter,
-			ScoreThreshold: req.ScoreThreshold,
-			LookupFrom:     req.LookupFrom,
-			Params:         req.Params,
-		}
-		if stmt.GroupSize != nil {
-			groupReq.GroupSize = qdrant.PtrOf(uint64(*stmt.GroupSize))
-		}
-		
-		groups, err := e.client.QueryGroups(ctx, groupReq)
-		if err != nil {
-			return nil, fmt.Errorf("failed to query groups from qdrant: %w", err)
-		}
-		
-		formatted := make([]GroupedSearchResult, len(groups))
-		for i, g := range groups {
-			hits := make([]SearchHit, len(g.Hits))
-			for j, hit := range g.Hits {
-				hits[j] = SearchHit{
-					ID:    pointIDString(hit.Id),
-					Score: hit.Score,
-				}
-				if textVal, ok := hit.Payload["text"]; ok {
-					hits[j].Text = textVal.GetStringValue()
-				}
-			}
-			formatted[i] = GroupedSearchResult{
-				GroupID: groupIDString(g.Id),
-				Hits:    hits,
-			}
-		}
-		
-		return &ExecResponse{
-			OK:        true,
-			Operation: "QUERY_GROUPS",
-			Message:   fmt.Sprintf("Found %d groups", len(formatted)),
-			Data:      formatted,
-		}, nil
-	}
-
+func (e *Executor) executeFlatQuery(ctx context.Context, p *pipeline.QueryPipeline, state *pipeline.QueryState) (*ExecResponse, error) {
+	req := p.BuildFlatRequest(state)
 	results, err := e.client.Query(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query on qdrant: %w", err)
@@ -245,6 +184,39 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 		OK:        true,
 		Operation: "QUERY",
 		Message:   fmt.Sprintf("Found %d hits", len(formatted)),
+		Data:      formatted,
+	}, nil
+}
+
+func (e *Executor) executeGroupedQuery(ctx context.Context, p *pipeline.QueryPipeline, state *pipeline.QueryState) (*ExecResponse, error) {
+	req := p.BuildGroupedRequest(state)
+	groups, err := e.client.QueryGroups(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query groups on qdrant: %w", err)
+	}
+
+	formatted := make([]GroupedSearchResult, len(groups))
+	for i, g := range groups {
+		hits := make([]SearchHit, len(g.Hits))
+		for j, hit := range g.Hits {
+			hits[j] = SearchHit{
+				ID:    pointIDString(hit.Id),
+				Score: hit.Score,
+			}
+			if textVal, ok := hit.Payload["text"]; ok {
+				hits[j].Text = textVal.GetStringValue()
+			}
+		}
+		formatted[i] = GroupedSearchResult{
+			GroupID: groupIDString(g.Id),
+			Hits:    hits,
+		}
+	}
+
+	return &ExecResponse{
+		OK:        true,
+		Operation: "QUERY_GROUPS",
+		Message:   fmt.Sprintf("Found %d groups", len(formatted)),
 		Data:      formatted,
 	}, nil
 }
