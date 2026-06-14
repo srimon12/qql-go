@@ -74,20 +74,36 @@ func (fc *FilterConverter) buildCompareExpr(expr ast.CompareExpr) (*qdrant.Condi
 	case "!=":
 		return fc.buildNotEqualCondition(expr.Field, expr.Value)
 	case ">":
+		v, err := toFloat64(expr.Value)
+		if err != nil {
+			return nil, err
+		}
 		return qdrant.NewRange(expr.Field, &qdrant.Range{
-			Gt: toFloat64(expr.Value),
+			Gt: v,
 		}), nil
 	case ">=":
+		v, err := toFloat64(expr.Value)
+		if err != nil {
+			return nil, err
+		}
 		return qdrant.NewRange(expr.Field, &qdrant.Range{
-			Gte: toFloat64(expr.Value),
+			Gte: v,
 		}), nil
 	case "<":
+		v, err := toFloat64(expr.Value)
+		if err != nil {
+			return nil, err
+		}
 		return qdrant.NewRange(expr.Field, &qdrant.Range{
-			Lt: toFloat64(expr.Value),
+			Lt: v,
 		}), nil
 	case "<=":
+		v, err := toFloat64(expr.Value)
+		if err != nil {
+			return nil, err
+		}
 		return qdrant.NewRange(expr.Field, &qdrant.Range{
-			Lte: toFloat64(expr.Value),
+			Lte: v,
 		}), nil
 	default:
 		return nil, errors.NewQQLRuntimeError("unknown comparison operator: " + expr.Op)
@@ -115,9 +131,17 @@ func normalizeFilterExpr(expr ast.FilterExpr) (ast.FilterExpr, error) {
 }
 
 func (fc *FilterConverter) buildBetweenExpr(expr ast.BetweenExpr) (*qdrant.Condition, error) {
+	low, err := toFloat64(expr.Low)
+	if err != nil {
+		return nil, err
+	}
+	high, err := toFloat64(expr.High)
+	if err != nil {
+		return nil, err
+	}
 	return qdrant.NewRange(expr.Field, &qdrant.Range{
-		Gte: toFloat64(expr.Low),
-		Lte: toFloat64(expr.High),
+		Gte: low,
+		Lte: high,
 	}), nil
 }
 
@@ -302,7 +326,11 @@ func (fc *FilterConverter) buildSetCondition(field string, values []any, negate 
 	case literalKindInt:
 		intValues := make([]int64, len(values))
 		for i, value := range values {
-			intValues[i] = toInt64(value)
+			v, err := toInt64(value)
+			if err != nil {
+				return nil, err
+			}
+			intValues[i] = v
 		}
 		if negate {
 			return qdrant.NewMatchExceptInts(field, intValues...), nil
@@ -320,7 +348,11 @@ func (fc *FilterConverter) buildSetCondition(field string, values []any, negate 
 	case literalKindFloat:
 		conds := make([]*qdrant.Condition, len(values))
 		for i, value := range values {
-			conds[i] = exactFloatCondition(field, toFloat64Value(value))
+			v, err := toFloat64Value(value)
+			if err != nil {
+				return nil, err
+			}
+			conds[i] = exactFloatCondition(field, v)
 		}
 		if negate {
 			return qdrant.NewFilterAsCondition(&qdrant.Filter{MustNot: conds}), nil
@@ -372,40 +404,40 @@ func literalKindOf(v any) (literalKind, error) {
 	}
 }
 
-func toInt64(v any) int64 {
+func toInt64(v any) (int64, error) {
 	switch val := v.(type) {
 	case int:
-		return int64(val)
+		return int64(val), nil
 	case int64:
-		return val
+		return val, nil
 	}
-	return 0
+	return 0, errors.NewQQLRuntimeError("expected integer type")
 }
 
-func toFloat64Value(v any) float64 {
+func toFloat64Value(v any) (float64, error) {
 	switch val := v.(type) {
 	case float32:
-		return float64(val)
+		return float64(val), nil
 	case float64:
-		return val
+		return val, nil
 	}
-	return 0
+	return 0, errors.NewQQLRuntimeError("expected float type")
 }
 
-func toFloat64(v any) *float64 {
+func toFloat64(v any) (*float64, error) {
 	switch val := v.(type) {
 	case float64:
-		return &val
+		return &val, nil
 	case float32:
 		f := float64(val)
-		return &f
+		return &f, nil
 	case int:
 		f := float64(val)
-		return &f
+		return &f, nil
 	case int64:
 		f := float64(val)
-		return &f
+		return &f, nil
 	default:
-		return nil
+		return nil, errors.NewQQLRuntimeError("expected numeric type for range condition")
 	}
 }

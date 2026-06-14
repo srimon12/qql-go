@@ -30,16 +30,14 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 		return 0, 0, fmt.Errorf("collection '%s' does not exist", collection)
 	}
 
-	hybrid, denseName, sparseName, err := getVectorTopology(ctx, client, collection)
+	info, err := client.GetCollectionInfo(ctx, collection)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get collection info: %w", err)
+	}
+
+	hybrid, denseName, sparseName, err := getVectorTopology(info)
 	if err != nil {
 		return 0, 0, err
-	}
-	total, err := client.Count(ctx, &qdrant.CountPoints{
-		CollectionName: collection,
-		Exact:          qdrant.PtrOf(true),
-	})
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to count points: %w", err)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
@@ -47,13 +45,6 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 	}
 
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("-- QQL dump for %s\n", collection))
-	builder.WriteString(fmt.Sprintf("-- Points: %d\n\n", total))
-
-	info, err := client.GetCollectionInfo(ctx, collection)
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to get collection info: %w", err)
-	}
 	createLine := buildDumpCreateLine(collection, hybrid, denseName, sparseName, info)
 	builder.WriteString(createLine)
 	builder.WriteString("\n\n")
@@ -62,6 +53,9 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 	skipped := 0
 	var offset *qdrant.PointId
 	for {
+		if err := ctx.Err(); err != nil {
+			return written, skipped, err
+		}
 		points, nextOffset, err := client.ScrollAndOffset(ctx, &qdrant.ScrollPoints{
 			CollectionName: collection,
 			Limit:          qdrant.PtrOf(uint32(batchSize)),
@@ -118,17 +112,21 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 		offset = nextOffset
 	}
 
-	builder.WriteString(fmt.Sprintf("-- Written: %d\n-- Skipped: %d\n", written, skipped))
-	if err := os.WriteFile(outputPath, []byte(builder.String()), 0o644); err != nil {
+	var header strings.Builder
+	header.WriteString(fmt.Sprintf("-- QQL dump for %s\n", collection))
+	header.WriteString(fmt.Sprintf("-- Points: %d\n\n", written))
+
+	finalOutput := header.String() + builder.String() + fmt.Sprintf("-- Written: %d\n-- Skipped: %d\n", written, skipped)
+
+	if err := os.WriteFile(outputPath, []byte(finalOutput), 0o644); err != nil {
 		return written, skipped, fmt.Errorf("failed to write dump: %w", err)
 	}
 	return written, skipped, nil
 }
 
-func getVectorTopology(ctx context.Context, client Client, collection string) (hybrid bool, denseName, sparseName string, err error) {
-	info, err := client.GetCollectionInfo(ctx, collection)
-	if err != nil {
-		return false, "", "", fmt.Errorf("failed to inspect collection: %w", err)
+func getVectorTopology(info *qdrant.CollectionInfo) (hybrid bool, denseName, sparseName string, err error) {
+	if info == nil {
+		return false, "", "", nil
 	}
 	config := info.GetConfig()
 	if config == nil {
@@ -187,7 +185,7 @@ func payloadValue(value *qdrant.Value) any {
 	case *qdrant.Value_BoolValue:
 		return kind.BoolValue
 	case *qdrant.Value_IntegerValue:
-		return int(kind.IntegerValue)
+		return kind.IntegerValue
 	case *qdrant.Value_DoubleValue:
 		return kind.DoubleValue
 	case *qdrant.Value_StringValue:
@@ -213,7 +211,7 @@ func pointIDValue(id *qdrant.PointId) any {
 	case *qdrant.PointId_Uuid:
 		return value.Uuid
 	case *qdrant.PointId_Num:
-		return int(value.Num)
+		return value.Num
 	default:
 		return fmt.Sprintf("%v", id)
 	}
@@ -249,6 +247,10 @@ func serializeValue(value any) string {
 		}
 		return "false"
 	case int:
+		return fmt.Sprintf("%d", typed)
+	case int64:
+		return fmt.Sprintf("%d", typed)
+	case uint64:
 		return fmt.Sprintf("%d", typed)
 	case float64:
 		return fmt.Sprintf("%v", typed)
@@ -291,7 +293,13 @@ func buildDumpCreateLine(collection string, hybrid bool, denseName, sparseName s
 	}
 
 	config := info.GetConfig()
+	if config == nil {
+		return b.String()
+	}
 	params := config.GetParams()
+	if params == nil {
+		return b.String()
+	}
 
 	// VECTORS
 	if vectorsCfg := params.GetVectorsConfig(); vectorsCfg != nil {

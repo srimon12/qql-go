@@ -6,21 +6,26 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 type Config struct {
-	URL                string            `json:"url"`
-	Secret             string            `json:"secret"`
-	ActiveProfile      string            `json:"active_profile"`
-	InferenceModel     string            `json:"inference_model"`
-	InferenceMode      string            `json:"inference_mode"`
-	CloudModelOptions  map[string]string `json:"cloud_model_options,omitempty"` // e.g. {"openai-api-key": "sk-...", "openrouter-api-key": "..."}
-	EmbeddingEndpoint  string            `json:"embedding_endpoint"`
-	EmbeddingAPIKey    string            `json:"embedding_api_key"`
-	EmbeddingModel     string            `json:"embedding_model"`
-	EmbeddingDimension int               `json:"embedding_dimension"`
-	NoVerify           bool              `json:"no_verify"`
-	CACert             string            `json:"ca_cert"`
+	URL                  string            `json:"url"`
+	Secret               string            `json:"secret"`
+	ActiveProfile        string            `json:"active_profile"`
+	InferenceModel       string            `json:"inference_model"`
+	SparseInferenceModel string            `json:"sparse_inference_model"`
+	InferenceMode        string            `json:"inference_mode"`
+	CloudModelOptions    map[string]string `json:"cloud_model_options,omitempty"` // e.g. {"openai-api-key": "sk-...", "openrouter-api-key": "..."}
+	EmbeddingEndpoint    string            `json:"embedding_endpoint"`
+	EmbeddingAPIKey      string            `json:"embedding_api_key"`
+	EmbeddingModel       string            `json:"embedding_model"`
+	EmbeddingDimension   int               `json:"embedding_dimension"`
+	NoVerify             bool              `json:"no_verify"`
+	CACert               string            `json:"ca_cert"`
+	BM25K1               *float64          `json:"bm25_k1,omitempty"`
+	BM25B                *float64          `json:"bm25_b,omitempty"`
+	BM25AvgDL            *float64          `json:"bm25_avg_dl,omitempty"`
 }
 
 type Profile struct {
@@ -31,8 +36,11 @@ type Profile struct {
 	CACert   string `json:"ca_cert"`
 }
 
-var cfg *Config
-var profiles map[string]*Profile
+var (
+	cfg      *Config
+	profiles map[string]*Profile
+	mu       sync.RWMutex
+)
 
 func configDir() (string, error) {
 	home, err := os.UserHomeDir()
@@ -77,7 +85,9 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
 
+	mu.Lock()
 	cfg = cloneConfig(&loaded)
+	mu.Unlock()
 	return cfg, nil
 }
 
@@ -96,7 +106,9 @@ func SaveConfig(c *Config) error {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
+	mu.Lock()
 	cfg = stored
+	mu.Unlock()
 	return nil
 }
 
@@ -110,11 +122,15 @@ func DeleteConfig() error {
 		return fmt.Errorf("failed to delete config: %w", err)
 	}
 
+	mu.Lock()
 	cfg = nil
+	mu.Unlock()
 	return nil
 }
 
 func GetConfig() *Config {
+	mu.RLock()
+	defer mu.RUnlock()
 	return cfg
 }
 
@@ -133,7 +149,9 @@ func LoadProfiles() (map[string]*Profile, error) {
 		return nil, fmt.Errorf("failed to read profiles: %w", err)
 	}
 
+	mu.Lock()
 	profiles = normalizeProfiles(loaded)
+	mu.Unlock()
 	return profiles, nil
 }
 
@@ -148,7 +166,9 @@ func SaveProfiles(p map[string]*Profile) error {
 		return fmt.Errorf("failed to write profiles: %w", err)
 	}
 
+	mu.Lock()
 	profiles = stored
+	mu.Unlock()
 	return nil
 }
 
@@ -192,10 +212,13 @@ func HasConfig() bool {
 }
 
 func ensureProfiles() (map[string]*Profile, error) {
-	if profiles == nil {
-		return LoadProfiles()
+	mu.RLock()
+	if profiles != nil {
+		defer mu.RUnlock()
+		return profiles, nil
 	}
-	return profiles, nil
+	mu.RUnlock()
+	return LoadProfiles()
 }
 
 func cloneConfig(c *Config) *Config {

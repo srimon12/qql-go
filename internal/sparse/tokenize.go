@@ -3,6 +3,7 @@ package sparse
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 var specialSingleCharTokens = map[rune]struct{}{
@@ -41,11 +42,14 @@ func isTokenChar(r rune) bool {
 }
 
 func maybeToken(s string) string {
-	if len(s) >= 2 {
+	rc := utf8.RuneCountInString(s)
+	if rc >= 2 {
 		return s
 	}
-	if len(s) == 1 {
-		if _, ok := specialSingleCharTokens[rune(s[0])]; ok {
+	if rc == 1 {
+		// Use the first rune since we know length is exactly 1
+		r, _ := utf8.DecodeRuneInString(s)
+		if _, ok := specialSingleCharTokens[r]; ok {
 			return s
 		}
 	}
@@ -53,10 +57,6 @@ func maybeToken(s string) string {
 }
 
 func appendTokens(tokens []string, raw string) []string {
-	if tok := maybeToken(raw); tok != "" {
-		tokens = append(tokens, tok)
-	}
-
 	// Check for hyphen fast path
 	hasHyphen := false
 	for i := 0; i < len(raw); i++ {
@@ -67,6 +67,9 @@ func appendTokens(tokens []string, raw string) []string {
 	}
 
 	if !hasHyphen {
+		if tok := maybeToken(raw); tok != "" {
+			tokens = append(tokens, tok)
+		}
 		return tokens
 	}
 

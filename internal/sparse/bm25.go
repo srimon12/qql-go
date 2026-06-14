@@ -3,13 +3,8 @@ package sparse
 import (
 	"math"
 	"slices"
-)
 
-// BM25 parameters matching Qdrant FastEmbed defaults.
-const (
-	bm25K1    = 1.2
-	bm25B     = 0.75
-	bm25AvgDL = 256.0
+	"github.com/srimon12/qql-go/internal/config"
 )
 
 // Vector is a sparse vector with sorted indices and parallel values.
@@ -74,11 +69,24 @@ func BuildDocument(text string) Vector {
 	return Vector{Indices: indices, Values: values}
 }
 
-// bm25TF computes the BM25-saturated term frequency component for a document.
-// Formula: tf * (k1 + 1) / (tf + k1 * (1 - b + b * docLen / avgdl))
-// This is the per-term value stored in the sparse vector when Qdrant
-// applies IDF on the server side.
 func bm25TF(tfCount, docLen float64) float32 {
-	denom := tfCount + bm25K1*(1.0-bm25B+bm25B*docLen/bm25AvgDL)
-	return float32(tfCount * (bm25K1 + 1) / denom)
+	cfg := config.GetConfig()
+	k1 := 1.2
+	b := 0.75
+	avgdl := 256.0
+
+	if cfg != nil {
+		if cfg.BM25K1 != nil {
+			k1 = *cfg.BM25K1
+		}
+		if cfg.BM25B != nil {
+			b = *cfg.BM25B
+		}
+		if cfg.BM25AvgDL != nil {
+			avgdl = *cfg.BM25AvgDL
+		}
+	}
+
+	denom := tfCount + k1*(1.0-b+b*docLen/avgdl)
+	return float32(tfCount * (k1 + 1) / denom)
 }

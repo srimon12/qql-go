@@ -110,8 +110,11 @@ func RunFile(path string, executor Executor, stopOnError bool) (int, int, error)
 	if err != nil {
 		return 0, 0, fmt.Errorf("cannot read file: %w", err)
 	}
+	return RunScript(string(data), executor, stopOnError)
+}
 
-	statements, err := SplitStatements(string(data))
+func RunScript(script string, executor Executor, stopOnError bool) (int, int, error) {
+	statements, err := SplitStatements(script)
 	if err != nil {
 		return 0, 0, fmt.Errorf("cannot parse script: %w", err)
 	}
@@ -122,7 +125,7 @@ func RunFile(path string, executor Executor, stopOnError bool) (int, int, error)
 		if _, err := executor.Execute(stmt); err != nil {
 			failCount++
 			if stopOnError {
-				return okCount, failCount, nil
+				return okCount, failCount, err
 			}
 			continue
 		}

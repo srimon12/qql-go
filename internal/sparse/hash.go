@@ -1,6 +1,5 @@
 package sparse
 
-const defaultHashSpace = 1 << 20
 const offset32 = 2166136261
 const prime32 = 16777619
 
@@ -21,5 +20,5 @@ func hashToken(token string) uint32 {
 		h *= prime32
 	}
 
-	return h % defaultHashSpace
+	return h
 }
