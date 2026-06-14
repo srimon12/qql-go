@@ -146,48 +146,10 @@ type ScrollStmt struct {
 	After       any
 }
 
-type SearchStmt struct {
-	Collection     string
-	QueryText      string
-	Limit          int
-	Model          *string
-	Hybrid         bool
-	Fusion         *string
-	SparseOnly     bool
-	SparseModel    *string
-	QueryFilter    FilterExpr
-	Rerank         bool
-	RerankModel    *string
-	WithClause     *SearchWith
-	GroupBy        string
-	GroupSize      int
-	Offset         int
-	ScoreThreshold *float64
-	LookupFrom     string
-	LookupVector   *string
-	DenseVector    *string
-	SparseVector   *string
-}
-
 type QuantizationSearchWith struct {
 	Ignore       *bool
 	Rescore      *bool
 	Oversampling *float64
-}
-
-type RecommendStmt struct {
-	Collection     string
-	PositiveIDs    []any
-	NegativeIDs    []any
-	Limit          int
-	Strategy       *string
-	QueryFilter    FilterExpr
-	Offset         int
-	ScoreThreshold *float64
-	WithClause     *SearchWith
-	LookupFrom     string
-	LookupVector   *string
-	Using          *string
 }
 
 type QueryMode string
@@ -281,8 +243,7 @@ func (ShowCollectionsStmt) isASTNode()  {}
 func (ShowCollectionStmt) isASTNode()   {}
 func (SelectStmt) isASTNode()           {}
 func (ScrollStmt) isASTNode()           {}
-func (SearchStmt) isASTNode()           {}
-func (RecommendStmt) isASTNode()        {}
+// Removed SearchStmt and RecommendStmt methods
 func (QueryStmt) isASTNode()            {}
 func (DeleteStmt) isASTNode()           {}
 func (UpdateVectorStmt) isASTNode()     {}

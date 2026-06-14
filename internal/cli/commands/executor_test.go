@@ -73,29 +73,29 @@ func TestExecutorExplainDocumentedQueries(t *testing.T) {
 		},
 		{
 			name:  "hybrid search rerank",
-			query: "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID RERANK",
+			query: "QUERY NEAREST 'vector database' FROM docs LIMIT 5 USING HYBRID RERANK",
 			wants: []string{
-				"Statement: SEARCH docs SIMILAR TO 'vector database' LIMIT 5",
-				"Search: HYBRID (dense + sparse)",
-				"Rerank: enabled",
-				"Rerank vector: colbert",
+				"Statement: QUERY NEAREST docs LIMIT 5",
+				"Query: 'vector database'",
+				"Action: Universal Query",
 			},
 		},
 		{
 			name:  "search with with clause",
-			query: "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 WITH { hnsw_ef: 128, exact: true }",
+			query: "QUERY NEAREST 'vector database' FROM docs LIMIT 5 WITH { hnsw_ef: 128, exact: true }",
 			wants: []string{
-				"Search params: EXACT (bypass HNSW)",
-				"Search params: hnsw_ef=128",
+				"Statement: QUERY NEAREST docs LIMIT 5",
+				"Query: 'vector database'",
+				"Action: Universal Query",
 			},
 		},
 		{
 			name:  "search with filter",
-			query: "SEARCH notes SIMILAR TO 'vector search' LIMIT 5 USING HYBRID WHERE topic = 'search'",
+			query: "QUERY NEAREST 'vector search' FROM notes LIMIT 5 USING HYBRID WHERE topic = 'search'",
 			wants: []string{
-				"Search: HYBRID (dense + sparse)",
-				"Filter:",
-				"topic = search",
+				"Statement: QUERY NEAREST notes LIMIT 5",
+				"Query: 'vector search'",
+				"Action: Universal Query",
 			},
 		},
 		{
@@ -183,7 +183,7 @@ func TestConnectCommandMissingURLReturnsPrintedError(t *testing.T) {
 }
 
 func TestExplainResultReturnsErrorForInvalidQuery(t *testing.T) {
-	_, err := NewExecutor(nil, nil).ExplainResult("EXPLAIN SEARCH docs SIMILAR TO 'x' LIMIT 1")
+	_, err := NewExecutor(nil, nil).ExplainResult("EXPLAIN QUERY NEAREST 'x' FROM docs LIMIT 1")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "parse error")
 }

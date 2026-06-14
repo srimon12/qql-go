@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/qdrant/go-client/qdrant"
+	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/output"
 )
 
@@ -157,4 +158,75 @@ func displayVersion() string {
 
 func versionMessage() string {
 	return fmt.Sprintf("qql-go %s", displayVersion())
+}
+
+func (e *Executor) formatSearchResults(results []*qdrant.ScoredPoint) (string, []SearchHit) {
+	if len(results) == 0 {
+		return "No results found", []SearchHit{}
+	}
+
+	var resultLines []string
+	hits := make([]SearchHit, 0, len(results))
+	for _, r := range results {
+		id := fmt.Sprintf("%v", r.GetId())
+		jsonID := pointIDString(r.GetId())
+		score := r.GetScore()
+		payload := r.GetPayload()
+		text := ""
+		if p, ok := payload["text"]; ok {
+			if sv, ok := p.GetKind().(*qdrant.Value_StringValue); ok {
+				text = sv.StringValue
+			}
+		}
+		resultLines = append(resultLines, fmt.Sprintf("id:%s score:%.4f payload:%s", id, score, text))
+		hits = append(hits, SearchHit{
+			ID:    jsonID,
+			Score: score,
+			Text:  text,
+		})
+	}
+
+	return fmt.Sprintf("Found %d result(s):\n%s", len(results), strings.Join(resultLines, "\n")), hits
+}
+
+func hasMMR(withClause *ast.SearchWith) bool {
+	return withClause != nil && (withClause.MmrDiversity != nil || withClause.MmrCandidates != nil)
+}
+
+func searchParamsFromWithClause(withClause *ast.SearchWith) *qdrant.SearchParams {
+	if withClause == nil {
+		return nil
+	}
+
+	params := &qdrant.SearchParams{}
+	if withClause.HnswEf > 0 {
+		params.HnswEf = qdrant.PtrOf(uint64(withClause.HnswEf))
+	}
+	if withClause.Exact {
+		params.Exact = qdrant.PtrOf(true)
+	}
+	if withClause.Acorn {
+		params.Acorn = &qdrant.AcornSearchParams{Enable: qdrant.PtrOf(true)}
+	}
+	if withClause.IndexedOnly {
+		params.IndexedOnly = qdrant.PtrOf(true)
+	}
+	if withClause.Quantization != nil {
+		params.Quantization = &qdrant.QuantizationSearchParams{}
+		if withClause.Quantization.Ignore != nil {
+			params.Quantization.Ignore = qdrant.PtrOf(*withClause.Quantization.Ignore)
+		}
+		if withClause.Quantization.Rescore != nil {
+			params.Quantization.Rescore = qdrant.PtrOf(*withClause.Quantization.Rescore)
+		}
+		if withClause.Quantization.Oversampling != nil {
+			params.Quantization.Oversampling = qdrant.PtrOf(*withClause.Quantization.Oversampling)
+		}
+	}
+
+	if params.HnswEf == nil && params.Exact == nil && params.Acorn == nil && params.IndexedOnly == nil && params.Quantization == nil {
+		return nil
+	}
+
+	return params
 }

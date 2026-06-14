@@ -66,10 +66,6 @@ func (e *Executor) ExecuteResult(query string) (*ExecResponse, error) {
 		return e.doSelect(n)
 	case *ast.ScrollStmt:
 		return e.doScroll(n)
-	case *ast.SearchStmt:
-		return e.doSearch(n)
-	case *ast.RecommendStmt:
-		return e.doRecommend(n)
 	case *ast.QueryStmt:
 		return e.doQuery(n)
 	case *ast.DeleteStmt:
@@ -613,112 +609,15 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			plan.WriteString(fmt.Sprintf("After: %v\n", n.After))
 		}
 		plan.WriteString("Action: Scroll (paginate) through points\n")
-	case *ast.SearchStmt:
-		plan.WriteString(fmt.Sprintf("Statement: SEARCH %s SIMILAR TO '%s' LIMIT %d\n",
-			n.Collection, n.QueryText, n.Limit))
-		if n.Offset > 0 {
-			plan.WriteString(fmt.Sprintf("Offset: %d\n", n.Offset))
+
+	case *ast.QueryStmt:
+		plan.WriteString(fmt.Sprintf("Statement: QUERY %s %s LIMIT %v\n", string(n.Mode), n.Collection, n.Limit))
+		if n.QueryText != nil {
+			plan.WriteString(fmt.Sprintf("Query: '%s'\n", *n.QueryText))
+		} else if n.QueryID != nil {
+			plan.WriteString(fmt.Sprintf("Query ID: %v\n", n.QueryID))
 		}
-		if n.ScoreThreshold != nil {
-			plan.WriteString(fmt.Sprintf("Score threshold: %.4f\n", *n.ScoreThreshold))
-		}
-		if n.LookupFrom != "" {
-			plan.WriteString(fmt.Sprintf("Lookup from: %s", n.LookupFrom))
-			if n.LookupVector != nil && *n.LookupVector != "" {
-				plan.WriteString(fmt.Sprintf(" (vector: %s)", *n.LookupVector))
-			}
-			plan.WriteString("\n")
-		}
-		if n.Model != nil && *n.Model != "" {
-			plan.WriteString(fmt.Sprintf("Model: %s\n", *n.Model))
-		}
-		if n.SparseOnly {
-			plan.WriteString("Search: SPARSE\n")
-		} else if n.Hybrid {
-			mode := "HYBRID (dense + sparse)"
-			if n.Fusion != nil && *n.Fusion != "" {
-				mode = fmt.Sprintf("HYBRID (dense + sparse, fusion=%s)", *n.Fusion)
-			}
-			plan.WriteString("Search: " + mode + "\n")
-		} else {
-			plan.WriteString("Search: DENSE\n")
-		}
-		if n.QueryFilter != nil {
-			plan.WriteString(fmt.Sprintf("Filter: %s\n", e.filterToString(n.QueryFilter)))
-		}
-		if n.WithClause != nil && n.WithClause.Exact {
-			plan.WriteString("Search params: EXACT (bypass HNSW)\n")
-		}
-		if n.WithClause != nil && n.WithClause.HnswEf > 0 {
-			plan.WriteString(fmt.Sprintf("Search params: hnsw_ef=%d\n", n.WithClause.HnswEf))
-		}
-		if n.WithClause != nil && n.WithClause.Acorn {
-			plan.WriteString("Search params: acorn=true\n")
-		}
-		if n.WithClause != nil && n.WithClause.IndexedOnly {
-			plan.WriteString("Search params: indexed_only=true\n")
-		}
-		if n.WithClause != nil && n.WithClause.Quantization != nil {
-			plan.WriteString("Search params: quantization enabled\n")
-		}
-		if n.WithClause != nil && n.WithClause.MmrDiversity != nil {
-			plan.WriteString(fmt.Sprintf("Search params: mmr_diversity=%.4f\n", *n.WithClause.MmrDiversity))
-		}
-		if n.WithClause != nil && n.WithClause.MmrCandidates != nil {
-			plan.WriteString(fmt.Sprintf("Search params: mmr_candidates=%d\n", *n.WithClause.MmrCandidates))
-		}
-		if n.GroupBy != "" {
-			plan.WriteString(fmt.Sprintf("Group by: %s\n", n.GroupBy))
-			plan.WriteString(fmt.Sprintf("Group size: %d\n", n.GroupSize))
-		}
-		if n.Rerank {
-			plan.WriteString("Rerank: enabled\n")
-			if n.RerankModel != nil && *n.RerankModel != "" {
-				plan.WriteString(fmt.Sprintf("Rerank model: %s\n", *n.RerankModel))
-			}
-			plan.WriteString(fmt.Sprintf("Rerank vector: %s\n", rerankVectorName))
-		}
-	case *ast.RecommendStmt:
-		plan.WriteString(fmt.Sprintf("Statement: RECOMMEND FROM %s LIMIT %d\n", n.Collection, n.Limit))
-		plan.WriteString(fmt.Sprintf("Positive IDs: %d\n", len(n.PositiveIDs)))
-		if len(n.NegativeIDs) > 0 {
-			plan.WriteString(fmt.Sprintf("Negative IDs: %d\n", len(n.NegativeIDs)))
-		}
-		if n.Strategy != nil && *n.Strategy != "" {
-			plan.WriteString(fmt.Sprintf("Strategy: %s\n", *n.Strategy))
-		}
-		if n.LookupFrom != "" {
-			plan.WriteString(fmt.Sprintf("Lookup from: %s", n.LookupFrom))
-			if n.LookupVector != nil && *n.LookupVector != "" {
-				plan.WriteString(fmt.Sprintf(" (vector: %s)", *n.LookupVector))
-			}
-			plan.WriteString("\n")
-		}
-		if n.Using != nil && *n.Using != "" {
-			plan.WriteString(fmt.Sprintf("Using vector: %s\n", *n.Using))
-		}
-		if n.Offset > 0 {
-			plan.WriteString(fmt.Sprintf("Offset: %d\n", n.Offset))
-		}
-		if n.ScoreThreshold != nil {
-			plan.WriteString(fmt.Sprintf("Score threshold: %.4f\n", *n.ScoreThreshold))
-		}
-		if n.QueryFilter != nil {
-			plan.WriteString(fmt.Sprintf("Filter: %s\n", e.filterToString(n.QueryFilter)))
-		}
-		if n.WithClause != nil && n.WithClause.Exact {
-			plan.WriteString("Search params: EXACT (bypass HNSW)\n")
-		}
-		if n.WithClause != nil && n.WithClause.HnswEf > 0 {
-			plan.WriteString(fmt.Sprintf("Search params: hnsw_ef=%d\n", n.WithClause.HnswEf))
-		}
-		if n.WithClause != nil && n.WithClause.IndexedOnly {
-			plan.WriteString("Search params: indexed_only=true\n")
-		}
-		if n.WithClause != nil && n.WithClause.Quantization != nil {
-			plan.WriteString("Search params: quantization enabled\n")
-		}
-		plan.WriteString("Action: Recommend points by example IDs\n")
+		plan.WriteString("Action: Universal Query\n")
 	case *ast.DeleteStmt:
 		if n.Field != "" {
 			plan.WriteString(fmt.Sprintf("Statement: DELETE FROM %s WHERE %s = '%v'\n",

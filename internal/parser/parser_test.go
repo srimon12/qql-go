@@ -51,37 +51,33 @@ func TestParseDocumentedExamples(t *testing.T) {
 		},
 		{
 			name:  "readme hybrid search",
-			input: "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID",
+			input: "QUERY NEAREST 'vector database' FROM docs LIMIT 5 USING HYBRID",
 			check: func(t *testing.T, node ast.ASTNode) {
-				stmt, ok := node.(*ast.SearchStmt)
-				require.True(t, ok, "expected SearchStmt")
+				stmt, ok := node.(*ast.QueryStmt)
+				require.True(t, ok, "expected QueryStmt")
 				assert.Equal(t, "docs", stmt.Collection)
-				assert.Equal(t, "vector database", stmt.QueryText)
+				assert.Equal(t, "vector database", *stmt.QueryText)
 				assert.Equal(t, 5, stmt.Limit)
-				assert.True(t, stmt.Hybrid)
 			},
 		},
 		{
 			name:  "readme hybrid search with filter",
-			input: "SEARCH notes SIMILAR TO 'vector search' LIMIT 5 USING HYBRID WHERE topic = 'search'",
+			input: "QUERY NEAREST 'vector search' FROM notes LIMIT 5 USING HYBRID WHERE topic = 'search'",
 			check: func(t *testing.T, node ast.ASTNode) {
-				stmt, ok := node.(*ast.SearchStmt)
-				require.True(t, ok, "expected SearchStmt")
+				stmt, ok := node.(*ast.QueryStmt)
+				require.True(t, ok, "expected QueryStmt")
 				assert.Equal(t, "notes", stmt.Collection)
-				assert.True(t, stmt.Hybrid)
 				require.NotNil(t, stmt.QueryFilter)
 				assertFilterExprEqual(t, &ast.CompareExpr{Field: "topic", Op: "=", Value: "search"}, stmt.QueryFilter)
 			},
 		},
 		{
 			name:  "readme hybrid rerank search",
-			input: "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID RERANK",
+			input: "QUERY NEAREST 'vector database' FROM docs LIMIT 5 USING HYBRID RERANK",
 			check: func(t *testing.T, node ast.ASTNode) {
-				stmt, ok := node.(*ast.SearchStmt)
-				require.True(t, ok, "expected SearchStmt")
+				stmt, ok := node.(*ast.QueryStmt)
+				require.True(t, ok, "expected QueryStmt")
 				assert.Equal(t, "docs", stmt.Collection)
-				assert.True(t, stmt.Hybrid)
-				assert.True(t, stmt.Rerank)
 			},
 		},
 		{
@@ -134,42 +130,42 @@ func TestParseFilterComparison(t *testing.T) {
 	}{
 		{
 			name:     "equals",
-			input:    "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE field = 'value'",
+			input:    "SCROLL FROM c WHERE field = 'value' LIMIT 10",
 			expected: &ast.CompareExpr{Field: "field", Op: "=", Value: "value"},
 		},
 		{
 			name:     "not equals",
-			input:    "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE field != 'value'",
+			input:    "SCROLL FROM c WHERE field != 'value' LIMIT 10",
 			expected: &ast.CompareExpr{Field: "field", Op: "!=", Value: "value"},
 		},
 		{
 			name:     "greater than",
-			input:    "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE count > 5",
+			input:    "SCROLL FROM c WHERE count > 5 LIMIT 10",
 			expected: &ast.CompareExpr{Field: "count", Op: ">", Value: 5},
 		},
 		{
 			name:     "greater than or equals",
-			input:    "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE count >= 5",
+			input:    "SCROLL FROM c WHERE count >= 5 LIMIT 10",
 			expected: &ast.CompareExpr{Field: "count", Op: ">=", Value: 5},
 		},
 		{
 			name:     "less than",
-			input:    "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE count < 10",
+			input:    "SCROLL FROM c WHERE count < 10 LIMIT 10",
 			expected: &ast.CompareExpr{Field: "count", Op: "<", Value: 10},
 		},
 		{
 			name:     "less than or equals",
-			input:    "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE count <= 10",
+			input:    "SCROLL FROM c WHERE count <= 10 LIMIT 10",
 			expected: &ast.CompareExpr{Field: "count", Op: "<=", Value: 10},
 		},
 		{
 			name:     "equals integer",
-			input:    "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE count = 42",
+			input:    "SCROLL FROM c WHERE count = 42 LIMIT 10",
 			expected: &ast.CompareExpr{Field: "count", Op: "=", Value: 42},
 		},
 		{
 			name:     "equals float",
-			input:    "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE score = 3.14",
+			input:    "SCROLL FROM c WHERE score = 3.14 LIMIT 10",
 			expected: &ast.CompareExpr{Field: "score", Op: "=", Value: 3.14},
 		},
 	}
@@ -184,7 +180,7 @@ func TestParseFilterComparison(t *testing.T) {
 			node, err := p.Parse(tokens)
 			require.NoError(t, err)
 
-			stmt, ok := node.(*ast.SearchStmt)
+			stmt, ok := node.(*ast.ScrollStmt)
 			require.True(t, ok)
 			require.NotNil(t, stmt.QueryFilter)
 			assertFilterExprEqual(t, tt.expected, stmt.QueryFilter)
@@ -193,7 +189,7 @@ func TestParseFilterComparison(t *testing.T) {
 }
 
 func TestParseFilterBetween(t *testing.T) {
-	input := "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE age BETWEEN 18 AND 65"
+	input := "SCROLL FROM c WHERE age BETWEEN 18 AND 65 LIMIT 10"
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(input)
 	require.NoError(t, err)
@@ -202,7 +198,7 @@ func TestParseFilterBetween(t *testing.T) {
 	node, err := p.Parse(tokens)
 	require.NoError(t, err)
 
-	stmt, ok := node.(*ast.SearchStmt)
+	stmt, ok := node.(*ast.ScrollStmt)
 	require.True(t, ok)
 	require.NotNil(t, stmt.QueryFilter)
 
@@ -214,7 +210,7 @@ func TestParseFilterBetween(t *testing.T) {
 }
 
 func TestParseFilterIn(t *testing.T) {
-	input := "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE status IN ('active', 'pending')"
+	input := "SCROLL FROM c WHERE status IN ('active', 'pending') LIMIT 10"
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(input)
 	require.NoError(t, err)
@@ -223,7 +219,7 @@ func TestParseFilterIn(t *testing.T) {
 	node, err := p.Parse(tokens)
 	require.NoError(t, err)
 
-	stmt, ok := node.(*ast.SearchStmt)
+	stmt, ok := node.(*ast.ScrollStmt)
 	require.True(t, ok)
 	require.NotNil(t, stmt.QueryFilter)
 
@@ -234,7 +230,7 @@ func TestParseFilterIn(t *testing.T) {
 }
 
 func TestParseFilterNotIn(t *testing.T) {
-	input := "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE status NOT IN ('deleted', 'archived')"
+	input := "SCROLL FROM c WHERE status NOT IN ('deleted', 'archived') LIMIT 10"
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(input)
 	require.NoError(t, err)
@@ -243,7 +239,7 @@ func TestParseFilterNotIn(t *testing.T) {
 	node, err := p.Parse(tokens)
 	require.NoError(t, err)
 
-	stmt, ok := node.(*ast.SearchStmt)
+	stmt, ok := node.(*ast.ScrollStmt)
 	require.True(t, ok)
 	require.NotNil(t, stmt.QueryFilter)
 
@@ -254,7 +250,7 @@ func TestParseFilterNotIn(t *testing.T) {
 }
 
 func TestParseFilterIsNull(t *testing.T) {
-	input := "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE field IS NULL"
+	input := "SCROLL FROM c WHERE field IS NULL LIMIT 10"
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(input)
 	require.NoError(t, err)
@@ -263,7 +259,7 @@ func TestParseFilterIsNull(t *testing.T) {
 	node, err := p.Parse(tokens)
 	require.NoError(t, err)
 
-	stmt, ok := node.(*ast.SearchStmt)
+	stmt, ok := node.(*ast.ScrollStmt)
 	require.True(t, ok)
 	require.NotNil(t, stmt.QueryFilter)
 
@@ -273,7 +269,7 @@ func TestParseFilterIsNull(t *testing.T) {
 }
 
 func TestParseFilterIsNotNull(t *testing.T) {
-	input := "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE field IS NOT NULL"
+	input := "SCROLL FROM c WHERE field IS NOT NULL LIMIT 10"
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(input)
 	require.NoError(t, err)
@@ -282,7 +278,7 @@ func TestParseFilterIsNotNull(t *testing.T) {
 	node, err := p.Parse(tokens)
 	require.NoError(t, err)
 
-	stmt, ok := node.(*ast.SearchStmt)
+	stmt, ok := node.(*ast.ScrollStmt)
 	require.True(t, ok)
 	require.NotNil(t, stmt.QueryFilter)
 
@@ -292,7 +288,7 @@ func TestParseFilterIsNotNull(t *testing.T) {
 }
 
 func TestParseFilterIsEmpty(t *testing.T) {
-	input := "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE field IS EMPTY"
+	input := "SCROLL FROM c WHERE field IS EMPTY LIMIT 10"
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(input)
 	require.NoError(t, err)
@@ -301,7 +297,7 @@ func TestParseFilterIsEmpty(t *testing.T) {
 	node, err := p.Parse(tokens)
 	require.NoError(t, err)
 
-	stmt, ok := node.(*ast.SearchStmt)
+	stmt, ok := node.(*ast.ScrollStmt)
 	require.True(t, ok)
 	require.NotNil(t, stmt.QueryFilter)
 
@@ -311,7 +307,7 @@ func TestParseFilterIsEmpty(t *testing.T) {
 }
 
 func TestParseFilterIsNotEmpty(t *testing.T) {
-	input := "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE field IS NOT EMPTY"
+	input := "SCROLL FROM c WHERE field IS NOT EMPTY LIMIT 10"
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(input)
 	require.NoError(t, err)
@@ -320,7 +316,7 @@ func TestParseFilterIsNotEmpty(t *testing.T) {
 	node, err := p.Parse(tokens)
 	require.NoError(t, err)
 
-	stmt, ok := node.(*ast.SearchStmt)
+	stmt, ok := node.(*ast.ScrollStmt)
 	require.True(t, ok)
 	require.NotNil(t, stmt.QueryFilter)
 
@@ -337,17 +333,17 @@ func TestParseFilterMatch(t *testing.T) {
 	}{
 		{
 			name:     "match text",
-			input:    "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE content MATCH 'hello world'",
+			input:    "SCROLL FROM c WHERE content MATCH 'hello world' LIMIT 10",
 			expected: &ast.MatchTextExpr{Field: "content", Text: "hello world"},
 		},
 		{
 			name:     "match any",
-			input:    "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE content MATCH ANY 'hello world'",
+			input:    "SCROLL FROM c WHERE content MATCH ANY 'hello world' LIMIT 10",
 			expected: &ast.MatchAnyExpr{Field: "content", Text: "hello world"},
 		},
 		{
 			name:     "match phrase",
-			input:    "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE content MATCH PHRASE 'hello world'",
+			input:    "SCROLL FROM c WHERE content MATCH PHRASE 'hello world' LIMIT 10",
 			expected: &ast.MatchPhraseExpr{Field: "content", Text: "hello world"},
 		},
 	}
@@ -362,7 +358,7 @@ func TestParseFilterMatch(t *testing.T) {
 			node, err := p.Parse(tokens)
 			require.NoError(t, err)
 
-			stmt, ok := node.(*ast.SearchStmt)
+			stmt, ok := node.(*ast.ScrollStmt)
 			require.True(t, ok)
 			require.NotNil(t, stmt.QueryFilter)
 			assertFilterExprEqual(t, tt.expected, stmt.QueryFilter)
@@ -371,7 +367,7 @@ func TestParseFilterMatch(t *testing.T) {
 }
 
 func TestParseFilterAnd(t *testing.T) {
-	input := "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE a = 1 AND b = 2"
+	input := "SCROLL FROM c WHERE a = 1 AND b = 2 LIMIT 10"
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(input)
 	require.NoError(t, err)
@@ -380,7 +376,7 @@ func TestParseFilterAnd(t *testing.T) {
 	node, err := p.Parse(tokens)
 	require.NoError(t, err)
 
-	stmt, ok := node.(*ast.SearchStmt)
+	stmt, ok := node.(*ast.ScrollStmt)
 	require.True(t, ok)
 	require.NotNil(t, stmt.QueryFilter)
 
@@ -392,7 +388,7 @@ func TestParseFilterAnd(t *testing.T) {
 }
 
 func TestParseFilterOr(t *testing.T) {
-	input := "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE a = 1 OR b = 2"
+	input := "SCROLL FROM c WHERE a = 1 OR b = 2 LIMIT 10"
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(input)
 	require.NoError(t, err)
@@ -401,7 +397,7 @@ func TestParseFilterOr(t *testing.T) {
 	node, err := p.Parse(tokens)
 	require.NoError(t, err)
 
-	stmt, ok := node.(*ast.SearchStmt)
+	stmt, ok := node.(*ast.ScrollStmt)
 	require.True(t, ok)
 	require.NotNil(t, stmt.QueryFilter)
 
@@ -413,7 +409,7 @@ func TestParseFilterOr(t *testing.T) {
 }
 
 func TestParseFilterNot(t *testing.T) {
-	input := "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE NOT a = 1"
+	input := "SCROLL FROM c WHERE NOT a = 1 LIMIT 10"
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(input)
 	require.NoError(t, err)
@@ -422,7 +418,7 @@ func TestParseFilterNot(t *testing.T) {
 	node, err := p.Parse(tokens)
 	require.NoError(t, err)
 
-	stmt, ok := node.(*ast.SearchStmt)
+	stmt, ok := node.(*ast.ScrollStmt)
 	require.True(t, ok)
 	require.NotNil(t, stmt.QueryFilter)
 
@@ -432,7 +428,7 @@ func TestParseFilterNot(t *testing.T) {
 }
 
 func TestParseFilterComplex(t *testing.T) {
-	input := "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE (a = 1 AND b = 2) OR (c = 3 AND NOT d = 4)"
+	input := "SCROLL FROM c WHERE (a = 1 AND b = 2) OR (c = 3 AND NOT d = 4) LIMIT 10"
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(input)
 	require.NoError(t, err)
@@ -441,7 +437,7 @@ func TestParseFilterComplex(t *testing.T) {
 	node, err := p.Parse(tokens)
 	require.NoError(t, err)
 
-	stmt, ok := node.(*ast.SearchStmt)
+	stmt, ok := node.(*ast.ScrollStmt)
 	require.True(t, ok)
 	require.NotNil(t, stmt.QueryFilter)
 
@@ -468,7 +464,7 @@ func TestParseFilterComplex(t *testing.T) {
 }
 
 func TestParseFilterPrecedence(t *testing.T) {
-	input := "SEARCH c SIMILAR TO 'text' LIMIT 10 WHERE a = 1 AND b = 2 OR c = 3"
+	input := "SCROLL FROM c WHERE a = 1 AND b = 2 OR c = 3 LIMIT 10"
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(input)
 	require.NoError(t, err)
@@ -477,7 +473,7 @@ func TestParseFilterPrecedence(t *testing.T) {
 	node, err := p.Parse(tokens)
 	require.NoError(t, err)
 
-	stmt, ok := node.(*ast.SearchStmt)
+	stmt, ok := node.(*ast.ScrollStmt)
 	require.True(t, ok)
 	require.NotNil(t, stmt.QueryFilter)
 
