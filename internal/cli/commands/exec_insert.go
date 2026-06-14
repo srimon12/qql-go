@@ -205,9 +205,6 @@ func (e *Executor) doInsertBulk(n *ast.InsertBulkStmt) (*ExecResponse, error) {
 
 func (e *Executor) buildInsertVectors(ctx context.Context, text, denseModel, sparseModel string, includeSparse, includeRerank bool, collection string, denseName, sparseName string) (map[string]*qdrant.Vector, error) {
 	if e.usesLocalEmbeddings() {
-		if includeSparse && sparseModel != "" {
-			return nil, fmt.Errorf("local embedding mode only supports BM25 sparse vectors; custom sparse model %q is not supported in local mode", sparseModel)
-		}
 		embedClient, err := e.embeddingClient(denseModel)
 		if err != nil {
 			return nil, err
@@ -258,9 +255,6 @@ func (e *Executor) buildInsertVectors(ctx context.Context, text, denseModel, spa
 
 func (e *Executor) buildInsertVectorsBatch(ctx context.Context, texts []string, denseModel, sparseModel string, includeSparse, includeRerank bool, collection string, denseName, sparseName string) ([]map[string]*qdrant.Vector, error) {
 	if e.usesLocalEmbeddings() {
-		if includeSparse && sparseModel != "" {
-			return nil, fmt.Errorf("local embedding mode only supports BM25 sparse vectors; custom sparse model %q is not supported in local mode", sparseModel)
-		}
 		embedClient, err := e.embeddingClient(denseModel)
 		if err != nil {
 			return nil, err

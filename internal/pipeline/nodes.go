@@ -396,7 +396,7 @@ func (n *PrefetchNode) buildPrefetches(ctx context.Context, state *QueryState, a
 
 	for _, ap := range astPrefs {
 		pq := &qdrant.PrefetchQuery{}
-		
+
 		if ap.Using != nil {
 			pq.Using = qdrant.PtrOf(*ap.Using)
 		}
@@ -424,8 +424,8 @@ func (n *PrefetchNode) buildPrefetches(ctx context.Context, state *QueryState, a
 		}
 
 		if ap.QueryText != nil {
-			// Determine if it's dense or sparse based on Using (default to dense if not "sparse")
-			isSparse := ap.Type == ast.QueryTypeSparse
+			// Determine if it's dense or sparse based on Type or Using name
+			isSparse := ap.Type == ast.QueryTypeSparse || (ap.Using != nil && *ap.Using == "sparse")
 			if isSparse {
 				if state.LocalEmbed {
 					indices, values, err := state.Embedder.EmbedSparse(ctx, *ap.QueryText)

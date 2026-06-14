@@ -166,5 +166,3 @@ func versionMessage() string {
 func hasMMR(withClause *ast.SearchWith) bool {
 	return withClause != nil && (withClause.MmrDiversity != nil || withClause.MmrCandidates != nil)
 }
-
-

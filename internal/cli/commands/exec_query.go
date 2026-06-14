@@ -21,6 +21,15 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 	if stmt.Using != nil {
 		denseVectorName = *stmt.Using
 		sparseVectorName = *stmt.Using
+	} else {
+		// For named-vector collections, default to "dense" when no USING is specified
+		topo, err := e.resolveVectorTopology(ctx, stmt.Collection)
+		if err == nil && topo != nil && topo.DenseVector != nil && *topo.DenseVector != "" {
+			denseVectorName = *topo.DenseVector
+			if topo.SparseVector != nil && *topo.SparseVector != "" {
+				sparseVectorName = *topo.SparseVector
+			}
+		}
 	}
 
 	denseModel := e.resolveDenseModel(stmt.Model)
@@ -130,21 +139,21 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 					VectorName: sparseVectorName,
 					Limit:      uint64(stmt.Limit),
 				})
+				state.VectorName = sparseVectorName
 			default:
-				// If we have manual prefetches, the main dense query itself isn't necessarily the only top-level node unless explicitly provided.
-				// Wait, if there are prefetches, does the main query text become the target? Or is there no target?
-				// The FUSION clause decides the target if there are prefetches!
 				if stmt.QueryText != nil {
 					execPipeline.Add(&pipeline.DenseEmbedNode{
 						Model:      denseModel,
 						VectorName: denseVectorName,
 						Limit:      uint64(stmt.Limit),
 					})
+					state.VectorName = denseVectorName
 				}
 			}
 
 			if stmt.FusionType != nil && stmt.Type != ast.QueryTypeHybrid {
 				execPipeline.Add(&pipeline.FusionNode{Mode: strings.ToLower(*stmt.FusionType)})
+				state.VectorName = "" // Fusion queries must not have Using on the top-level request
 			}
 		}
 
@@ -154,6 +163,7 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 			NegativeIDs: stmt.NegativeIDs,
 			Strategy:    stmt.Strategy,
 		})
+		state.VectorName = denseVectorName
 
 	case ast.QueryModeContext:
 		pairs := make([]pipeline.ContextPair, len(stmt.ContextPairs))
@@ -161,6 +171,7 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 			pairs[i] = pipeline.ContextPair{Positive: p.Positive, Negative: p.Negative}
 		}
 		execPipeline.Add(&pipeline.ContextNode{Pairs: pairs})
+		state.VectorName = denseVectorName
 
 	case ast.QueryModeDiscover:
 		pairs := make([]pipeline.ContextPair, len(stmt.ContextPairs))
@@ -168,6 +179,7 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 			pairs[i] = pipeline.ContextPair{Positive: p.Positive, Negative: p.Negative}
 		}
 		execPipeline.Add(&pipeline.DiscoverNode{Target: stmt.Target, Pairs: pairs})
+		state.VectorName = denseVectorName
 	}
 
 	if stmt.Rerank {

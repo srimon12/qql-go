@@ -404,6 +404,28 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 				return nil, err
 			}
 			stmt.Strategy = strategy
+		case lexer.TokenKindLimit:
+			p.advance()
+			limitTok, err := p.expect(lexer.TokenKindInteger)
+			if err != nil {
+				return nil, err
+			}
+			limit, err := parseIntToken(limitTok)
+			if err != nil {
+				return nil, err
+			}
+			stmt.Limit = limit
+		case lexer.TokenKindOffset:
+			p.advance()
+			offsetTok := p.peek()
+			offset, err := parseIntToken(p.advance())
+			if err != nil {
+				return nil, err
+			}
+			if offset < 0 {
+				return nil, errors.NewQQLSyntaxError("OFFSET must be a non-negative integer", offsetTok.Pos)
+			}
+			stmt.Offset = offset
 		default:
 			return stmt, nil
 		}

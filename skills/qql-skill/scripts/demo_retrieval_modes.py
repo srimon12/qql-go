@@ -14,6 +14,13 @@ EXAMPLES = [
         "requires_index": [],
     },
     {
+        "mode": "dense-by-id",
+        "when": "Use when you want to find results similar to a specific point by its ID.",
+        "query": "QUERY '123e4567-e89b-12d3-a456-426614174001' FROM articles LIMIT 5",
+        "setup": [],
+        "requires_index": [],
+    },
+    {
         "mode": "hybrid",
         "when": "Use when exact terms, acronyms, model names, or error strings matter.",
         "query": (
@@ -29,6 +36,16 @@ EXAMPLES = [
         "query": (
             "QUERY 'out of memory hnsw_ef acorn' FROM incidents "
             "LIMIT 10 USING HYBRID FUSION DBSF"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "hybrid-rrf-params",
+        "when": "Use when you want to tune RRF parameters — K controls rank smoothing, weights control source influence.",
+        "query": (
+            "QUERY 'vector search performance' FROM articles "
+            "LIMIT 10 USING HYBRID WITH { rrf_k: 30, rrf_weights: [0.7, 0.3] }"
         ),
         "setup": [],
         "requires_index": [],
@@ -56,6 +73,26 @@ EXAMPLES = [
         "query": (
             "QUERY 'transformer inference' FROM articles "
             "LIMIT 10 WITH { hnsw_ef: 256 }"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "score-threshold",
+        "when": "Use when you want to filter out low-relevance results at query time.",
+        "query": (
+            "QUERY 'vector database' FROM articles "
+            "LIMIT 10 SCORE THRESHOLD 0.5"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "offset",
+        "when": "Use when you need to paginate through flat search results.",
+        "query": (
+            "QUERY 'vector database' FROM articles "
+            "LIMIT 5 OFFSET 10"
         ),
         "setup": [],
         "requires_index": [],
@@ -134,13 +171,78 @@ EXAMPLES = [
         "when": "Use when grouped results still need hybrid recall and query-time tuning.",
         "query": (
             "QUERY 'retrieval recall regression' FROM incidents "
-            "LIMIT 4 USING HYBRID WITH { hnsw_ef: 128, acorn: true } "
+            "LIMIT 4 USING HYBRID WITH { hnsw_ef: 128 } "
             "GROUP BY team GROUP_SIZE 2"
         ),
         "setup": [
             "CREATE INDEX ON COLLECTION incidents FOR team TYPE keyword",
         ],
         "requires_index": ["team"],
+    },
+    {
+        "mode": "recommend",
+        "when": "Use when you have example point IDs and want to find similar items.",
+        "query": (
+            "QUERY RECOMMEND POSITIVE IDS ('uuid-1', 'uuid-2') FROM articles LIMIT 5"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "recommend-with-strategy",
+        "when": "Use when you want to control how positive/negative examples are combined.",
+        "query": (
+            "QUERY RECOMMEND POSITIVE IDS ('uuid-1') NEGATIVE IDS ('uuid-2') "
+            "STRATEGY 'best_score' FROM articles LIMIT 5"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "context",
+        "when": "Use when you have pairwise relevance signals (this is better than that) and want context-aware search.",
+        "query": (
+            "QUERY CONTEXT PAIRS (('uuid-1', 'uuid-2'), ('uuid-3', 'uuid-4')) FROM docs LIMIT 10"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "discover",
+        "when": "Use when you have a target item and context pairs to explore an interesting region of the vector space.",
+        "query": (
+            "QUERY DISCOVER TARGET 'uuid-1' CONTEXT PAIRS (('uuid-2', 'uuid-3')) FROM docs LIMIT 10"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "prefetch-rrf",
+        "when": "Use when you need multi-stage retrieval with separate dense and sparse prefetches combined via RRF.",
+        "query": (
+            "QUERY 'search query' FROM docs LIMIT 10\n"
+            "  PREFETCH (\n"
+            "    QUERY 'search query' USING 'dense' LIMIT 100,\n"
+            "    QUERY 'search query' USING 'sparse' LIMIT 100\n"
+            "  )\n"
+            "  FUSION RRF"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "prefetch-rrf-params",
+        "when": "Use when you need per-prefetch filtering and parameterized RRF tuning.",
+        "query": (
+            "QUERY 'search query' FROM docs LIMIT 10\n"
+            "  PREFETCH (\n"
+            "    QUERY 'search query' USING 'dense' LIMIT 100 WHERE category = 'tech' SCORE THRESHOLD 0.8,\n"
+            "    QUERY 'search query' USING 'sparse' LIMIT 100 WITH { exact: true }\n"
+            "  )\n"
+            "  FUSION RRF WITH { rrf_k: 10, rrf_weights: [0.7, 0.3] }"
+        ),
+        "setup": [],
+        "requires_index": [],
     },
     {
         "mode": "rerank",

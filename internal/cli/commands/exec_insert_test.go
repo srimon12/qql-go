@@ -131,7 +131,7 @@ func TestBuildInsertVectorsLocalModeGeneratesExplicitVectors(t *testing.T) {
 	require.NotContains(t, vectors, rerankVectorName)
 }
 
-func TestBuildInsertVectorsLocalModeRejectsCustomSparseModel(t *testing.T) {
+func TestBuildInsertVectorsLocalModeIgnoresSparseModel(t *testing.T) {
 	server := newEmbeddingServer(t, []float32{1, 2, 3})
 	defer server.Close()
 
@@ -142,9 +142,10 @@ func TestBuildInsertVectorsLocalModeRejectsCustomSparseModel(t *testing.T) {
 		EmbeddingDimension: 3,
 	})
 
-	_, err := exec.buildInsertVectors(context.Background(), "hello", "dense-model", "sparse-model", true, false, "test_local", "dense", "sparse")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "local embedding mode only supports BM25 sparse vectors")
+	vectors, err := exec.buildInsertVectors(context.Background(), "hello", "dense-model", "sparse-model", true, false, "test_local", "dense", "sparse")
+	require.NoError(t, err)
+	require.NotNil(t, vectors["dense"])
+	require.NotNil(t, vectors["sparse"])
 }
 
 func TestBuildInsertVectorsLocalModeRejectsRerank(t *testing.T) {

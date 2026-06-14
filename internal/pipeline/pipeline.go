@@ -33,6 +33,7 @@ type QueryState struct {
 
 	// --- Request assembly (set by executor before pipeline runs) ---
 	CollectionName string
+	VectorName     string
 	Limit          uint64
 	Offset         uint64
 	QdrantFilter   *qdrant.Filter
@@ -88,6 +89,9 @@ func (p *QueryPipeline) BuildFlatRequest(state *QueryState) *qdrant.QueryPoints 
 		Params:         state.Params,
 		Filter:         state.QdrantFilter,
 	}
+	if state.VectorName != "" {
+		req.Using = qdrant.PtrOf(state.VectorName)
+	}
 	if state.Offset > 0 {
 		req.Offset = &state.Offset
 	}
@@ -108,6 +112,7 @@ func (p *QueryPipeline) BuildGroupedRequest(state *QueryState) *qdrant.QueryPoin
 		CollectionName: flat.CollectionName,
 		Query:          flat.Query,
 		Prefetch:       flat.Prefetch,
+		Using:          flat.Using,
 		Limit:          flat.Limit,
 		GroupBy:        state.GroupBy,
 		GroupSize:      groupSizePtr(state.GroupSize),
