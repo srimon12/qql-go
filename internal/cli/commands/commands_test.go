@@ -58,7 +58,7 @@ func TestCollectionVectorParamsIncludesColbertWhenEnabled(t *testing.T) {
 
 func TestBuildInsertVectorsIncludesColbertOnlyWhenEnabled(t *testing.T) {
 	exec := NewExecutor(nil, &config.Config{})
-	vectors, err := exec.buildInsertVectors(context.Background(), "hello world", "dense-model", "sparse-model", true, true, "test")
+	vectors, err := exec.buildInsertVectors(context.Background(), "hello world", "dense-model", "sparse-model", true, true, "test-collection", "dense", "sparse")
 	require.NoError(t, err)
 
 	dense := vectors[denseVectorName]
@@ -77,7 +77,7 @@ func TestBuildInsertVectorsIncludesColbertOnlyWhenEnabled(t *testing.T) {
 	require.NotNil(t, sparse.GetDocument())
 	require.Equal(t, "sparse-model", sparse.GetDocument().GetModel())
 
-	withoutRerank, err := exec.buildInsertVectors(context.Background(), "hello world", "dense-model", "sparse-model", true, false, "test")
+	withoutRerank, err := exec.buildInsertVectors(context.Background(), "hello world", "dense-model", "sparse-model", true, false, "test-collection", "dense", "sparse")
 	require.NoError(t, err)
 	require.NotContains(t, withoutRerank, rerankVectorName)
 }
@@ -138,7 +138,7 @@ func TestBuildSearchRequestAppliesWithClauseAndSparseOverride(t *testing.T) {
 				Oversampling: float64Ptr(2.5),
 			},
 		},
-	}, "dense-model", sparseModel, false, 5)
+	}, "dense-model", sparseModel, false, 5, "dense", "sparse")
 	require.NoError(t, err)
 
 	require.Equal(t, "demo", req.GetCollectionName())
@@ -176,7 +176,7 @@ func TestBuildSearchRequestDenseMMR(t *testing.T) {
 			MmrDiversity:  float64Ptr(0.5),
 			MmrCandidates: intPtr(50),
 		},
-	}, "dense-model", "custom-sparse", false, 5)
+	}, "dense-model", "custom-sparse", false, 5, "dense", "sparse")
 	require.NoError(t, err)
 	require.NotNil(t, req.GetQuery().GetNearestWithMmr())
 	require.InDelta(t, 0.5, req.GetQuery().GetNearestWithMmr().GetMmr().GetDiversity(), 0.0001)
@@ -202,7 +202,7 @@ func TestBuildGroupSearchRequestCarriesHybridPrefetchParamsAndCustomModels(t *te
 		},
 		GroupBy:   "category",
 		GroupSize: 2,
-	}, "dense-model", sparseModel, false, 5)
+	}, "dense-model", sparseModel, false, 5, "dense", "sparse")
 	require.NoError(t, err)
 
 	groupReq := buildGroupSearchRequest(&ast.SearchStmt{
@@ -235,7 +235,7 @@ func TestBuildSearchRequestRejectsRerankWithoutCollectionSupport(t *testing.T) {
 		QueryText:  "vector database",
 		Limit:      5,
 		Rerank:     true,
-	}, "dense-model", "custom-sparse", false, 5)
+	}, "dense-model", "custom-sparse", false, 5, "dense", "sparse")
 	require.Error(t, err)
 }
 
@@ -806,7 +806,7 @@ func TestBuildClientConfigNormalizesSchemeAndPort(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := buildClientConfig(tt.input, "api-key")
+			cfg, err := buildClientConfig(tt.input, "api-key", false, "")
 			require.NoError(t, err)
 			require.Equal(t, tt.wantHost, cfg.Host)
 			require.Equal(t, tt.wantPort, cfg.Port)
@@ -1156,7 +1156,7 @@ func TestBuildInsertVectorsLocalModeGeneratesExplicitVectors(t *testing.T) {
 		EmbeddingDimension: 3,
 	})
 
-	vectors, err := exec.buildInsertVectors(context.Background(), "hello world", "dense-model", "sparse-model", true, false, "test_local")
+	vectors, err := exec.buildInsertVectors(context.Background(), "hello world", "dense-model", "sparse-model", true, false, "test_local", "dense", "sparse")
 	require.NoError(t, err)
 
 	dense := vectors[denseVectorName]
@@ -1179,7 +1179,7 @@ func TestBuildInsertVectorsLocalModeRejectsRerank(t *testing.T) {
 		EmbeddingDimension: 3,
 	})
 
-	_, err := exec.buildInsertVectors(context.Background(), "hello", "dense-model", "sparse-model", true, true, "test_local")
+	_, err := exec.buildInsertVectors(context.Background(), "hello", "dense-model", "sparse-model", true, true, "test_local", "dense", "sparse")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "rerank vectors are not implemented yet")
 }
@@ -1444,7 +1444,7 @@ func TestBuildRecommendRequestRejectsMMR(t *testing.T) {
 		PositiveIDs: []any{"a"},
 		Limit:       5,
 		WithClause:  &ast.SearchWith{MmrDiversity: float64Ptr(0.5)},
-	})
+	}, "dense")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "MMR is supported only for SEARCH statements")
 }
@@ -1467,7 +1467,7 @@ func TestBuildUpdateVectorRequestUsesNamedDenseVectorForHybridCollections(t *tes
 		Collection: "docs",
 		PointID:    7,
 		Vector:     []float32{0.1, 0.2},
-	})
+	}, "dense")
 	require.NoError(t, err)
 	require.Len(t, req.GetPoints(), 1)
 	require.NotNil(t, req.GetPoints()[0].GetVectors().GetVectors().GetVectors()[denseVectorName])
@@ -1495,7 +1495,7 @@ func TestBuildSearchPrefetchesLocalModeReturnsExplicitQueries(t *testing.T) {
 		EmbeddingDimension: 3,
 	})
 
-	prefetch, err := exec.buildSearchPrefetches(context.Background(), "hello world", "dense-model", "sparse-model", 5, nil, nil)
+	prefetch, err := exec.buildSearchPrefetches(context.Background(), "hello world", "dense-model", "sparse-model", 5, nil, nil, "dense", "sparse")
 	require.NoError(t, err)
 	require.Len(t, prefetch, 2)
 
@@ -1518,7 +1518,7 @@ func TestBuildSearchPrefetchesLocalModePropagatesEmbeddingError(t *testing.T) {
 		EmbeddingDimension: 3,
 	})
 
-	_, err := exec.buildSearchPrefetches(context.Background(), "hello world", "dense-model", "sparse-model", 5, nil, nil)
+	_, err := exec.buildSearchPrefetches(context.Background(), "hello world", "dense-model", "sparse-model", 5, nil, nil, "dense", "sparse")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to embed search query")
 }
@@ -1536,7 +1536,7 @@ func TestBuildSearchRequestSparseOnlyLocalMode(t *testing.T) {
 		QueryText:  "hello world",
 		Limit:      5,
 		SparseOnly: true,
-	}, "dense-model", "sparse-model", false, 5)
+	}, "dense-model", "sparse-model", false, 5, "dense", "sparse")
 	require.NoError(t, err)
 
 	require.Equal(t, "demo", req.GetCollectionName())
@@ -1552,7 +1552,7 @@ func TestBuildSearchRequestSparseOnlyRerankUsesSparsePrefetch(t *testing.T) {
 		Limit:      5,
 		SparseOnly: true,
 		Rerank:     true,
-	}, "dense-model", "sparse-model", true, 5)
+	}, "dense-model", "sparse-model", true, 5, "dense", "sparse")
 	require.NoError(t, err)
 
 	require.Equal(t, "demo", req.GetCollectionName())
@@ -1579,7 +1579,7 @@ func TestBuildSearchRequestHybridLocalMode(t *testing.T) {
 		QueryText:  "hello world",
 		Limit:      5,
 		Hybrid:     true,
-	}, "dense-model", "sparse-model", false, 5)
+	}, "dense-model", "sparse-model", false, 5, "dense", "sparse")
 	require.NoError(t, err)
 
 	require.Equal(t, "demo", req.GetCollectionName())
@@ -1600,7 +1600,7 @@ func TestBuildSearchRequestHybridLocalModePropagatesError(t *testing.T) {
 		QueryText:  "hello world",
 		Limit:      5,
 		Hybrid:     true,
-	}, "dense-model", "sparse-model", false, 5)
+	}, "dense-model", "sparse-model", false, 5, "dense", "sparse")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to embed search query")
 }
@@ -1610,7 +1610,7 @@ func TestBuildRecommendRequestDefaults(t *testing.T) {
 		Collection:  "docs",
 		PositiveIDs: []any{"a"},
 		Limit:       5,
-	})
+	}, "dense")
 	require.NoError(t, err)
 	require.Equal(t, "docs", req.GetCollectionName())
 	require.Equal(t, uint64(5), req.GetLimit())
@@ -1638,7 +1638,7 @@ func TestBuildRecommendRequestWithAllNewFields(t *testing.T) {
 		LookupFrom:   "src",
 		LookupVector: strPtr("dense"),
 		Using:        strPtr("sparse"),
-	})
+	}, "dense")
 	require.NoError(t, err)
 	require.Equal(t, "docs", req.GetCollectionName())
 	require.Equal(t, uint64(5), req.GetLimit())
@@ -1661,7 +1661,7 @@ func TestBuildRecommendRequestWithLookupFromNoVector(t *testing.T) {
 		PositiveIDs: []any{"a"},
 		Limit:       5,
 		LookupFrom:  "src",
-	})
+	}, "dense")
 	require.NoError(t, err)
 	require.NotNil(t, req.GetLookupFrom())
 	require.Equal(t, "src", req.GetLookupFrom().GetCollectionName())
@@ -1674,7 +1674,7 @@ func TestBuildRecommendRequestUnknownStrategy(t *testing.T) {
 		PositiveIDs: []any{"a"},
 		Limit:       5,
 		Strategy:    strPtr("bad_strategy"),
-	})
+	}, "dense")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unknown recommend strategy")
 }
@@ -1686,7 +1686,7 @@ func TestBuildRecommendRequestFilterExcludesIDs(t *testing.T) {
 		NegativeIDs: []any{"b"},
 		Limit:       5,
 		QueryFilter: &ast.CompareExpr{Field: "status", Op: "=", Value: "active"},
-	})
+	}, "dense")
 	require.NoError(t, err)
 	filter := req.GetFilter()
 	require.NotNil(t, filter)
@@ -1865,7 +1865,7 @@ func TestBuildSearchRequestHybridDBSF(t *testing.T) {
 		Limit:      5,
 		Hybrid:     true,
 		Fusion:     &fusion,
-	}, "dense-model", "sparse-model", false, 5)
+	}, "dense-model", "sparse-model", false, 5, "dense", "sparse")
 	require.NoError(t, err)
 
 	require.Equal(t, qdrant.Fusion_DBSF, req.GetQuery().GetFusion())
@@ -1878,7 +1878,7 @@ func TestBuildSearchRequestHybridRRFByDefault(t *testing.T) {
 		QueryText:  "vector database",
 		Limit:      5,
 		Hybrid:     true,
-	}, "dense-model", "sparse-model", false, 5)
+	}, "dense-model", "sparse-model", false, 5, "dense", "sparse")
 	require.NoError(t, err)
 
 	require.Equal(t, qdrant.Fusion_RRF, req.GetQuery().GetFusion())

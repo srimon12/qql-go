@@ -6,7 +6,9 @@ type InsertStmt struct {
 	Values      map[string]any
 	Model       *string
 	Hybrid      bool
+	DenseVector *string
 	SparseModel *string
+	SparseVector *string
 }
 
 type InsertBulkStmt struct {
@@ -14,7 +16,9 @@ type InsertBulkStmt struct {
 	ValuesList  []map[string]any
 	Model       *string
 	Hybrid      bool
+	DenseVector *string
 	SparseModel *string
+	SparseVector *string
 }
 
 type VectorsConfig struct {
@@ -68,6 +72,8 @@ type CreateCollectionStmt struct {
 	Hybrid       bool
 	Rerank       bool
 	Model        *string
+	DenseVector  *string
+	SparseVector *string
 	Quantization *QuantizationConfig
 	Config       *CollectionConfig
 }
@@ -136,6 +142,8 @@ type SearchStmt struct {
 	ScoreThreshold *float64
 	LookupFrom     string
 	LookupVector   *string
+	DenseVector    *string
+	SparseVector   *string
 }
 
 type QuantizationSearchWith struct {
@@ -170,6 +178,7 @@ type UpdateVectorStmt struct {
 	Collection string
 	PointID    any
 	Vector     []float32
+	VectorName *string
 }
 
 type UpdatePayloadStmt struct {

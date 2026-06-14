@@ -17,12 +17,16 @@ type Config struct {
 	EmbeddingAPIKey    string `json:"embedding_api_key"`
 	EmbeddingModel     string `json:"embedding_model"`
 	EmbeddingDimension int    `json:"embedding_dimension"`
+	NoVerify           bool   `json:"no_verify"`
+	CACert             string `json:"ca_cert"`
 }
 
 type Profile struct {
 	Name   string `json:"name"`
-	URL    string `json:"url"`
-	Secret string `json:"secret"`
+	URL      string `json:"url"`
+	Secret   string `json:"secret"`
+	NoVerify bool   `json:"no_verify"`
+	CACert   string `json:"ca_cert"`
 }
 
 var cfg *Config

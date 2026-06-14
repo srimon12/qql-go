@@ -111,17 +111,19 @@ func (p *Parser) parseInsert() (ast.ASTNode, error) {
 		return nil, err
 	}
 	pointID, values := extractInsertPointID(values)
-	model, hybrid, sparseModel, err := p.parseEmbeddingOptions()
+	model, hybrid, sparseModel, denseVector, sparseVector, err := p.parseEmbeddingOptions()
 	if err != nil {
 		return nil, err
 	}
 	return &ast.InsertStmt{
-		Collection:  collection,
-		PointID:     pointID,
-		Values:      values,
-		Model:       model,
-		Hybrid:      hybrid,
-		SparseModel: sparseModel,
+		Collection:   collection,
+		PointID:      pointID,
+		Values:       values,
+		Model:        model,
+		Hybrid:       hybrid,
+		SparseModel:  sparseModel,
+		DenseVector:  denseVector,
+		SparseVector: sparseVector,
 	}, nil
 }
 
@@ -151,16 +153,18 @@ func (p *Parser) parseInsertBulk() (*ast.InsertBulkStmt, error) {
 		}
 		valuesList = append(valuesList, dict)
 	}
-	model, hybrid, sparseModel, err := p.parseEmbeddingOptions()
+	model, hybrid, sparseModel, denseVector, sparseVector, err := p.parseEmbeddingOptions()
 	if err != nil {
 		return nil, err
 	}
 	return &ast.InsertBulkStmt{
-		Collection:  collection,
-		ValuesList:  valuesList,
-		Model:       model,
-		Hybrid:      hybrid,
-		SparseModel: sparseModel,
+		Collection:   collection,
+		ValuesList:   valuesList,
+		Model:        model,
+		Hybrid:       hybrid,
+		SparseModel:  sparseModel,
+		DenseVector:  denseVector,
+		SparseVector: sparseVector,
 	}, nil
 }
 
@@ -180,14 +184,32 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 	hybrid := false
 	rerank := false
 	var model *string
+	var denseVector *string
+	var sparseVector *string
 	if p.peek().Kind == lexer.TokenKindHybrid {
 		p.advance()
 		hybrid = true
 		if p.peek().Kind == lexer.TokenKindRerank {
 			p.advance()
 			rerank = true
+		} else {
+			var err error
+			for p.peek().Kind == lexer.TokenKindDense || p.peek().Kind == lexer.TokenKindSparse {
+				mode := p.advance().Kind
+				if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && toUpper(p.peek().Value) == "VECTOR") {
+					p.advance()
+					v, err2 := p.parseStringPtr()
+					if err2 != nil { return nil, err2 }
+					if mode == lexer.TokenKindDense { denseVector = v } else { sparseVector = v }
+				} else {
+					return nil, errors.NewQQLSyntaxError("Expected VECTOR after DENSE/SPARSE", p.peek().Pos)
+				}
+			}
+			err = nil // suppress unused
+			_ = err
 		}
 	} else if p.peek().Kind == lexer.TokenKindUsing {
+		// Old qql-go specific path
 		p.advance()
 		if p.peek().Kind == lexer.TokenKindHybrid {
 			p.advance()
@@ -196,16 +218,12 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 				p.advance()
 				var err error
 				model, err = p.parseRequiredModelString()
-				if err != nil {
-					return nil, err
-				}
+				if err != nil { return nil, err }
 			}
 		} else {
 			var err error
 			model, err = p.parseRequiredModelString()
-			if err != nil {
-				return nil, err
-			}
+			if err != nil { return nil, err }
 		}
 	}
 
@@ -225,6 +243,8 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 		Model:        model,
 		Quantization: quantization,
 		Config:       config,
+		DenseVector:  denseVector,
+		SparseVector: sparseVector,
 	}, nil
 }
 
@@ -988,7 +1008,7 @@ func (p *Parser) parseSearch() (*ast.SearchStmt, error) {
 		}
 	}
 
-	model, hybrid, sparseOnly, sparseModel, fusion, err := p.parseSearchEmbeddingOptions()
+	model, hybrid, sparseOnly, sparseModel, fusion, denseVector, sparseVector, err := p.parseSearchEmbeddingOptions()
 	if err != nil {
 		return nil, err
 	}
@@ -1098,6 +1118,8 @@ func (p *Parser) parseSearch() (*ast.SearchStmt, error) {
 				ScoreThreshold: scoreThreshold,
 				LookupFrom:     lookupFrom,
 				LookupVector:   lookupVector,
+				DenseVector:    denseVector,
+				SparseVector:   sparseVector,
 			}, nil
 		}
 	}
@@ -2113,96 +2135,124 @@ func toLower(s string) string {
 	return string(result)
 }
 
-func (p *Parser) parseEmbeddingOptions() (*string, bool, *string, error) {
+func (p *Parser) parseEmbeddingOptions() (*string, bool, *string, *string, *string, error) {
 	if p.peek().Kind != lexer.TokenKindUsing {
-		return nil, false, nil, nil
+		return nil, false, nil, nil, nil, nil
 	}
-
 	p.advance()
 	if p.peek().Kind != lexer.TokenKindHybrid {
-		model, err := p.parseRequiredModelString()
-		return model, false, nil, err
+		var denseVector *string
+		if p.peek().Kind == lexer.TokenKindDense { p.advance() }
+		denseVector, err := p.parseOptionalVectorString()
+		if err != nil { return nil, false, nil, nil, nil, err }
+		model, err := p.parseOptionalModelString()
+		if err != nil { return nil, false, nil, nil, nil, err }
+		if denseVector == nil {
+			denseVector, err = p.parseOptionalVectorString()
+			if err != nil { return nil, false, nil, nil, nil, err }
+		}
+		if model == nil && denseVector == nil {
+			model, err = p.parseRequiredModelString()
+			if err != nil { return nil, false, nil, nil, nil, err }
+		}
+		return model, false, nil, denseVector, nil, nil
 	}
-
 	p.advance()
-	var model *string
-	var sparseModel *string
+	var model, sparseModel, denseVector, sparseVector *string
 	for p.peek().Kind == lexer.TokenKindDense || p.peek().Kind == lexer.TokenKindSparse {
 		mode := p.advance().Kind
-		currentModel, err := p.parseRequiredModelString()
-		if err != nil {
-			return nil, false, nil, err
+		currentVector, err := p.parseOptionalVectorString()
+		if err != nil { return nil, false, nil, nil, nil, err }
+		currentModel, err := p.parseOptionalModelString()
+		if err != nil { return nil, false, nil, nil, nil, err }
+		if currentVector == nil {
+			currentVector, err = p.parseOptionalVectorString()
+			if err != nil { return nil, false, nil, nil, nil, err }
+		}
+		if currentModel == nil && currentVector == nil {
+			return nil, false, nil, nil, nil, errors.NewQQLSyntaxError("Expected MODEL or VECTOR after DENSE/SPARSE", p.peek().Pos)
 		}
 		if mode == lexer.TokenKindDense {
-			model = currentModel
+			model, denseVector = currentModel, currentVector
 		} else {
-			sparseModel = currentModel
+			sparseModel, sparseVector = currentModel, currentVector
 		}
 	}
-
-	return model, true, sparseModel, nil
+	return model, true, sparseModel, denseVector, sparseVector, nil
 }
 
-func (p *Parser) parseSearchEmbeddingOptions() (*string, bool, bool, *string, *string, error) {
+func (p *Parser) parseSearchEmbeddingOptions() (*string, bool, bool, *string, *string, *string, *string, error) {
 	if p.peek().Kind != lexer.TokenKindUsing {
-		return nil, false, false, nil, nil, nil
+		return nil, false, false, nil, nil, nil, nil, nil
 	}
-
 	p.advance()
 	if p.peek().Kind == lexer.TokenKindSparse {
 		p.advance()
-		var sparseModel *string
-		var err error
-		if p.peek().Kind == lexer.TokenKindModel {
-			sparseModel, err = p.parseRequiredModelString()
-			if err != nil {
-				return nil, false, false, nil, nil, err
-			}
+		sparseVector, err := p.parseOptionalVectorString()
+		if err != nil { return nil, false, false, nil, nil, nil, nil, err }
+		sparseModel, err := p.parseOptionalModelString()
+		if err != nil { return nil, false, false, nil, nil, nil, nil, err }
+		if sparseVector == nil {
+			sparseVector, err = p.parseOptionalVectorString()
+			if err != nil { return nil, false, false, nil, nil, nil, nil, err }
 		}
-		return nil, false, true, sparseModel, nil, nil
+		return nil, false, true, sparseModel, nil, nil, sparseVector, nil
 	}
-
-	model, hybrid, sparseModel, fusion, err := p.parseEmbeddingOptionsAfterUsingWithFusion()
-	return model, hybrid, false, sparseModel, fusion, err
+	model, hybrid, sparseModel, fusion, denseVector, sparseVector, err := p.parseEmbeddingOptionsAfterUsingWithFusion()
+	return model, hybrid, false, sparseModel, fusion, denseVector, sparseVector, err
 }
 
-func (p *Parser) parseEmbeddingOptionsAfterUsingWithFusion() (*string, bool, *string, *string, error) {
+func (p *Parser) parseEmbeddingOptionsAfterUsingWithFusion() (*string, bool, *string, *string, *string, *string, error) {
 	if p.peek().Kind != lexer.TokenKindHybrid {
-		model, err := p.parseRequiredModelString()
-		return model, false, nil, nil, err
+		var denseVector *string
+		if p.peek().Kind == lexer.TokenKindDense { p.advance() }
+		denseVector, err := p.parseOptionalVectorString()
+		if err != nil { return nil, false, nil, nil, nil, nil, err }
+		model, err := p.parseOptionalModelString()
+		if err != nil { return nil, false, nil, nil, nil, nil, err }
+		if denseVector == nil {
+			denseVector, err = p.parseOptionalVectorString()
+			if err != nil { return nil, false, nil, nil, nil, nil, err }
+		}
+		if model == nil && denseVector == nil {
+			model, err = p.parseRequiredModelString()
+			if err != nil { return nil, false, nil, nil, nil, nil, err }
+		}
+		return model, false, nil, nil, denseVector, nil, nil
 	}
-
 	p.advance()
-	var model *string
-	var sparseModel *string
-	var fusion *string
+	var model, sparseModel, denseVector, sparseVector, fusion *string
 	for p.peek().Kind == lexer.TokenKindDense || p.peek().Kind == lexer.TokenKindSparse || p.peek().Kind == lexer.TokenKindFusion {
 		if p.peek().Kind == lexer.TokenKindFusion {
 			p.advance()
 			fusionTok, err := p.expect(lexer.TokenKindString)
-			if err != nil {
-				return nil, false, nil, nil, err
-			}
+			if err != nil { return nil, false, nil, nil, nil, nil, err }
 			fusionVal := toLower(fusionTok.Value)
 			if fusionVal != "rrf" && fusionVal != "dbsf" {
-				return nil, false, nil, nil, errors.NewQQLSyntaxError("Unsupported hybrid fusion '"+fusionTok.Value+"'; expected 'rrf' or 'dbsf'", fusionTok.Pos)
+				return nil, false, nil, nil, nil, nil, errors.NewQQLSyntaxError("Unsupported hybrid fusion '"+fusionTok.Value+"'; expected 'rrf' or 'dbsf'", fusionTok.Pos)
 			}
 			fusion = &fusionVal
 			continue
 		}
 		mode := p.advance().Kind
-		currentModel, err := p.parseRequiredModelString()
-		if err != nil {
-			return nil, false, nil, nil, err
+		currentVector, err := p.parseOptionalVectorString()
+		if err != nil { return nil, false, nil, nil, nil, nil, err }
+		currentModel, err := p.parseOptionalModelString()
+		if err != nil { return nil, false, nil, nil, nil, nil, err }
+		if currentVector == nil {
+			currentVector, err = p.parseOptionalVectorString()
+			if err != nil { return nil, false, nil, nil, nil, nil, err }
+		}
+		if currentModel == nil && currentVector == nil {
+			return nil, false, nil, nil, nil, nil, errors.NewQQLSyntaxError("Expected MODEL or VECTOR after DENSE/SPARSE", p.peek().Pos)
 		}
 		if mode == lexer.TokenKindDense {
-			model = currentModel
+			model, denseVector = currentModel, currentVector
 		} else {
-			sparseModel = currentModel
+			sparseModel, sparseVector = currentModel, currentVector
 		}
 	}
-
-	return model, true, sparseModel, fusion, nil
+	return model, true, sparseModel, fusion, denseVector, sparseVector, nil
 }
 
 func (p *Parser) parseRequiredModelString() (*string, error) {
@@ -2313,4 +2363,13 @@ func (p *Parser) parseNumericLiteral() (float64, error) {
 	default:
 		return 0, errors.NewQQLSyntaxError("Expected a number, got '"+tok.Value+"'", tok.Pos)
 	}
+}
+
+func (p *Parser) parseOptionalVectorString() (*string, error) {
+	tok := p.peek()
+	if tok.Kind == lexer.TokenKindVector || (tok.Kind == lexer.TokenKindIdentifier && toUpper(tok.Value) == "VECTOR") {
+		p.advance()
+		return p.parseStringPtr()
+	}
+	return nil, nil
 }

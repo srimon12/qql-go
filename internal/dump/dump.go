@@ -32,7 +32,7 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 		return 0, 0, fmt.Errorf("collection '%s' does not exist", collection)
 	}
 
-	hybrid, err := isHybrid(ctx, client, collection)
+	hybrid, denseName, sparseName, err := getVectorTopology(ctx, client, collection)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -56,7 +56,7 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to get collection info: %w", err)
 	}
-	createLine := buildDumpCreateLine(collection, hybrid, info)
+	createLine := buildDumpCreateLine(collection, hybrid, denseName, sparseName, info)
 	builder.WriteString(createLine)
 	builder.WriteString("\n\n")
 
@@ -103,7 +103,13 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 			}
 			builder.WriteString("]")
 			if hybrid {
-				builder.WriteString(" USING HYBRID")
+				if denseName != "dense" || sparseName != "sparse" {
+					builder.WriteString(fmt.Sprintf(" USING HYBRID DENSE VECTOR '%s' SPARSE VECTOR '%s'", escapeString(denseName), escapeString(sparseName)))
+				} else {
+					builder.WriteString(" USING HYBRID")
+				}
+			} else if denseName != "dense" && denseName != "" {
+				builder.WriteString(fmt.Sprintf(" USING VECTOR '%s'", escapeString(denseName)))
 			}
 			builder.WriteString("\n\n")
 		}
@@ -121,12 +127,34 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 	return written, skipped, nil
 }
 
-func isHybrid(ctx context.Context, client Client, collection string) (bool, error) {
+func getVectorTopology(ctx context.Context, client Client, collection string) (hybrid bool, denseName, sparseName string, err error) {
 	info, err := client.GetCollectionInfo(ctx, collection)
 	if err != nil {
-		return false, fmt.Errorf("failed to inspect collection: %w", err)
+		return false, "", "", fmt.Errorf("failed to inspect collection: %w", err)
 	}
-	return info.GetConfig().GetParams().GetSparseVectorsConfig() != nil, nil
+	config := info.GetConfig()
+	if config == nil { return false, "", "", nil }
+	params := config.GetParams()
+	if params == nil { return false, "", "", nil }
+
+	if vcfg := params.GetVectorsConfig(); vcfg != nil {
+		if vmap := vcfg.GetParamsMap(); vmap != nil {
+			for k := range vmap.GetMap() {
+				if k == "dense" { denseName = "dense" } else if denseName == "" { denseName = k }
+			}
+		} else {
+			denseName = ""
+		}
+	} else {
+		denseName = "dense"
+	}
+	if scfg := params.GetSparseVectorsConfig(); scfg != nil {
+		hybrid = true
+		for k := range scfg.GetMap() {
+			if k == "sparse" { sparseName = "sparse" } else if sparseName == "" { sparseName = k }
+		}
+	}
+	return hybrid, denseName, sparseName, nil
 }
 
 func payloadToMap(payload map[string]*qdrant.Value) map[string]any {
@@ -235,12 +263,17 @@ func escapeString(value string) string {
 	return value
 }
 
-func buildDumpCreateLine(collection string, hybrid bool, info *qdrant.CollectionInfo) string {
+func buildDumpCreateLine(collection string, hybrid bool, denseName, sparseName string, info *qdrant.CollectionInfo) string {
 	var b strings.Builder
 	b.WriteString("CREATE COLLECTION ")
 	b.WriteString(collection)
 	if hybrid {
 		b.WriteString(" HYBRID")
+		if denseName != "dense" || sparseName != "sparse" {
+			b.WriteString(fmt.Sprintf(" DENSE VECTOR '%s' SPARSE VECTOR '%s'", escapeString(denseName), escapeString(sparseName)))
+		}
+	} else if denseName != "dense" && denseName != "" {
+		b.WriteString(fmt.Sprintf(" VECTOR '%s'", escapeString(denseName)))
 	}
 
 	config := info.GetConfig()

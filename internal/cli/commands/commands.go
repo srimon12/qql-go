@@ -2,9 +2,12 @@ package commands
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"maps"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -85,18 +88,18 @@ func NewClient(cfg *config.Config) (*qdrant.Client, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
-	return newClientFromURL(cfg.URL, cfg.Secret)
+	return newClientFromURL(cfg.URL, cfg.Secret, cfg.NoVerify, cfg.CACert)
 }
 
-func newClientFromURL(rawURL, apiKey string) (*qdrant.Client, error) {
-	cfg, err := buildClientConfig(rawURL, apiKey)
+func newClientFromURL(rawURL, apiKey string, noVerify bool, caCert string) (*qdrant.Client, error) {
+	cfg, err := buildClientConfig(rawURL, apiKey, noVerify, caCert)
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %w", err)
 	}
 	return qdrant.NewClient(cfg)
 }
 
-func buildClientConfig(rawURL, apiKey string) (*qdrant.Config, error) {
+func buildClientConfig(rawURL, apiKey string, noVerify bool, caCert string) (*qdrant.Config, error) {
 	normalized := strings.TrimSpace(rawURL)
 	if normalized == "" {
 		return nil, fmt.Errorf("empty URL")
@@ -130,11 +133,31 @@ func buildClientConfig(rawURL, apiKey string) (*qdrant.Config, error) {
 		port = 6334
 	}
 
+	var tlsConf *tls.Config
+	if strings.EqualFold(parsed.Scheme, "https") {
+		tlsConf = &tls.Config{MinVersion: tls.VersionTLS13}
+		if noVerify {
+			tlsConf.InsecureSkipVerify = true
+		}
+		if caCert != "" {
+			certPEM, err := os.ReadFile(caCert)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read CA cert: %w", err)
+			}
+			certPool := x509.NewCertPool()
+			if !certPool.AppendCertsFromPEM(certPEM) {
+				return nil, fmt.Errorf("failed to parse CA cert from %s", caCert)
+			}
+			tlsConf.RootCAs = certPool
+		}
+	}
+
 	return &qdrant.Config{
 		Host:                   host,
 		Port:                   port,
 		APIKey:                 apiKey,
-		UseTLS:                 strings.EqualFold(parsed.Scheme, "https"),
+		UseTLS:                 tlsConf != nil,
+		TLSConfig:              tlsConf,
 		SkipCompatibilityCheck: true,
 	}, nil
 }
@@ -1129,7 +1152,7 @@ func (e *Executor) doInsert(n *ast.InsertStmt) (*ExecResponse, error) {
 		return nil, fmt.Errorf("'text' field must be a string")
 	}
 
-	created, err := e.ensureCollectionForInsert(ctx, n.Collection, n.Model, n.Hybrid)
+	created, err := e.ensureCollectionForInsert(ctx, n.Collection, n.Model, n.Hybrid, n.DenseVector, n.SparseVector)
 	if err != nil {
 		return nil, err
 	}
@@ -1140,7 +1163,8 @@ func (e *Executor) doInsert(n *ast.InsertStmt) (*ExecResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	includeRerank, err := e.collectionHasRerankVector(ctx, n.Collection)
+	topo, err := e.resolveVectorTopology(ctx, n.Collection)
+	includeRerank := topo != nil && topo.RerankVector != nil
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect collection: %w", err)
 	}
@@ -1150,7 +1174,20 @@ func (e *Executor) doInsert(n *ast.InsertStmt) (*ExecResponse, error) {
 		return nil, err
 	}
 
-	vectors, err := e.buildInsertVectors(ctx, text, model, sparseModel, useHybrid, includeRerank, n.Collection)
+	denseName, sparseName := denseVectorName, sparseVectorName
+	if topo != nil && topo.DenseVector != nil && *topo.DenseVector != "" {
+		denseName = *topo.DenseVector
+	}
+	if topo != nil && topo.SparseVector != nil && *topo.SparseVector != "" {
+		sparseName = *topo.SparseVector
+	}
+	if n.DenseVector != nil {
+		denseName = *n.DenseVector
+	}
+	if n.SparseVector != nil {
+		sparseName = *n.SparseVector
+	}
+	vectors, err := e.buildInsertVectors(ctx, text, model, sparseModel, useHybrid, includeRerank, n.Collection, denseName, sparseName)
 	if err != nil {
 		return nil, err
 	}
@@ -1215,7 +1252,7 @@ func (e *Executor) doInsertBulk(n *ast.InsertBulkStmt) (*ExecResponse, error) {
 		payloads = append(payloads, payload)
 	}
 
-	created, err := e.ensureCollectionForInsert(ctx, n.Collection, n.Model, n.Hybrid)
+	created, err := e.ensureCollectionForInsert(ctx, n.Collection, n.Model, n.Hybrid, n.DenseVector, n.SparseVector)
 	if err != nil {
 		return nil, err
 	}
@@ -1223,12 +1260,26 @@ func (e *Executor) doInsertBulk(n *ast.InsertBulkStmt) (*ExecResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	includeRerank, err := e.collectionHasRerankVector(ctx, n.Collection)
+	topo, err := e.resolveVectorTopology(ctx, n.Collection)
+	includeRerank := topo != nil && topo.RerankVector != nil
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect collection: %w", err)
 	}
 
-	vectorsBatch, err := e.buildInsertVectorsBatch(ctx, texts, model, sparseModel, useHybrid, includeRerank, n.Collection)
+	denseName, sparseName := denseVectorName, sparseVectorName
+	if topo != nil && topo.DenseVector != nil && *topo.DenseVector != "" {
+		denseName = *topo.DenseVector
+	}
+	if topo != nil && topo.SparseVector != nil && *topo.SparseVector != "" {
+		sparseName = *topo.SparseVector
+	}
+	if n.DenseVector != nil {
+		denseName = *n.DenseVector
+	}
+	if n.SparseVector != nil {
+		sparseName = *n.SparseVector
+	}
+	vectorsBatch, err := e.buildInsertVectorsBatch(ctx, texts, model, sparseModel, useHybrid, includeRerank, n.Collection, denseName, sparseName)
 	if err != nil {
 		return nil, err
 	}
@@ -1411,7 +1462,8 @@ func (e *Executor) doSearch(n *ast.SearchStmt) (*ExecResponse, error) {
 		return nil, err
 	}
 
-	hasRerankVector, err := e.collectionHasRerankVector(ctx, n.Collection)
+	topo, err := e.resolveVectorTopology(ctx, n.Collection)
+	hasRerankVector := topo != nil && topo.RerankVector != nil
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect collection: %w", err)
 	}
@@ -1423,7 +1475,20 @@ func (e *Executor) doSearch(n *ast.SearchStmt) (*ExecResponse, error) {
 
 	fetchLimit := effectiveSearchLimit(limit, n.Rerank)
 
-	searchReq, err := e.buildSearchRequest(ctx, n, model, sparseModel, hasRerankVector, fetchLimit)
+	denseName, sparseName := denseVectorName, sparseVectorName
+	if topo != nil && topo.DenseVector != nil && *topo.DenseVector != "" {
+		denseName = *topo.DenseVector
+	}
+	if topo != nil && topo.SparseVector != nil && *topo.SparseVector != "" {
+		sparseName = *topo.SparseVector
+	}
+	if n.DenseVector != nil {
+		denseName = *n.DenseVector
+	}
+	if n.SparseVector != nil {
+		sparseName = *n.SparseVector
+	}
+	searchReq, err := e.buildSearchRequest(ctx, n, model, sparseModel, hasRerankVector, fetchLimit, denseName, sparseName)
 	if err != nil {
 		return nil, err
 	}
@@ -1508,7 +1573,7 @@ func validateSearchMMRUsage(n *ast.SearchStmt) error {
 	return nil
 }
 
-func buildRecommendRequest(n *ast.RecommendStmt) (*qdrant.QueryPoints, error) {
+func buildRecommendRequest(n *ast.RecommendStmt, usingName string) (*qdrant.QueryPoints, error) {
 	if hasMMR(n.WithClause) {
 		return nil, fmt.Errorf("MMR is supported only for SEARCH statements")
 	}
@@ -1528,8 +1593,8 @@ func buildRecommendRequest(n *ast.RecommendStmt) (*qdrant.QueryPoints, error) {
 		})
 	}
 
-	using := denseVectorName
-	if n.Using != nil && *n.Using != "" {
+	using := usingName
+	if n.Using != nil {
 		using = *n.Using
 	}
 
@@ -1578,7 +1643,15 @@ func (e *Executor) doRecommend(n *ast.RecommendStmt) (*ExecResponse, error) {
 		return nil, fmt.Errorf("collection '%s' does not exist", n.Collection)
 	}
 
-	req, err := buildRecommendRequest(n)
+	topo, err := e.resolveVectorTopology(ctx, n.Collection)
+	denseName := denseVectorName
+	if topo != nil && topo.DenseVector != nil && *topo.DenseVector != "" {
+		denseName = *topo.DenseVector
+	}
+	if n.Using != nil {
+		denseName = *n.Using
+	}
+	req, err := buildRecommendRequest(n, denseName)
 	if err != nil {
 		return nil, err
 	}
@@ -1657,7 +1730,15 @@ func (e *Executor) doUpdateVector(n *ast.UpdateVectorStmt) (*ExecResponse, error
 		return nil, fmt.Errorf("collection '%s' does not exist", n.Collection)
 	}
 
-	request, err := e.buildUpdateVectorRequest(ctx, n)
+	topo, err := e.resolveVectorTopology(ctx, n.Collection)
+	denseName := denseVectorName
+	if topo != nil && topo.DenseVector != nil && *topo.DenseVector != "" {
+		denseName = *topo.DenseVector
+	}
+	if n.VectorName != nil {
+		denseName = *n.VectorName
+	}
+	request, err := e.buildUpdateVectorRequest(ctx, n, denseName)
 	if err != nil {
 		return nil, err
 	}
@@ -1998,7 +2079,7 @@ func toLowerStr(s string) string {
 	return string(result)
 }
 
-func (e *Executor) ensureCollectionForInsert(ctx context.Context, collection string, model *string, requestedHybrid bool) (bool, error) {
+func (e *Executor) ensureCollectionForInsert(ctx context.Context, collection string, model *string, requestedHybrid bool, explicitDense, explicitSparse *string) (bool, error) {
 	exists, err := e.client.CollectionExists(ctx, collection)
 	if err != nil {
 		return false, fmt.Errorf("failed to check collection: %w", err)
@@ -2011,13 +2092,24 @@ func (e *Executor) ensureCollectionForInsert(ctx context.Context, collection str
 	if err != nil {
 		return false, err
 	}
+	denseName := denseVectorName
+	if explicitDense != nil {
+		denseName = *explicitDense
+	}
+	vectorsMap := map[string]*qdrant.VectorParams{
+		denseName: collectionVectorParams(denseSize, false)[denseVectorName],
+	}
 	createReq := &qdrant.CreateCollection{
 		CollectionName: collection,
-		VectorsConfig:  qdrant.NewVectorsConfigMap(collectionVectorParams(denseSize, false)),
+		VectorsConfig:  qdrant.NewVectorsConfigMap(vectorsMap),
 	}
 	if requestedHybrid {
+		sparseName := sparseVectorName
+		if explicitSparse != nil {
+			sparseName = *explicitSparse
+		}
 		createReq.SparseVectorsConfig = qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
-			sparseVectorName: {Modifier: qdrant.Modifier_Idf.Enum()},
+			sparseName: {Modifier: qdrant.Modifier_Idf.Enum()},
 		})
 	}
 	if err := e.client.CreateCollection(ctx, createReq); err != nil {
@@ -2029,7 +2121,7 @@ func (e *Executor) ensureCollectionForInsert(ctx context.Context, collection str
 	return true, nil
 }
 
-func (e *Executor) buildInsertVectors(ctx context.Context, text, denseModel, sparseModel string, includeSparse, includeRerank bool, collection string) (map[string]*qdrant.Vector, error) {
+func (e *Executor) buildInsertVectors(ctx context.Context, text, denseModel, sparseModel string, includeSparse, includeRerank bool, collection string, denseName, sparseName string) (map[string]*qdrant.Vector, error) {
 	if e.usesLocalEmbeddings() {
 		embedClient, err := e.embeddingClient(denseModel)
 		if err != nil {
@@ -2042,10 +2134,10 @@ func (e *Executor) buildInsertVectors(ctx context.Context, text, denseModel, spa
 		}
 
 		vectors := map[string]*qdrant.Vector{
-			denseVectorName: qdrant.NewVectorDense(denseVector),
+			denseName: qdrant.NewVectorDense(denseVector),
 		}
 		if includeSparse {
-			vectors[sparseVectorName] = qdrant.NewVectorSparse(sparseVec.Indices, sparseVec.Values)
+			vectors[sparseName] = qdrant.NewVectorSparse(sparseVec.Indices, sparseVec.Values)
 		}
 		if includeRerank {
 			return nil, fmt.Errorf("local/external rerank vectors are not implemented yet")
@@ -2054,13 +2146,13 @@ func (e *Executor) buildInsertVectors(ctx context.Context, text, denseModel, spa
 	}
 
 	vectors := map[string]*qdrant.Vector{
-		denseVectorName: qdrant.NewVectorDocument(&qdrant.Document{
+		denseName: qdrant.NewVectorDocument(&qdrant.Document{
 			Text:  text,
 			Model: denseModel,
 		}),
 	}
 	if includeSparse {
-		vectors[sparseVectorName] = qdrant.NewVectorDocument(&qdrant.Document{
+		vectors[sparseName] = qdrant.NewVectorDocument(&qdrant.Document{
 			Text:  text,
 			Model: sparseModel,
 		})
@@ -2074,7 +2166,7 @@ func (e *Executor) buildInsertVectors(ctx context.Context, text, denseModel, spa
 	return vectors, nil
 }
 
-func (e *Executor) buildInsertVectorsBatch(ctx context.Context, texts []string, denseModel, sparseModel string, includeSparse, includeRerank bool, collection string) ([]map[string]*qdrant.Vector, error) {
+func (e *Executor) buildInsertVectorsBatch(ctx context.Context, texts []string, denseModel, sparseModel string, includeSparse, includeRerank bool, collection string, denseName, sparseName string) ([]map[string]*qdrant.Vector, error) {
 	if e.usesLocalEmbeddings() {
 		embedClient, err := e.embeddingClient(denseModel)
 		if err != nil {
@@ -2105,7 +2197,7 @@ func (e *Executor) buildInsertVectorsBatch(ctx context.Context, texts []string, 
 
 		for idx := range texts {
 			vectors := map[string]*qdrant.Vector{
-				denseVectorName: qdrant.NewVectorDense(denseVectors[idx]),
+				denseName: qdrant.NewVectorDense(denseVectors[idx]),
 			}
 			if includeSparse {
 				sv := sparseVectors[idx]
@@ -2118,7 +2210,7 @@ func (e *Executor) buildInsertVectorsBatch(ctx context.Context, texts []string, 
 
 	batch := make([]map[string]*qdrant.Vector, 0, len(texts))
 	for _, text := range texts {
-		vectors, err := e.buildInsertVectors(ctx, text, denseModel, sparseModel, includeSparse, includeRerank, collection)
+		vectors, err := e.buildInsertVectors(ctx, text, denseModel, sparseModel, includeSparse, includeRerank, collection, denseName, sparseName)
 		if err != nil {
 			return nil, err
 		}
@@ -2127,7 +2219,7 @@ func (e *Executor) buildInsertVectorsBatch(ctx context.Context, texts []string, 
 	return batch, nil
 }
 
-func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, denseModel, sparseModel string, hasRerankVector bool, limit uint64) (*qdrant.QueryPoints, error) {
+func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, denseModel, sparseModel string, hasRerankVector bool, limit uint64, denseName, sparseName string) (*qdrant.QueryPoints, error) {
 	params := searchParamsFromWithClause(n.WithClause)
 
 	if n.SparseOnly {
@@ -2144,7 +2236,7 @@ func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, de
 			}
 			sparsePrefetch := &qdrant.PrefetchQuery{
 				Query:  qdrant.NewQueryDocument(&qdrant.Document{Text: n.QueryText, Model: sparseModel}),
-				Using:  qdrant.PtrOf(sparseVectorName),
+				Using:  qdrant.PtrOf(sparseName),
 				Limit:  qdrant.PtrOf(limit * rerankPrefetchFactor),
 				Params: params,
 			}
@@ -2165,7 +2257,7 @@ func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, de
 		return &qdrant.QueryPoints{
 			CollectionName: n.Collection,
 			Query:          query,
-			Using:          qdrant.PtrOf(sparseVectorName),
+			Using:          qdrant.PtrOf(sparseName),
 			Limit:          qdrant.PtrOf(limit),
 			Params:         params,
 		}, nil
@@ -2182,7 +2274,7 @@ func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, de
 		if n.RerankModel != nil && *n.RerankModel != "" {
 			rerankModel = *n.RerankModel
 		}
-		prefetch, err := e.buildSearchPrefetches(ctx, n.QueryText, denseModel, sparseModel, limit, params, nil)
+		prefetch, err := e.buildSearchPrefetches(ctx, n.QueryText, denseModel, sparseModel, limit, params, nil, denseName, sparseName)
 		if err != nil {
 			return nil, err
 		}
@@ -2190,7 +2282,7 @@ func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, de
 	}
 
 	if n.Hybrid {
-		prefetch, err := e.buildSearchPrefetches(ctx, n.QueryText, denseModel, sparseModel, limit, params, n.WithClause)
+		prefetch, err := e.buildSearchPrefetches(ctx, n.QueryText, denseModel, sparseModel, limit, params, n.WithClause, denseName, sparseName)
 		if err != nil {
 			return nil, err
 		}
@@ -2242,13 +2334,13 @@ func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, de
 	return &qdrant.QueryPoints{
 		CollectionName: n.Collection,
 		Query:          query,
-		Using:          qdrant.PtrOf(denseVectorName),
+		Using:          qdrant.PtrOf(denseName),
 		Limit:          qdrant.PtrOf(limit),
 		Params:         params,
 	}, nil
 }
 
-func (e *Executor) buildSearchPrefetches(ctx context.Context, queryText, denseModel, sparseModel string, limit uint64, params *qdrant.SearchParams, withClause *ast.SearchWith) ([]*qdrant.PrefetchQuery, error) {
+func (e *Executor) buildSearchPrefetches(ctx context.Context, queryText, denseModel, sparseModel string, limit uint64, params *qdrant.SearchParams, withClause *ast.SearchWith, denseName, sparseName string) ([]*qdrant.PrefetchQuery, error) {
 	denseQuery := qdrant.NewQueryDocument(&qdrant.Document{
 		Text:  queryText,
 		Model: denseModel,
@@ -2289,13 +2381,13 @@ func (e *Executor) buildSearchPrefetches(ctx context.Context, queryText, denseMo
 	return []*qdrant.PrefetchQuery{
 		{
 			Query:  sparseQuery,
-			Using:  qdrant.PtrOf(sparseVectorName),
+			Using:  qdrant.PtrOf(sparseName),
 			Limit:  qdrant.PtrOf(limit),
 			Params: params,
 		},
 		{
 			Query:  denseQuery,
-			Using:  qdrant.PtrOf(denseVectorName),
+			Using:  qdrant.PtrOf(denseName),
 			Limit:  qdrant.PtrOf(limit),
 			Params: params,
 		},
@@ -2324,7 +2416,7 @@ func buildGroupSearchRequest(n *ast.SearchStmt, req *qdrant.QueryPoints, filter 
 	}
 }
 
-func (e *Executor) buildUpdateVectorRequest(ctx context.Context, n *ast.UpdateVectorStmt) (*qdrant.UpdatePointVectors, error) {
+func (e *Executor) buildUpdateVectorRequest(ctx context.Context, n *ast.UpdateVectorStmt, vectorName string) (*qdrant.UpdatePointVectors, error) {
 	info, err := e.client.GetCollectionInfo(ctx, n.Collection)
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect collection: %w", err)
@@ -2333,8 +2425,12 @@ func (e *Executor) buildUpdateVectorRequest(ctx context.Context, n *ast.UpdateVe
 	wait := true
 	vectors := qdrant.NewVectors(n.Vector...)
 	if info.GetConfig().GetParams().GetVectorsConfig().GetParamsMap() != nil {
+		name := vectorName
+		if n.VectorName != nil {
+			name = *n.VectorName
+		}
 		vectors = qdrant.NewVectorsMap(map[string]*qdrant.Vector{
-			denseVectorName: qdrant.NewVectorDense(n.Vector),
+			name: qdrant.NewVectorDense(n.Vector),
 		})
 	}
 
@@ -3019,7 +3115,7 @@ func loadSavedConfigAndClient() (*config.Config, *qdrant.Client, error) {
 		return nil, nil, err
 	}
 
-	client, err := newClientFromURL(cfg.URL, cfg.Secret)
+	client, err := newClientFromURL(cfg.URL, cfg.Secret, cfg.NoVerify, cfg.CACert)
 	if err != nil {
 		return nil, nil, fmt.Errorf("connection failed: %w", err)
 	}
@@ -3251,6 +3347,8 @@ func NewConnectCmd(out *output.Outputter) *cobra.Command {
 			embeddingKey, _ := cmd.Flags().GetString("embedding-key")
 			embeddingModel, _ := cmd.Flags().GetString("embedding-model")
 			embeddingDimension, _ := cmd.Flags().GetInt("embedding-dimension")
+			noVerify, _ := cmd.Flags().GetBool("no-verify")
+			caCert, _ := cmd.Flags().GetString("ca-cert")
 
 			if url == "" {
 				return commandError(out, mode, "connect", "", fmt.Errorf("--url is required"))
@@ -3294,7 +3392,7 @@ func NewConnectCmd(out *output.Outputter) *cobra.Command {
 				out.Print(fmt.Sprintf("Connecting to %s...", url))
 			}
 
-			client, err := newClientFromURL(url, secret)
+			client, err := newClientFromURL(url, secret, noVerify, caCert)
 			if err != nil {
 				return commandError(out, mode, "connect", "", fmt.Errorf("connection failed: %w", err))
 			}
@@ -3312,6 +3410,8 @@ func NewConnectCmd(out *output.Outputter) *cobra.Command {
 				EmbeddingAPIKey:    embeddingKey,
 				EmbeddingModel:     embeddingModel,
 				EmbeddingDimension: embeddingDimension,
+				NoVerify:           noVerify,
+				CACert:             caCert,
 			}
 
 			// Validate embedding endpoint is reachable in local/external mode
@@ -3633,4 +3733,58 @@ func NewVersionCmd(out *output.Outputter) *cobra.Command {
 	}
 	addOutputFlags(cmd)
 	return cmd
+}
+
+type VectorTopology struct {
+	DenseVector  *string
+	SparseVector *string
+	RerankVector *string
+}
+
+func (e *Executor) resolveVectorTopology(ctx context.Context, collection string) (*VectorTopology, error) {
+	info, err := e.client.GetCollectionInfo(ctx, collection)
+	if err != nil {
+		return nil, err
+	}
+	topo := &VectorTopology{}
+	config := info.GetConfig()
+	if config == nil {
+		return topo, nil
+	}
+	params := config.GetParams()
+	if params == nil {
+		return topo, nil
+	}
+
+	vectorsConfig := params.GetVectorsConfig()
+	if vectorsConfig != nil {
+		if paramsMap := vectorsConfig.GetParamsMap(); paramsMap != nil {
+			for vname := range paramsMap.GetMap() {
+				if vname == denseVectorName {
+					topo.DenseVector = qdrant.PtrOf(denseVectorName)
+				} else if vname == rerankVectorName {
+					topo.RerankVector = qdrant.PtrOf(rerankVectorName)
+				} else if topo.DenseVector == nil || *topo.DenseVector == "" {
+					v := vname
+					topo.DenseVector = &v
+				}
+			}
+		} else if vectorsConfig.GetParams() != nil {
+			topo.DenseVector = qdrant.PtrOf("")
+		}
+	}
+
+	sparseVectorsConfig := params.GetSparseVectorsConfig()
+	if sparseVectorsConfig != nil {
+		for vname := range sparseVectorsConfig.GetMap() {
+			if vname == sparseVectorName {
+				topo.SparseVector = qdrant.PtrOf(sparseVectorName)
+			} else if topo.SparseVector == nil || *topo.SparseVector == "" {
+				v := vname
+				topo.SparseVector = &v
+			}
+		}
+	}
+
+	return topo, nil
 }
