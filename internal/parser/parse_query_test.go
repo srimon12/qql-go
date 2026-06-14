@@ -123,3 +123,113 @@ func TestParseQueryErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestParseQueryPrefetch(t *testing.T) {
+	input := `QUERY 'search' FROM docs LIMIT 10
+  PREFETCH (
+    QUERY 'search' USING 'dense' LIMIT 100 WHERE category = 'tech' SCORE THRESHOLD 0.8,
+    QUERY 'search' USING 'sparse' LIMIT 100 WITH { exact: true }
+  )
+  FUSION RRF WITH { rrf_k: 10, rrf_weights: [0.7, 0.3] }`
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	assert.Equal(t, "docs", stmt.Collection)
+	assert.Equal(t, 10, stmt.Limit)
+	require.Len(t, stmt.Prefetches, 2)
+	assert.Equal(t, "dense", *stmt.Prefetches[0].Using)
+	assert.Equal(t, 100, stmt.Prefetches[0].Limit)
+	require.NotNil(t, stmt.Prefetches[0].ScoreThreshold)
+	assert.Equal(t, float64(0.8), *stmt.Prefetches[0].ScoreThreshold)
+	require.NotNil(t, stmt.Prefetches[0].QueryFilter)
+
+	assert.Equal(t, "sparse", *stmt.Prefetches[1].Using)
+	assert.Equal(t, 100, stmt.Prefetches[1].Limit)
+	require.NotNil(t, stmt.Prefetches[1].WithClause)
+	assert.True(t, stmt.Prefetches[1].WithClause.Exact)
+
+	require.NotNil(t, stmt.FusionType)
+	assert.Equal(t, "RRF", *stmt.FusionType)
+	require.NotNil(t, stmt.WithClause)
+	require.NotNil(t, stmt.WithClause.RrfK)
+	assert.Equal(t, 10, *stmt.WithClause.RrfK)
+	require.Len(t, stmt.WithClause.RrfWeights, 2)
+	assert.Equal(t, float32(0.7), stmt.WithClause.RrfWeights[0])
+	assert.Equal(t, float32(0.3), stmt.WithClause.RrfWeights[1])
+}
+
+func TestParseQueryPrefetchEdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			"PREFETCH + USING HYBRID mutual exclusion",
+			"QUERY 'test' FROM docs USING HYBRID PREFETCH (QUERY 'test' USING 'dense')",
+			true,
+		},
+		{
+			"FUSION without PREFETCH or USING HYBRID",
+			"QUERY 'test' FROM docs FUSION RRF",
+			true,
+		},
+		{
+			"Empty PREFETCH block",
+			"QUERY 'test' FROM docs PREFETCH ()",
+			true,
+		},
+		{
+			"Duplicate FUSION clause",
+			"QUERY 'test' FROM docs USING HYBRID FUSION RRF FUSION DBSF",
+			true,
+		},
+		{
+			"Nested prefetches and ID query",
+			"QUERY 'test' FROM docs PREFETCH (PREFETCH (QUERY 123 USING 'dense'), QUERY 'text' USING 'sparse')",
+			false,
+		},
+		{
+			"FUSION DBSF",
+			"QUERY 'test' FROM docs USING HYBRID FUSION DBSF",
+			false,
+		},
+		{
+			"Prefetch with LOOKUP FROM",
+			"QUERY 'test' FROM docs PREFETCH (QUERY 123 USING 'dense' LOOKUP FROM other_collection)",
+			false,
+		},
+		{
+			"Prefetch with RECOMMEND mode",
+			"QUERY 'test' FROM docs PREFETCH (QUERY RECOMMEND POSITIVE IDS (1, 2) NEGATIVE IDS (3) USING 'dense')",
+			false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.input)
+			if err != nil && tt.wantErr {
+				return
+			}
+			require.NoError(t, err)
+
+			p := NewParser()
+			_, err = p.Parse(tokens)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

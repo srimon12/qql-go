@@ -167,40 +167,4 @@ func hasMMR(withClause *ast.SearchWith) bool {
 	return withClause != nil && (withClause.MmrDiversity != nil || withClause.MmrCandidates != nil)
 }
 
-func searchParamsFromWithClause(withClause *ast.SearchWith) *qdrant.SearchParams {
-	if withClause == nil {
-		return nil
-	}
 
-	params := &qdrant.SearchParams{}
-	if withClause.HnswEf > 0 {
-		params.HnswEf = qdrant.PtrOf(uint64(withClause.HnswEf))
-	}
-	if withClause.Exact {
-		params.Exact = qdrant.PtrOf(true)
-	}
-	if withClause.Acorn {
-		params.Acorn = &qdrant.AcornSearchParams{Enable: qdrant.PtrOf(true)}
-	}
-	if withClause.IndexedOnly {
-		params.IndexedOnly = qdrant.PtrOf(true)
-	}
-	if withClause.Quantization != nil {
-		params.Quantization = &qdrant.QuantizationSearchParams{}
-		if withClause.Quantization.Ignore != nil {
-			params.Quantization.Ignore = qdrant.PtrOf(*withClause.Quantization.Ignore)
-		}
-		if withClause.Quantization.Rescore != nil {
-			params.Quantization.Rescore = qdrant.PtrOf(*withClause.Quantization.Rescore)
-		}
-		if withClause.Quantization.Oversampling != nil {
-			params.Quantization.Oversampling = qdrant.PtrOf(*withClause.Quantization.Oversampling)
-		}
-	}
-
-	if params.HnswEf == nil && params.Exact == nil && params.Acorn == nil && params.IndexedOnly == nil && params.Quantization == nil {
-		return nil
-	}
-
-	return params
-}

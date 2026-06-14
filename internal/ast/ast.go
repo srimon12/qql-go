@@ -8,6 +8,8 @@ type SearchWith struct {
 	Quantization  *QuantizationSearchWith
 	MmrDiversity  *float64
 	MmrCandidates *int
+	RrfK          *int
+	RrfWeights    []float32
 }
 
 type FilterExpr interface {

@@ -371,6 +371,8 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 	var quantization *ast.QuantizationSearchWith
 	var mmrDiversity *float64
 	var mmrCandidates *int
+	var rrfK *int
+	var rrfWeights []float32
 	var err error
 	for p.peek().Kind != lexer.TokenKindRbrace {
 		keyTok := p.peek()
@@ -443,8 +445,50 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 				return nil, errors.NewQQLSyntaxError("mmr_candidates must be a positive integer, got '"+intTok.Value+"'", intTok.Pos)
 			}
 			mmrCandidates = &candidates
+		case "rrf_k":
+			intTok, err := p.expect(lexer.TokenKindInteger)
+			if err != nil {
+				return nil, err
+			}
+			k, err := parseIntToken(intTok)
+			if err != nil {
+				return nil, err
+			}
+			if k <= 0 {
+				return nil, errors.NewQQLSyntaxError("rrf_k must be a positive integer, got '"+intTok.Value+"'", intTok.Pos)
+			}
+			rrfK = &k
+		case "rrf_weights":
+			if _, err := p.expect(lexer.TokenKindLbracket); err != nil {
+				return nil, err
+			}
+			for p.peek().Kind != lexer.TokenKindRbracket {
+				valTok, err := p.parseNumber()
+				if err != nil {
+					return nil, err
+				}
+				switch typed := valTok.(type) {
+				case int:
+					rrfWeights = append(rrfWeights, float32(typed))
+				case float64:
+					rrfWeights = append(rrfWeights, float32(typed))
+				default:
+					return nil, errors.NewQQLSyntaxError("rrf_weights must contain numeric values", keyTok.Pos)
+				}
+				if p.peek().Kind == lexer.TokenKindComma {
+					p.advance()
+					if p.peek().Kind == lexer.TokenKindRbracket {
+						break
+					}
+				} else {
+					break
+				}
+			}
+			if _, err := p.expect(lexer.TokenKindRbracket); err != nil {
+				return nil, err
+			}
 		default:
-			return nil, errors.NewQQLSyntaxError("Unknown WITH parameter '"+key+"'. Expected: hnsw_ef, exact, acorn, indexed_only, quantization, mmr_diversity, mmr_candidates", keyTok.Pos)
+			return nil, errors.NewQQLSyntaxError("Unknown WITH parameter '"+key+"'. Expected: hnsw_ef, exact, acorn, indexed_only, quantization, mmr_diversity, mmr_candidates, rrf_k, rrf_weights", keyTok.Pos)
 		}
 		if p.peek().Kind == lexer.TokenKindComma {
 			p.advance()
@@ -466,6 +510,8 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 		Quantization:  quantization,
 		MmrDiversity:  mmrDiversity,
 		MmrCandidates: mmrCandidates,
+		RrfK:          rrfK,
+		RrfWeights:    rrfWeights,
 	}, nil
 }
 
@@ -574,5 +620,11 @@ func mergeSearchWith(dst **ast.SearchWith, src *ast.SearchWith) {
 	}
 	if src.MmrCandidates != nil {
 		current.MmrCandidates = src.MmrCandidates
+	}
+	if src.RrfK != nil {
+		current.RrfK = src.RrfK
+	}
+	if len(src.RrfWeights) > 0 {
+		current.RrfWeights = src.RrfWeights
 	}
 }

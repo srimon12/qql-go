@@ -179,6 +179,28 @@ const (
 	QueryTypeHybrid
 )
 
+type Prefetch struct {
+	Prefetches     []*Prefetch
+	Type           QueryType
+	QueryText      *string
+	QueryID        any
+	Mode           QueryMode
+	PositiveIDs    []any
+	NegativeIDs    []any
+	ContextPairs   []ContextPair
+	Target         any
+	Limit          int
+	Strategy       *string
+	QueryFilter    FilterExpr
+	ScoreThreshold *float64
+	GroupBy        *string
+	GroupSize      *int
+	WithClause     *SearchWith
+	LookupFrom     string
+	LookupVector   *string
+	Using          *string
+}
+
 type QueryStmt struct {
 	Collection string
 	Mode       QueryMode
@@ -210,6 +232,10 @@ type QueryStmt struct {
 	LookupVector   *string
 	Using          *string
 	Model          *string
+
+	// Prefetch DAG
+	Prefetches []*Prefetch
+	FusionType *string
 
 	// Legacy flags mapped to pipeline logic
 	Hybrid      bool

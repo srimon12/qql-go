@@ -15,10 +15,12 @@ type Embedder interface {
 // QueryState represents the transient state as a query traverses the execution DAG.
 type QueryState struct {
 	// --- Query construction (set by embed nodes) ---
-	QueryText   string
-	Prefetches  []*qdrant.PrefetchQuery
-	TargetQuery *qdrant.Query
-	Params      *qdrant.SearchParams
+	QueryText        string
+	Prefetches       []*qdrant.PrefetchQuery
+	ManualPrefetches []*qdrant.PrefetchQuery
+	TargetQuery      *qdrant.Query
+	Params           *qdrant.SearchParams
+	FusionConfig     *qdrant.Rrf
 
 	// --- Embedding strategy ---
 	HasMMR            bool
@@ -73,10 +75,15 @@ func (p *QueryPipeline) Execute(ctx context.Context, state *QueryState) error {
 // BuildFlatRequest assembles a complete QueryPoints request from the accumulated state.
 // Call this after Execute().
 func (p *QueryPipeline) BuildFlatRequest(state *QueryState) *qdrant.QueryPoints {
+	prefetches := state.Prefetches
+	if len(state.ManualPrefetches) > 0 {
+		prefetches = append(prefetches, state.ManualPrefetches...)
+	}
+
 	req := &qdrant.QueryPoints{
 		CollectionName: state.CollectionName,
 		Query:          state.TargetQuery,
-		Prefetch:       state.Prefetches,
+		Prefetch:       prefetches,
 		Limit:          &state.Limit,
 		Params:         state.Params,
 		Filter:         state.QdrantFilter,

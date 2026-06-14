@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/qdrant/go-client/qdrant"
+	"github.com/srimon12/qql-go/internal/ast"
+	"github.com/srimon12/qql-go/internal/filters"
 )
 
 type DenseEmbedNode struct {
@@ -114,6 +116,11 @@ type FusionNode struct {
 }
 
 func (n *FusionNode) Execute(ctx context.Context, state *QueryState) error {
+	if n.Mode == "rrf" && state.FusionConfig != nil {
+		state.TargetQuery = qdrant.NewQueryRRF(state.FusionConfig)
+		return nil
+	}
+
 	switch n.Mode {
 	case "rrf":
 		state.TargetQuery = qdrant.NewQueryFusion(qdrant.Fusion_RRF)
@@ -301,51 +308,214 @@ func isUUID(u string) bool {
 	return true
 }
 
-func buildVectorInput(ctx context.Context, state *QueryState, val any) (*qdrant.VectorInput, error) {
+func buildPointID(val any) (*qdrant.PointId, error) {
 	switch v := val.(type) {
 	case string:
 		if num, err := strconv.ParseUint(v, 10, 64); err == nil {
-			return qdrant.NewVectorInputID(qdrant.NewIDNum(num)), nil
+			return qdrant.NewIDNum(num), nil
 		}
 		if isUUID(v) {
-			return qdrant.NewVectorInputID(qdrant.NewIDUUID(v)), nil
+			return qdrant.NewIDUUID(v), nil
 		}
-		if state.LocalEmbed {
-			if state.Embedder == nil {
-				return nil, fmt.Errorf("local embedding requested but no Embedder provided")
-			}
-			denseVector, err := state.Embedder.EmbedDense(ctx, v, state.DenseModel)
-			if err != nil {
-				return nil, fmt.Errorf("failed to embed target query: %w", err)
-			}
-			return qdrant.NewVectorInputDense(denseVector), nil
-		}
-		return qdrant.NewVectorInputDocument(&qdrant.Document{
-			Text:    v,
-			Model:   state.DenseModel,
-			Options: buildDocumentOptions(state.CloudModelOptions),
-		}), nil
+		return nil, fmt.Errorf("string is neither valid uint64 nor UUID")
 	case int:
 		if v < 0 {
 			return nil, fmt.Errorf("unsupported vector input type: negative integer")
 		}
-		return qdrant.NewVectorInputID(qdrant.NewIDNum(uint64(v))), nil
+		return qdrant.NewIDNum(uint64(v)), nil
 	case int64:
 		if v < 0 {
 			return nil, fmt.Errorf("unsupported vector input type: negative integer")
 		}
-		return qdrant.NewVectorInputID(qdrant.NewIDNum(uint64(v))), nil
+		return qdrant.NewIDNum(uint64(v)), nil
 	case uint64:
-		return qdrant.NewVectorInputID(qdrant.NewIDNum(v)), nil
+		return qdrant.NewIDNum(v), nil
 	case float64:
 		// Prevent precision loss silently passing the check
 		if v < 0 || v > float64(1<<53) || v != float64(uint64(v)) {
 			return nil, fmt.Errorf("unsupported vector input type: non-integer or oversized float")
 		}
-		return qdrant.NewVectorInputID(qdrant.NewIDNum(uint64(v))), nil
+		return qdrant.NewIDNum(uint64(v)), nil
 	case []float32: // In case of raw vectors
-		return qdrant.NewVectorInputDense(v), nil
+		return nil, fmt.Errorf("cannot use raw vector as PointId")
 	default:
 		return nil, fmt.Errorf("unsupported vector input type: %T", val)
 	}
+}
+
+func buildVectorInput(ctx context.Context, state *QueryState, val any) (*qdrant.VectorInput, error) {
+	if s, ok := val.(string); ok && !isUUID(s) {
+		if _, err := strconv.ParseUint(s, 10, 64); err != nil {
+			if state.LocalEmbed {
+				if state.Embedder == nil {
+					return nil, fmt.Errorf("local embedding requested but no Embedder provided")
+				}
+				denseVector, err := state.Embedder.EmbedDense(ctx, s, state.DenseModel)
+				if err != nil {
+					return nil, fmt.Errorf("failed to embed target query: %w", err)
+				}
+				return qdrant.NewVectorInputDense(denseVector), nil
+			}
+			return qdrant.NewVectorInputDocument(&qdrant.Document{
+				Text:    s,
+				Model:   state.DenseModel,
+				Options: buildDocumentOptions(state.CloudModelOptions),
+			}), nil
+		}
+	}
+	if v, ok := val.([]float32); ok {
+		return qdrant.NewVectorInputDense(v), nil
+	}
+	pid, err := buildPointID(val)
+	if err != nil {
+		return nil, err
+	}
+	return qdrant.NewVectorInputID(pid), nil
+}
+
+type PrefetchNode struct {
+	ASTPrefetches []*ast.Prefetch
+}
+
+func (n *PrefetchNode) Execute(ctx context.Context, state *QueryState) error {
+	manual, err := n.buildPrefetches(ctx, state, n.ASTPrefetches)
+	if err != nil {
+		return err
+	}
+	state.ManualPrefetches = manual
+	return nil
+}
+
+func (n *PrefetchNode) buildPrefetches(ctx context.Context, state *QueryState, astPrefs []*ast.Prefetch) ([]*qdrant.PrefetchQuery, error) {
+	if len(astPrefs) == 0 {
+		return nil, nil
+	}
+
+	var results []*qdrant.PrefetchQuery
+	fc := filters.NewFilterConverter()
+
+	for _, ap := range astPrefs {
+		pq := &qdrant.PrefetchQuery{}
+		
+		if ap.Using != nil {
+			pq.Using = qdrant.PtrOf(*ap.Using)
+		}
+		if ap.Limit > 0 {
+			pq.Limit = qdrant.PtrOf(uint64(ap.Limit))
+		}
+		if ap.ScoreThreshold != nil {
+			pq.ScoreThreshold = qdrant.PtrOf(float32(*ap.ScoreThreshold))
+		}
+		if ap.LookupFrom != "" {
+			loc := &qdrant.LookupLocation{
+				CollectionName: ap.LookupFrom,
+			}
+			if ap.LookupVector != nil {
+				loc.VectorName = qdrant.PtrOf(*ap.LookupVector)
+			}
+			pq.LookupFrom = loc
+		}
+		if ap.QueryFilter != nil {
+			filter, err := fc.BuildFilter(ap.QueryFilter)
+			if err != nil {
+				return nil, fmt.Errorf("failed to build filter for prefetch: %w", err)
+			}
+			pq.Filter = filter
+		}
+
+		if ap.QueryText != nil {
+			// Determine if it's dense or sparse based on Using (default to dense if not "sparse")
+			isSparse := ap.Type == ast.QueryTypeSparse
+			if isSparse {
+				if state.LocalEmbed {
+					indices, values, err := state.Embedder.EmbedSparse(ctx, *ap.QueryText)
+					if err != nil {
+						return nil, fmt.Errorf("failed to embed sparse prefetch: %w", err)
+					}
+					pq.Query = qdrant.NewQuerySparse(indices, values)
+				} else {
+					doc := &qdrant.Document{
+						Text:    *ap.QueryText,
+						Options: buildDocumentOptions(state.CloudModelOptions),
+					}
+					pq.Query = qdrant.NewQueryDocument(doc)
+				}
+			} else {
+				if state.LocalEmbed {
+					denseVector, err := state.Embedder.EmbedDense(ctx, *ap.QueryText, state.DenseModel)
+					if err != nil {
+						return nil, fmt.Errorf("failed to embed dense prefetch: %w", err)
+					}
+					pq.Query = qdrant.NewQueryDense(denseVector)
+				} else {
+					doc := &qdrant.Document{
+						Text:    *ap.QueryText,
+						Options: buildDocumentOptions(state.CloudModelOptions),
+					}
+					pq.Query = qdrant.NewQueryDocument(doc)
+				}
+			}
+		} else if ap.QueryID != nil {
+			pid, err := buildPointID(ap.QueryID)
+			if err != nil {
+				return nil, fmt.Errorf("invalid prefetch query id: %w", err)
+			}
+			pq.Query = qdrant.NewQueryID(pid)
+		}
+
+		if ap.WithClause != nil {
+			pq.Params = BuildSearchParams(ap.WithClause)
+		} else if state.Params != nil {
+			// Inherit top level params if not overridden
+			pq.Params = state.Params
+		}
+
+		// Recursion
+		if len(ap.Prefetches) > 0 {
+			nested, err := n.buildPrefetches(ctx, state, ap.Prefetches)
+			if err != nil {
+				return nil, err
+			}
+			pq.Prefetch = nested
+		}
+
+		results = append(results, pq)
+	}
+
+	return results, nil
+}
+
+func BuildSearchParams(withClause *ast.SearchWith) *qdrant.SearchParams {
+	if withClause == nil {
+		return nil
+	}
+	params := &qdrant.SearchParams{}
+	if withClause.HnswEf > 0 {
+		params.HnswEf = qdrant.PtrOf(uint64(withClause.HnswEf))
+	}
+	if withClause.Exact {
+		params.Exact = qdrant.PtrOf(true)
+	}
+	if withClause.Acorn {
+		params.Acorn = &qdrant.AcornSearchParams{Enable: qdrant.PtrOf(true)}
+	}
+	if withClause.IndexedOnly {
+		params.IndexedOnly = qdrant.PtrOf(true)
+	}
+	if withClause.Quantization != nil {
+		params.Quantization = &qdrant.QuantizationSearchParams{}
+		if withClause.Quantization.Ignore != nil {
+			params.Quantization.Ignore = qdrant.PtrOf(*withClause.Quantization.Ignore)
+		}
+		if withClause.Quantization.Rescore != nil {
+			params.Quantization.Rescore = qdrant.PtrOf(*withClause.Quantization.Rescore)
+		}
+		if withClause.Quantization.Oversampling != nil {
+			params.Quantization.Oversampling = qdrant.PtrOf(*withClause.Quantization.Oversampling)
+		}
+	}
+	if params.HnswEf == nil && params.Exact == nil && params.Acorn == nil && params.IndexedOnly == nil && params.Quantization == nil {
+		return nil
+	}
+	return params
 }

@@ -253,6 +253,17 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 		stmt.Type = ast.QueryTypeDense
 	}
 
+	if p.peek().Kind == lexer.TokenKindPrefetch {
+		if stmt.Type == ast.QueryTypeHybrid {
+			return nil, errors.NewQQLSyntaxError("Cannot combine USING HYBRID with manual PREFETCH blocks", p.peek().Pos)
+		}
+		prefetches, err := p.parsePrefetchClause()
+		if err != nil {
+			return nil, err
+		}
+		stmt.Prefetches = prefetches
+	}
+
 	seenWith := false
 	if p.peek().Kind == lexer.TokenKindWith {
 		// Lookahead to check if it's WITH MODEL
@@ -282,6 +293,7 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 	seenExact := false
 	seenGroupSize := false
 	seenStrategy := false
+	seenFusion := false
 
 	for {
 		switch p.peek().Kind {
@@ -314,7 +326,23 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 			}
 			seenExact = true
 			p.advance()
-			ensureSearchWith(&stmt.WithClause).Exact = true
+			mergeSearchWith(&stmt.WithClause, &ast.SearchWith{Exact: true})
+		case lexer.TokenKindFusion:
+			if seenFusion {
+				return nil, errors.NewQQLSyntaxError("Duplicate FUSION clause", p.peek().Pos)
+			}
+			seenFusion = true
+			p.advance()
+			fusionTok := p.peek()
+			if fusionTok.Kind != lexer.TokenKindIdentifier || (strings.ToUpper(fusionTok.Value) != "RRF" && strings.ToUpper(fusionTok.Value) != "DBSF") {
+				return nil, errors.NewQQLSyntaxError("Expected RRF or DBSF after FUSION", fusionTok.Pos)
+			}
+			p.advance()
+			if stmt.Type != ast.QueryTypeHybrid && len(stmt.Prefetches) == 0 {
+				return nil, errors.NewQQLSyntaxError("FUSION requires PREFETCH blocks or USING HYBRID", fusionTok.Pos)
+			}
+			upperFusion := strings.ToUpper(fusionTok.Value)
+			stmt.FusionType = &upperFusion
 		case lexer.TokenKindWith:
 			if seenWith {
 				return nil, errors.NewQQLSyntaxError("Duplicate WITH clause", p.peek().Pos)
@@ -378,6 +406,270 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 			stmt.Strategy = strategy
 		default:
 			return stmt, nil
+		}
+	}
+}
+
+func (p *Parser) parsePrefetchClause() ([]*ast.Prefetch, error) {
+	if _, err := p.expect(lexer.TokenKindPrefetch); err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+		return nil, err
+	}
+
+	var prefetches []*ast.Prefetch
+	if p.peek().Kind == lexer.TokenKindRparen {
+		return nil, errors.NewQQLSyntaxError("Expected at least one PREFETCH block inside ()", p.peek().Pos)
+	}
+
+	for {
+		prefetch, err := p.parseSinglePrefetch()
+		if err != nil {
+			return nil, err
+		}
+		prefetches = append(prefetches, prefetch)
+
+		if p.peek().Kind == lexer.TokenKindComma {
+			p.advance()
+			if p.peek().Kind == lexer.TokenKindRparen {
+				break
+			}
+		} else {
+			break
+		}
+	}
+	if _, err := p.expect(lexer.TokenKindRparen); err != nil {
+		return nil, err
+	}
+	return prefetches, nil
+}
+
+func (p *Parser) parseSinglePrefetch() (*ast.Prefetch, error) {
+	prefetch := &ast.Prefetch{}
+
+	if p.peek().Kind == lexer.TokenKindPrefetch {
+		nested, err := p.parsePrefetchClause()
+		if err != nil {
+			return nil, err
+		}
+		prefetch.Prefetches = nested
+	} else if p.peek().Kind == lexer.TokenKindQuery {
+		p.advance()
+		tok := p.peek()
+		if tok.Kind == lexer.TokenKindNearest {
+			p.advance()
+			tok = p.peek()
+		}
+
+		switch tok.Kind {
+		case lexer.TokenKindRecommend:
+			prefetch.Mode = ast.QueryModeRecommend
+			p.advance()
+			if tok2 := p.peek(); tok2.Kind == lexer.TokenKindPositive {
+				p.advance()
+				if _, err := p.expect(lexer.TokenKindIds); err != nil {
+					return nil, err
+				}
+				ids, err := p.parsePointIDList()
+				if err != nil {
+					return nil, err
+				}
+				prefetch.PositiveIDs = ids
+			} else {
+				return nil, errors.NewQQLSyntaxError("Expected POSITIVE IDS after QUERY RECOMMEND", tok2.Pos)
+			}
+			if tok3 := p.peek(); tok3.Kind == lexer.TokenKindNegative {
+				p.advance()
+				if _, err := p.expect(lexer.TokenKindIds); err != nil {
+					return nil, err
+				}
+				ids, err := p.parsePointIDList()
+				if err != nil {
+					return nil, err
+				}
+				prefetch.NegativeIDs = ids
+			}
+		case lexer.TokenKindContext:
+			prefetch.Mode = ast.QueryModeContext
+			p.advance()
+			if _, err := p.expect(lexer.TokenKindPairs); err != nil {
+				return nil, err
+			}
+			for {
+				if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+					return nil, err
+				}
+				posId, err := p.parsePointIDValue("CONTEXT POSITIVE")
+				if err != nil {
+					return nil, err
+				}
+				if _, err := p.expect(lexer.TokenKindComma); err != nil {
+					return nil, err
+				}
+				negId, err := p.parsePointIDValue("CONTEXT NEGATIVE")
+				if err != nil {
+					return nil, err
+				}
+				if _, err := p.expect(lexer.TokenKindRparen); err != nil {
+					return nil, err
+				}
+
+				prefetch.ContextPairs = append(prefetch.ContextPairs, ast.ContextPair{Positive: posId, Negative: negId})
+
+				if p.peek().Kind == lexer.TokenKindComma {
+					p.advance()
+				} else {
+					break
+				}
+			}
+		case lexer.TokenKindDiscover:
+			prefetch.Mode = ast.QueryModeDiscover
+			p.advance()
+			if _, err := p.expect(lexer.TokenKindTarget); err != nil {
+				return nil, err
+			}
+			targetId, err := p.parsePointIDValue("DISCOVER TARGET")
+			if err != nil {
+				return nil, err
+			}
+			prefetch.Target = targetId
+			if tok2 := p.peek(); tok2.Kind == lexer.TokenKindContext {
+				p.advance()
+				if _, err := p.expect(lexer.TokenKindPairs); err != nil {
+					return nil, err
+				}
+				for {
+					if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+						return nil, err
+					}
+					posId, err := p.parsePointIDValue("DISCOVER CONTEXT")
+					if err != nil {
+						return nil, err
+					}
+					if _, err := p.expect(lexer.TokenKindComma); err != nil {
+						return nil, err
+					}
+					negId, err := p.parsePointIDValue("DISCOVER CONTEXT")
+					if err != nil {
+						return nil, err
+					}
+					if _, err := p.expect(lexer.TokenKindRparen); err != nil {
+						return nil, err
+					}
+
+					prefetch.ContextPairs = append(prefetch.ContextPairs, ast.ContextPair{Positive: posId, Negative: negId})
+
+					if p.peek().Kind == lexer.TokenKindComma {
+						p.advance()
+					} else {
+						break
+					}
+				}
+			}
+		default:
+			prefetch.Mode = ast.QueryModeNearest
+			if tok.Kind == lexer.TokenKindString {
+				p.advance()
+				prefetch.QueryText = &tok.Value
+			} else if tok.Kind == lexer.TokenKindInteger {
+				p.advance()
+				val, err := parseIntToken(tok)
+				if err != nil {
+					return nil, err
+				}
+				prefetch.QueryID = val
+			} else {
+				return nil, errors.NewQQLSyntaxError("Expected string, integer, RECOMMEND, DISCOVER, or CONTEXT for PREFETCH QUERY", tok.Pos)
+			}
+		}
+	}
+
+	for {
+		tok := p.peek()
+		switch tok.Kind {
+		case lexer.TokenKindUsing:
+			p.advance()
+			if p.peek().Kind == lexer.TokenKindString {
+				vecTok := p.peek()
+				p.advance()
+				prefetch.Using = &vecTok.Value
+			} else if p.peek().Kind == lexer.TokenKindDense {
+				p.advance()
+				dense := "dense"
+				prefetch.Using = &dense
+				prefetch.Type = ast.QueryTypeDense
+			} else if p.peek().Kind == lexer.TokenKindSparse {
+				p.advance()
+				prefetch.Type = ast.QueryTypeSparse
+				if p.peek().Kind == lexer.TokenKindString {
+					vecTok := p.peek()
+					p.advance()
+					prefetch.Using = &vecTok.Value
+				} else {
+					sparse := "sparse"
+					prefetch.Using = &sparse
+				}
+			} else {
+				return nil, errors.NewQQLSyntaxError("Expected string vector name, DENSE, or SPARSE after USING in PREFETCH", p.peek().Pos)
+			}
+		case lexer.TokenKindLimit:
+			p.advance()
+			intTok, err := p.expect(lexer.TokenKindInteger)
+			if err != nil {
+				return nil, err
+			}
+			limit, err := parseIntToken(intTok)
+			if err != nil {
+				return nil, err
+			}
+			prefetch.Limit = limit
+		case lexer.TokenKindScore:
+			p.advance()
+			if _, err := p.expect(lexer.TokenKindThreshold); err != nil {
+				return nil, err
+			}
+			scoreTok := p.peek()
+			if scoreTok.Kind != lexer.TokenKindFloat && scoreTok.Kind != lexer.TokenKindInteger {
+				return nil, errors.NewQQLSyntaxError("Expected float or integer for SCORE THRESHOLD", scoreTok.Pos)
+			}
+			p.advance()
+			val, _ := parseFloatToken(scoreTok)
+			prefetch.ScoreThreshold = &val
+		case lexer.TokenKindWhere:
+			p.advance()
+			filter, err := p.parseFilterExpr()
+			if err != nil {
+				return nil, err
+			}
+			prefetch.QueryFilter = filter
+		case lexer.TokenKindLookup:
+			p.advance()
+			if _, err := p.expect(lexer.TokenKindFrom); err != nil {
+				return nil, err
+			}
+			lookupFrom, err := p.parseIdentifier()
+			if err != nil {
+				return nil, err
+			}
+			prefetch.LookupFrom = lookupFrom
+			if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && strings.ToUpper(p.peek().Value) == "VECTOR") {
+				p.advance()
+				lookupVector, err := p.parseStringPtr()
+				if err != nil {
+					return nil, err
+				}
+				prefetch.LookupVector = lookupVector
+			}
+		case lexer.TokenKindWith:
+			p.advance()
+			parsedWith, err := p.parseWithClause()
+			if err != nil {
+				return nil, err
+			}
+			mergeSearchWith(&prefetch.WithClause, parsedWith)
+		default:
+			return prefetch, nil
 		}
 	}
 }

@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/qdrant/go-client/qdrant"
 	"github.com/srimon12/qql-go/internal/ast"
@@ -43,7 +44,7 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 	state := &pipeline.QueryState{
 		Embedder:          e,
 		LocalEmbed:        e.usesLocalEmbeddings(),
-		Params:            searchParamsFromWithClause(stmt.WithClause),
+		Params:            pipeline.BuildSearchParams(stmt.WithClause),
 		HasMMR:            hasMMR(stmt.WithClause),
 		CloudModelOptions: e.cloudModelOptions(),
 		DenseModel:        denseModel,
@@ -51,6 +52,17 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 		Limit:             uint64(stmt.Limit),
 		Offset:            uint64(stmt.Offset),
 		QdrantFilter:      qdrantFilter,
+	}
+	if stmt.WithClause != nil {
+		if stmt.WithClause.RrfK != nil || len(stmt.WithClause.RrfWeights) > 0 {
+			state.FusionConfig = &qdrant.Rrf{}
+			if stmt.WithClause.RrfK != nil {
+				state.FusionConfig.K = qdrant.PtrOf(uint32(*stmt.WithClause.RrfK))
+			}
+			if len(stmt.WithClause.RrfWeights) > 0 {
+				state.FusionConfig.Weights = stmt.WithClause.RrfWeights
+			}
+		}
 	}
 	if stmt.ScoreThreshold != nil {
 		state.ScoreThreshold = qdrant.PtrOf(float32(*stmt.ScoreThreshold))
@@ -87,6 +99,12 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 			if stmt.QueryText != nil {
 				state.QueryText = *stmt.QueryText
 			}
+
+			// Add manual prefetches first
+			if len(stmt.Prefetches) > 0 {
+				execPipeline.Add(&pipeline.PrefetchNode{ASTPrefetches: stmt.Prefetches})
+			}
+
 			switch stmt.Type {
 			case ast.QueryTypeHybrid:
 				execPipeline.Add(&pipeline.DenseEmbedNode{
@@ -101,7 +119,11 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 					Limit:      uint64(stmt.Limit) * 10,
 					AsPrefetch: true,
 				})
-				execPipeline.Add(&pipeline.FusionNode{Mode: "rrf"})
+				if stmt.FusionType != nil {
+					execPipeline.Add(&pipeline.FusionNode{Mode: strings.ToLower(*stmt.FusionType)})
+				} else {
+					execPipeline.Add(&pipeline.FusionNode{Mode: "rrf"})
+				}
 			case ast.QueryTypeSparse:
 				execPipeline.Add(&pipeline.SparseEmbedNode{
 					Model:      e.resolveSparseModel(stmt.Model),
@@ -109,11 +131,20 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 					Limit:      uint64(stmt.Limit),
 				})
 			default:
-				execPipeline.Add(&pipeline.DenseEmbedNode{
-					Model:      denseModel,
-					VectorName: denseVectorName,
-					Limit:      uint64(stmt.Limit),
-				})
+				// If we have manual prefetches, the main dense query itself isn't necessarily the only top-level node unless explicitly provided.
+				// Wait, if there are prefetches, does the main query text become the target? Or is there no target?
+				// The FUSION clause decides the target if there are prefetches!
+				if stmt.QueryText != nil {
+					execPipeline.Add(&pipeline.DenseEmbedNode{
+						Model:      denseModel,
+						VectorName: denseVectorName,
+						Limit:      uint64(stmt.Limit),
+					})
+				}
+			}
+
+			if stmt.FusionType != nil && stmt.Type != ast.QueryTypeHybrid {
+				execPipeline.Add(&pipeline.FusionNode{Mode: strings.ToLower(*stmt.FusionType)})
 			}
 		}
 
