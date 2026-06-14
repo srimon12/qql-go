@@ -213,22 +213,27 @@ func (e *Executor) buildInsertVectors(ctx context.Context, text, denseModel, spa
 		return vectors, nil
 	}
 
+	// Cloud inference path: send text as a Document, Qdrant cluster handles embedding.
+	opts := buildDocumentOptionsFromMap(e.cloudModelOptions())
 	vectors := map[string]*qdrant.Vector{
 		denseName: qdrant.NewVectorDocument(&qdrant.Document{
-			Text:  text,
-			Model: denseModel,
+			Text:    text,
+			Model:   denseModel,
+			Options: opts,
 		}),
 	}
 	if includeSparse {
 		vectors[sparseName] = qdrant.NewVectorDocument(&qdrant.Document{
-			Text:  text,
-			Model: sparseModel,
+			Text:    text,
+			Model:   sparseModel,
+			Options: opts,
 		})
 	}
 	if includeRerank {
 		vectors[rerankVectorName] = qdrant.NewVectorDocument(&qdrant.Document{
-			Text:  text,
-			Model: rerankModelDefault,
+			Text:    text,
+			Model:   rerankModelDefault,
+			Options: opts,
 		})
 	}
 	return vectors, nil

@@ -211,26 +211,4 @@ func buildDeleteRequest(n *ast.DeleteStmt) (*qdrant.DeletePoints, error) {
 	}, nil
 }
 
-func addExcludedIDsToFilter(filter *qdrant.Filter, ids []any) *qdrant.Filter {
-	if len(ids) == 0 {
-		return filter
-	}
-	pointIDs := make([]*qdrant.PointId, 0, len(ids))
-	for _, id := range ids {
-		pointIDs = append(pointIDs, newPointID(id))
-	}
-	exclude := &qdrant.Condition{
-		ConditionOneOf: &qdrant.Condition_HasId{
-			HasId: &qdrant.HasIdCondition{
-				HasId: pointIDs,
-			},
-		},
-	}
-	if filter == nil {
-		return &qdrant.Filter{
-			MustNot: []*qdrant.Condition{exclude},
-		}
-	}
-	filter.MustNot = append(filter.MustNot, exclude)
-	return filter
-}
+

@@ -28,7 +28,7 @@ func TestParseQueryNearest(t *testing.T) {
 	assert.Equal(t, "vector search", *stmt.QueryText)
 	assert.Equal(t, 10, stmt.Limit)
 	assert.Equal(t, 5, stmt.Offset)
-	assert.True(t, stmt.Hybrid)
+	assert.Equal(t, ast.QueryTypeHybrid, stmt.Type)
 	assert.True(t, stmt.Rerank)
 	require.NotNil(t, stmt.QueryFilter)
 	require.NotNil(t, stmt.WithClause)

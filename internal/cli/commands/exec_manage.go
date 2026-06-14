@@ -187,20 +187,17 @@ func buildOptimizersConfigDiff(cfg *ast.OptimizersRuntimeConfig) *qdrant.Optimiz
 		diff.PreventUnoptimized = cfg.PreventUnoptimized
 	}
 	if cfg.MaxOptimizationThreads != nil {
-		switch v := cfg.MaxOptimizationThreads.(type) {
-		case int:
+		if cfg.MaxOptimizationThreads.Auto {
 			diff.MaxOptimizationThreads = &qdrant.MaxOptimizationThreads{
-				Variant: &qdrant.MaxOptimizationThreads_Value{
-					Value: uint64(v),
+				Variant: &qdrant.MaxOptimizationThreads_Setting_{
+					Setting: qdrant.MaxOptimizationThreads_Auto,
 				},
 			}
-		case string:
-			if toLowerStr(v) == "auto" {
-				diff.MaxOptimizationThreads = &qdrant.MaxOptimizationThreads{
-					Variant: &qdrant.MaxOptimizationThreads_Setting_{
-						Setting: qdrant.MaxOptimizationThreads_Auto,
-					},
-				}
+		} else {
+			diff.MaxOptimizationThreads = &qdrant.MaxOptimizationThreads{
+				Variant: &qdrant.MaxOptimizationThreads_Value{
+					Value: cfg.MaxOptimizationThreads.Value,
+				},
 			}
 		}
 	}

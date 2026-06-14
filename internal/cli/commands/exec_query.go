@@ -28,7 +28,7 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 		denseModel = *stmt.Model
 	}
 	var sparseModel *string
-	if stmt.Hybrid {
+	if stmt.Type == ast.QueryTypeHybrid {
 		sparseModelStr := denseModel
 		if denseModel != "" {
 			sparseModelStr += "-sparse" // Default inference convention
@@ -37,10 +37,11 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 	}
 
 	state := &pipeline.QueryState{
-		Embedder:   e,
-		LocalEmbed: e.usesLocalEmbeddings(),
-		Params:     searchParamsFromWithClause(stmt.WithClause),
-		HasMMR:     hasMMR(stmt.WithClause),
+		Embedder:          e,
+		LocalEmbed:        e.usesLocalEmbeddings(),
+		Params:            searchParamsFromWithClause(stmt.WithClause),
+		HasMMR:            hasMMR(stmt.WithClause),
+		CloudModelOptions: e.cloudModelOptions(),
 	}
 	if state.HasMMR {
 		if stmt.WithClause.MmrDiversity != nil {
@@ -56,48 +57,49 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 
 	switch stmt.Mode {
 	case ast.QueryModeNearest:
-		if stmt.QueryText != nil {
-			state.QueryText = *stmt.QueryText
-		} else if stmt.QueryID != nil {
+		if stmt.QueryID != nil {
 			// For ID-based NEAREST, we use RecommendNode with single positive
 			execPipeline.Add(&pipeline.RecommendNode{
 				PositiveIDs: []any{stmt.QueryID},
 			})
-			break
-		}
-
-		if stmt.Hybrid {
-			execPipeline.Add(&pipeline.DenseEmbedNode{
-				Model:      denseModel,
-				VectorName: denseVectorName,
-				Limit:      uint64(stmt.Limit) * 10,
-				AsPrefetch: true,
-			})
-			execPipeline.Add(&pipeline.SparseEmbedNode{
-				Model:      *sparseModel,
-				VectorName: sparseVectorName,
-				Limit:      uint64(stmt.Limit) * 10,
-				AsPrefetch: true,
-			})
-			fusionMode := "rrf"
-			if stmt.Fusion != nil {
-				fusionMode = *stmt.Fusion
-			}
-			execPipeline.Add(&pipeline.FusionNode{Mode: fusionMode})
-		} else if stmt.SparseOnly {
-			execPipeline.Add(&pipeline.SparseEmbedNode{
-				Model:      denseModel,
-				VectorName: sparseVectorName,
-				Limit:      uint64(stmt.Limit),
-				AsPrefetch: false,
-			})
 		} else {
-			execPipeline.Add(&pipeline.DenseEmbedNode{
-				Model:      denseModel,
-				VectorName: denseVectorName,
-				Limit:      uint64(stmt.Limit),
-				AsPrefetch: false,
-			})
+			if stmt.QueryText != nil {
+				state.QueryText = *stmt.QueryText
+			}
+
+			if stmt.Type == ast.QueryTypeHybrid {
+				execPipeline.Add(&pipeline.DenseEmbedNode{
+					Model:      denseModel,
+					VectorName: denseVectorName,
+					Limit:      uint64(stmt.Limit) * 10,
+					AsPrefetch: true,
+				})
+				execPipeline.Add(&pipeline.SparseEmbedNode{
+					Model:      *sparseModel,
+					VectorName: sparseVectorName,
+					Limit:      uint64(stmt.Limit) * 10,
+					AsPrefetch: true,
+				})
+				fusionMode := "rrf"
+				if stmt.Fusion != nil {
+					fusionMode = *stmt.Fusion
+				}
+				execPipeline.Add(&pipeline.FusionNode{Mode: fusionMode})
+			} else if stmt.Type == ast.QueryTypeSparse {
+				execPipeline.Add(&pipeline.SparseEmbedNode{
+					Model:      denseModel,
+					VectorName: sparseVectorName,
+					Limit:      uint64(stmt.Limit),
+					AsPrefetch: false,
+				})
+			} else {
+				execPipeline.Add(&pipeline.DenseEmbedNode{
+					Model:      denseModel,
+					VectorName: denseVectorName,
+					Limit:      uint64(stmt.Limit),
+					AsPrefetch: false,
+				})
+			}
 		}
 
 	case ast.QueryModeRecommend:
@@ -176,23 +178,73 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 		}
 	}
 
-	results, err := e.client.Query(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("query failed: %w", err)
+	if stmt.GroupBy != nil {
+		groupReq := &qdrant.QueryPointGroups{
+			CollectionName: stmt.Collection,
+			Query:          state.TargetQuery,
+			Prefetch:       state.Prefetches,
+			Limit:          qdrant.PtrOf(uint64(stmt.Limit)),
+			GroupBy:        *stmt.GroupBy,
+			Filter:         req.Filter,
+			ScoreThreshold: req.ScoreThreshold,
+			LookupFrom:     req.LookupFrom,
+			Params:         req.Params,
+		}
+		if stmt.GroupSize != nil {
+			groupReq.GroupSize = qdrant.PtrOf(uint64(*stmt.GroupSize))
+		}
+		
+		groups, err := e.client.QueryGroups(ctx, groupReq)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query groups from qdrant: %w", err)
+		}
+		
+		formatted := make([]GroupedSearchResult, len(groups))
+		for i, g := range groups {
+			hits := make([]SearchHit, len(g.Hits))
+			for j, hit := range g.Hits {
+				hits[j] = SearchHit{
+					ID:    pointIDString(hit.Id),
+					Score: hit.Score,
+				}
+				if textVal, ok := hit.Payload["text"]; ok {
+					hits[j].Text = textVal.GetStringValue()
+				}
+			}
+			formatted[i] = GroupedSearchResult{
+				GroupID: groupIDString(g.Id),
+				Hits:    hits,
+			}
+		}
+		
+		return &ExecResponse{
+			OK:        true,
+			Operation: "QUERY_GROUPS",
+			Message:   fmt.Sprintf("Found %d groups", len(formatted)),
+			Data:      formatted,
+		}, nil
 	}
 
-	message, hits := e.formatSearchResults(results)
+	results, err := e.client.Query(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query on qdrant: %w", err)
+	}
+
+	formatted := make([]SearchHit, len(results))
+	for i, hit := range results {
+		formatted[i] = SearchHit{
+			ID:    pointIDString(hit.Id),
+			Score: hit.Score,
+		}
+		if textVal, ok := hit.Payload["text"]; ok {
+			formatted[i].Text = textVal.GetStringValue()
+		}
+	}
+
 	return &ExecResponse{
 		OK:        true,
-		Operation: "query",
-		Message:   message,
-		Data: map[string]any{
-			"count":      len(hits),
-			"results":    hits,
-			"collection": stmt.Collection,
-			"mode":       string(stmt.Mode),
-			"hybrid":     stmt.Hybrid,
-			"rerank":     stmt.Rerank,
-		},
+		Operation: "QUERY",
+		Message:   fmt.Sprintf("Found %d hits", len(formatted)),
+		Data:      formatted,
 	}, nil
 }

@@ -30,13 +30,13 @@ func TestStripComments(t *testing.T) {
 }
 
 func TestSplitStatements(t *testing.T) {
-	input := "SHOW COLLECTIONS\nINSERT INTO COLLECTION docs VALUES {'text': 'hello'}\nRECOMMEND FROM docs POSITIVE IDS ('1') LIMIT 5"
+	input := "SHOW COLLECTIONS\nINSERT INTO COLLECTION docs VALUES {'text': 'hello'}\nQUERY RECOMMEND FROM docs POSITIVE IDS ('1') LIMIT 5"
 	statements, err := SplitStatements(input)
 	require.NoError(t, err)
 	require.Len(t, statements, 3)
 	require.Equal(t, "SHOW COLLECTIONS", statements[0])
 	require.Contains(t, statements[1], "INSERT INTO COLLECTION docs")
-	require.Contains(t, statements[2], "RECOMMEND FROM docs")
+	require.Contains(t, statements[2], "QUERY RECOMMEND FROM docs")
 }
 
 func TestSplitStatementsSelectAndScroll(t *testing.T) {

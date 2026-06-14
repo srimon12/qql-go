@@ -5,6 +5,7 @@ import (
 
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
+	"github.com/srimon12/qql-go/internal/utils"
 	"github.com/srimon12/qql-go/internal/lexer"
 )
 
@@ -91,7 +92,7 @@ func (p *Parser) parseInsertBulk() (*ast.InsertBulkStmt, error) {
 
 func extractInsertPointID(values map[string]any) (any, map[string]any) {
 	for key, value := range values {
-		if toLower(key) == "id" {
+		if utils.ToLower(key) == "id" {
 			delete(values, key)
 			return value, values
 		}

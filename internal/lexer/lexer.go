@@ -2,6 +2,7 @@ package lexer
 
 import (
 	"github.com/srimon12/qql-go/internal/errors"
+	"github.com/srimon12/qql-go/internal/utils"
 )
 
 var keywords = map[string]TokenKind{
@@ -38,7 +39,6 @@ var keywords = map[string]TokenKind{
 	"DROP":        TokenKindDrop,
 	"SHOW":        TokenKindShow,
 	"COLLECTIONS": TokenKindCollections,
-	"SEARCH":      TokenKindSearch,
 	"SELECT":      TokenKindSelect,
 	"SCROLL":      TokenKindScroll,
 	"FUSION":      TokenKindFusion,
@@ -281,9 +281,9 @@ func (l *Lexer) readIdentifier(query string, start int) Token {
 	word := query[start:i]
 	firstSegment := word[:findDot(word)]
 	if len(firstSegment) > 0 {
-		upperFirst := toUpper(firstSegment)
-		if _, ok := keywords[upperFirst]; ok && !containsDot(word) {
-			return Token{Kind: keywords[upperFirst], Value: word, Pos: start}
+		upperFirst := utils.ToUpper(firstSegment)
+		if kind, ok := keywords[upperFirst]; ok && !containsDot(word) {
+			return Token{Kind: kind, Value: word, Pos: start}
 		}
 	}
 
@@ -308,17 +308,7 @@ func containsDot(s string) bool {
 	return false
 }
 
-func toUpper(s string) string {
-	result := make([]byte, len(s))
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c >= 'a' && c <= 'z' {
-			c -= 32
-		}
-		result[i] = c
-	}
-	return string(result)
-}
+
 
 func isWhitespace(ch byte) bool {
 	return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'

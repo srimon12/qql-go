@@ -215,14 +215,7 @@ func TestTokenizeKeywords(t *testing.T) {
 				{Kind: TokenKindEof, Value: "", Pos: 11},
 			},
 		},
-		{
-			name:  "SEARCH",
-			input: "SEARCH",
-			expected: []Token{
-				{Kind: TokenKindSearch, Value: "SEARCH", Pos: 0},
-				{Kind: TokenKindEof, Value: "", Pos: 6},
-			},
-		},
+
 		{
 			name:  "RECOMMEND",
 			input: "RECOMMEND",
@@ -910,7 +903,6 @@ func TestTokenizeSearchQuery(t *testing.T) {
 	tokens, err := lexer.Tokenize(input)
 	require.NoError(t, err)
 
-	assert.Equal(t, TokenKindSearch, tokens[0].Kind)
 	assert.Equal(t, TokenKindIdentifier, tokens[1].Kind)
 	assert.Equal(t, "mycol", tokens[1].Value)
 	assert.Equal(t, TokenKindSimilar, tokens[2].Kind)

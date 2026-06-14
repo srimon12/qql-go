@@ -260,6 +260,15 @@ func (e *Executor) usesLocalEmbeddings() bool {
 	return mode == "local" || mode == "external"
 }
 
+// cloudModelOptions returns the provider API key options for Qdrant cloud inference.
+// Only populated when inference_mode = "cloud" and cloud_model_options is configured.
+func (e *Executor) cloudModelOptions() map[string]string {
+	if e == nil || e.config == nil || e.usesLocalEmbeddings() {
+		return nil
+	}
+	return e.config.CloudModelOptions
+}
+
 func (e *Executor) embeddingClient(model string) (*embedding.Client, error) {
 	if e == nil || e.config == nil {
 		return nil, fmt.Errorf("embedding configuration is missing")
@@ -435,7 +444,7 @@ const (
 	collectionReadyInterval = 250 * time.Millisecond
 	rerankPrefetchFactor    = 4
 	rerankPrefetchCap       = 200
-	defaultInferenceMode    = "cloud"
+	defaultInferenceMode    = "local"
 )
 
 var Version = "0.2.0"

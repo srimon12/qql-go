@@ -43,8 +43,13 @@ type OptimizersRuntimeConfig struct {
 	MemmapThreshold        *uint64
 	IndexingThreshold      *uint64
 	FlushIntervalSec       *uint64
-	MaxOptimizationThreads any // int or "auto" string
+	MaxOptimizationThreads *OptimizationThreads
 	PreventUnoptimized     *bool
+}
+
+type OptimizationThreads struct {
+	Auto  bool
+	Value uint64
 }
 
 type CollectionParamsConfig struct {
@@ -166,9 +171,18 @@ type ContextPair struct {
 	Negative any
 }
 
+type QueryType int
+
+const (
+	QueryTypeDense QueryType = iota
+	QueryTypeSparse
+	QueryTypeHybrid
+)
+
 type QueryStmt struct {
 	Collection string
 	Mode       QueryMode
+	Type       QueryType
 	
 	// For NEAREST
 	QueryText *string
@@ -189,6 +203,8 @@ type QueryStmt struct {
 	QueryFilter    FilterExpr
 	Offset         int
 	ScoreThreshold *float64
+	GroupBy        *string
+	GroupSize      *int
 	WithClause     *SearchWith
 	LookupFrom     string
 	LookupVector   *string

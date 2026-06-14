@@ -11,7 +11,7 @@ import (
 	"github.com/qdrant/go-client/qdrant"
 )
 
-const batchSize = 50
+
 
 type Client interface {
 	CollectionExists(ctx context.Context, collectionName string) (bool, error)

@@ -21,8 +21,11 @@ type QueryState struct {
 	HasMMR        bool
 	MmrCandidates uint32
 	MmrDiversity  float32
-	LocalEmbed    bool
-	Embedder      Embedder
+	LocalEmbed         bool
+	Embedder           Embedder
+	// CloudModelOptions carries provider API keys for Qdrant cloud inference
+	// e.g. {"openai-api-key": "sk-...", "openrouter-api-key": "or-..."}
+	CloudModelOptions  map[string]string
 }
 
 // ExecutionNode defines a single step in the QQL Query Planner DAG.

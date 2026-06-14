@@ -3,6 +3,7 @@ package parser
 import (
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
+	"github.com/srimon12/qql-go/internal/utils"
 	"github.com/srimon12/qql-go/internal/lexer"
 )
 
@@ -189,7 +190,7 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 			return nil, err
 		}
 		stmt.LookupFrom = lookupFrom
-		if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && toUpper(p.peek().Value) == "VECTOR") {
+		if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && utils.ToUpper(p.peek().Value) == "VECTOR") {
 			p.advance()
 			lookupVector, err := p.parseStringPtr()
 			if err != nil {
@@ -203,10 +204,10 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 		p.advance()
 		if p.peek().Kind == lexer.TokenKindHybrid {
 			p.advance()
-			stmt.Hybrid = true
+			stmt.Type = ast.QueryTypeHybrid
 		} else if p.peek().Kind == lexer.TokenKindSparse {
 			p.advance()
-			stmt.SparseOnly = true
+			stmt.Type = ast.QueryTypeSparse
 			if p.peek().Kind == lexer.TokenKindString {
 				vecNameTok := p.peek()
 				p.advance()
@@ -216,15 +217,18 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 			vecNameTok := p.peek()
 			p.advance()
 			stmt.Using = &vecNameTok.Value
+			stmt.Type = ast.QueryTypeDense
 		} else {
 			return nil, errors.NewQQLSyntaxError("Expected HYBRID, SPARSE, or a vector name string after USING", p.peek().Pos)
 		}
+	} else {
+		stmt.Type = ast.QueryTypeDense
 	}
 
 	if p.peek().Kind == lexer.TokenKindWith {
 		// Lookahead to check if it's WITH MODEL
 		p.advance() // Consume WITH
-		if p.peek().Kind == lexer.TokenKindIdentifier && toUpper(p.peek().Value) == "MODEL" {
+		if p.peek().Kind == lexer.TokenKindIdentifier && utils.ToUpper(p.peek().Value) == "MODEL" {
 			p.advance() // Consume MODEL
 			modelTok, err := p.expect(lexer.TokenKindString)
 			if err != nil {
@@ -245,6 +249,7 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 	seenWhere := false
 	seenRerank := false
 	seenWith := false
+	seenGroup := false
 
 	for {
 		switch p.peek().Kind {
@@ -280,7 +285,7 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 			}
 			seenWith = true
 			p.advance()
-			if p.peek().Kind == lexer.TokenKindIdentifier && toUpper(p.peek().Value) == "MODEL" {
+			if p.peek().Kind == lexer.TokenKindIdentifier && utils.ToUpper(p.peek().Value) == "MODEL" {
 				p.advance()
 				modelTok, err := p.expect(lexer.TokenKindString)
 				if err != nil {
@@ -294,6 +299,31 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 				}
 				mergeSearchWith(&stmt.WithClause, parsedWith)
 			}
+		case lexer.TokenKindGroup:
+			if seenGroup {
+				return nil, errors.NewQQLSyntaxError("Duplicate GROUP BY clause", p.peek().Pos)
+			}
+			seenGroup = true
+			p.advance()
+			if _, err := p.expect(lexer.TokenKindBy); err != nil {
+				return nil, err
+			}
+			groupField, err := p.parseStringPtr()
+			if err != nil {
+				return nil, err
+			}
+			stmt.GroupBy = groupField
+		case lexer.TokenKindGroupSize:
+			groupSizeTok := p.peek()
+			groupSizeVal, err := p.parseNumericLiteral()
+			if err != nil {
+				return nil, err
+			}
+			if groupSizeVal <= 0 || float64(uint64(groupSizeVal)) != groupSizeVal {
+				return nil, errors.NewQQLSyntaxError("GROUP_SIZE must be a positive integer", groupSizeTok.Pos)
+			}
+			sizeInt := int(groupSizeVal)
+			stmt.GroupSize = &sizeInt
 		case lexer.TokenKindStrategy:
 			p.advance()
 			strategy, err := p.parseStringPtr()

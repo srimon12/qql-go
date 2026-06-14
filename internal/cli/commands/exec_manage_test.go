@@ -71,7 +71,7 @@ func TestBuildQuantizationConfigProduct(t *testing.T) {
 
 func TestCreateCollectionIncludesQuantizationConfig(t *testing.T) {
 	client := newFakeQdrantClient()
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 
 	resp, err := exec.doCreateCollection(&ast.CreateCollectionStmt{
 		Collection: "docs",
@@ -95,7 +95,7 @@ func TestCreateCollectionIncludesQuantizationConfig(t *testing.T) {
 
 func TestCreateCollectionHybridRerankIncludesBinaryQuantizationConfig(t *testing.T) {
 	client := newFakeQdrantClient()
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 
 	resp, err := exec.doCreateCollection(&ast.CreateCollectionStmt{
 		Collection: "docs",
@@ -116,7 +116,7 @@ func TestCreateCollectionHybridRerankIncludesBinaryQuantizationConfig(t *testing
 
 func TestCreateCollectionIncludesPayloadM(t *testing.T) {
 	client := newFakeQdrantClient()
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 
 	resp, err := exec.doCreateCollection(&ast.CreateCollectionStmt{
 		Collection: "docs",
@@ -145,7 +145,7 @@ func TestAlterCollectionPassesConfigBlocks(t *testing.T) {
 			},
 		},
 	}
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 
 	resp, err := exec.doAlterCollection(&ast.AlterCollectionStmt{
 		Collection: "docs",
@@ -199,7 +199,7 @@ func TestAlterCollectionVectorsOnDiskAppliesToAllDenseVectors(t *testing.T) {
 			},
 		},
 	}
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 
 	_, err := exec.doAlterCollection(&ast.AlterCollectionStmt{
 		Collection: "docs",
@@ -220,7 +220,7 @@ func TestAlterCollectionVectorsOnDiskAppliesToAllDenseVectors(t *testing.T) {
 func TestAlterCollectionCanSetTurboQuantization(t *testing.T) {
 	client := newFakeQdrantClient()
 	client.exists = true
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 
 	resp, err := exec.doAlterCollection(&ast.AlterCollectionStmt{
 		Collection: "docs",
@@ -244,7 +244,7 @@ func TestAlterCollectionCanSetTurboQuantization(t *testing.T) {
 func TestAlterCollectionRejectsInvalidTurboQuantization(t *testing.T) {
 	client := newFakeQdrantClient()
 	client.exists = true
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 
 	_, err := exec.doAlterCollection(&ast.AlterCollectionStmt{
 		Collection: "docs",
@@ -263,7 +263,7 @@ func TestAlterCollectionRejectsInvalidTurboQuantization(t *testing.T) {
 func TestAlterCollectionCanDisableQuantization(t *testing.T) {
 	client := newFakeQdrantClient()
 	client.exists = true
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 
 	resp, err := exec.doAlterCollection(&ast.AlterCollectionStmt{
 		Collection:   "docs",
@@ -277,7 +277,7 @@ func TestAlterCollectionCanDisableQuantization(t *testing.T) {
 
 func TestDoCreateIndexSupportsKeywordOptions(t *testing.T) {
 	client := newFakeQdrantClient()
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 
 	resp, err := exec.doCreateIndex(&ast.CreateIndexStmt{
 		Collection: "docs",
@@ -301,7 +301,7 @@ func TestDoCreateIndexSupportsKeywordOptions(t *testing.T) {
 
 func TestDoCreateIndexSupportsTextOptions(t *testing.T) {
 	client := newFakeQdrantClient()
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 
 	resp, err := exec.doCreateIndex(&ast.CreateIndexStmt{
 		Collection: "docs",
@@ -329,7 +329,7 @@ func TestDoCreateIndexSupportsTextOptions(t *testing.T) {
 
 func TestDoCreateIndexSupportsUUIDOptions(t *testing.T) {
 	client := newFakeQdrantClient()
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 
 	resp, err := exec.doCreateIndex(&ast.CreateIndexStmt{
 		Collection: "docs",
@@ -349,7 +349,7 @@ func TestDoCreateIndexSupportsUUIDOptions(t *testing.T) {
 
 func TestDoCreateIndexRejectsUnknownOption(t *testing.T) {
 	client := newFakeQdrantClient()
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 
 	_, err := exec.doCreateIndex(&ast.CreateIndexStmt{
 		Collection: "docs",
@@ -574,7 +574,7 @@ func TestShowCollectionDense(t *testing.T) {
 		},
 	}
 
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "docs"})
 	require.NoError(t, err)
 	require.True(t, resp.OK)
@@ -633,7 +633,7 @@ func TestShowCollectionHybrid(t *testing.T) {
 		},
 	}
 
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "hybrid_docs"})
 	require.NoError(t, err)
 	require.True(t, resp.OK)
@@ -674,7 +674,7 @@ func TestShowCollectionNamedDenseNotHybrid(t *testing.T) {
 		},
 	}
 
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "dense_only"})
 	require.NoError(t, err)
 
@@ -720,7 +720,7 @@ func TestShowCollectionWithPayloadSchema(t *testing.T) {
 		},
 	}
 
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "indexed"})
 	require.NoError(t, err)
 
@@ -760,7 +760,7 @@ func TestShowCollectionHandlesMissingPayloadSchema(t *testing.T) {
 		},
 	}
 
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "no_schema"})
 	require.NoError(t, err)
 
@@ -774,7 +774,7 @@ func TestShowCollectionNonexistentRaises(t *testing.T) {
 	client := newFakeQdrantClient()
 	client.exists = false
 
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 	_, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "missing"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "does not exist")
@@ -810,7 +810,7 @@ func TestShowCollectionWithQuantization(t *testing.T) {
 		},
 	}
 
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "quantized"})
 	require.NoError(t, err)
 
@@ -850,7 +850,7 @@ func TestShowCollectionHnswExtraFields(t *testing.T) {
 		},
 	}
 
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "hnsw_conf"})
 	require.NoError(t, err)
 
@@ -888,7 +888,7 @@ func TestShowCollectionWithTurboQuantization(t *testing.T) {
 		},
 	}
 
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "turbo_quantized"})
 	require.NoError(t, err)
 
@@ -920,7 +920,7 @@ func TestShowCollectionWithoutHnswConfigDoesNotPanic(t *testing.T) {
 		},
 	}
 
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 	resp, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "no_hnsw"})
 	require.NoError(t, err)
 	require.True(t, resp.OK)
@@ -942,14 +942,14 @@ func TestShowCollectionWithoutVectorConfigReturnsError(t *testing.T) {
 		},
 	}
 
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 	_, err := exec.doShowCollection(&ast.ShowCollectionStmt{Collection: "broken"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "has no vector configuration")
 }
 
 func TestExplainShowCollection(t *testing.T) {
-	exec := NewExecutor(nil, &config.Config{})
+	exec := NewExecutor(nil, &config.Config{InferenceMode: "cloud"})
 	plan, err := exec.Explain("SHOW COLLECTION docs")
 	require.NoError(t, err)
 	require.Contains(t, plan, "Statement: SHOW COLLECTION docs")

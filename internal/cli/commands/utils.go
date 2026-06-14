@@ -10,32 +10,18 @@ import (
 	"github.com/srimon12/qql-go/internal/output"
 )
 
-func toLowerStr(s string) string {
-	result := make([]byte, len(s))
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c >= 'A' && c <= 'Z' {
-			c += 32
-		}
-		result[i] = c
-	}
-	return string(result)
-}
-
-func float32PtrFromFloat64(value *float64) *float32 {
-	if value == nil {
+// buildDocumentOptionsFromMap converts the string-keyed provider options from config
+// into the map[string]*qdrant.Value format expected by the gRPC Document type.
+// Used for Qdrant cloud inference with paid providers (OpenAI, OpenRouter, etc.).
+func buildDocumentOptionsFromMap(opts map[string]string) map[string]*qdrant.Value {
+	if len(opts) == 0 {
 		return nil
 	}
-	converted := float32(*value)
-	return &converted
-}
-
-func uint32PtrFromInt(value *int) *uint32 {
-	if value == nil {
-		return nil
+	out := make(map[string]*qdrant.Value, len(opts))
+	for k, v := range opts {
+		out[k] = qdrant.NewValueString(v)
 	}
-	converted := uint32(*value)
-	return &converted
+	return out
 }
 
 func newPointID(value any) *qdrant.PointId {

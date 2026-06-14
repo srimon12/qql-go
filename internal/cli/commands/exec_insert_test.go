@@ -13,7 +13,7 @@ import (
 )
 
 func TestBuildInsertVectorsIncludesColbertOnlyWhenEnabled(t *testing.T) {
-	exec := NewExecutor(nil, &config.Config{})
+	exec := NewExecutor(nil, &config.Config{InferenceMode: "cloud"})
 	vectors, err := exec.buildInsertVectors(context.Background(), "hello world", "dense-model", "sparse-model", true, true, "test-collection", "dense", "sparse")
 	require.NoError(t, err)
 
@@ -55,7 +55,7 @@ func TestInsertPointIDAndPayloadExtractsIDFromValues(t *testing.T) {
 
 func TestInsertAutoCreatesMissingCollection(t *testing.T) {
 	client := newFakeQdrantClient()
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 
 	resp, err := exec.doInsert(&ast.InsertStmt{
 		Collection: "docs",
@@ -85,7 +85,7 @@ func TestInsertPreservesHybridAutodetectionOnExistingCollection(t *testing.T) {
 		},
 	}
 
-	exec := NewExecutor(client, &config.Config{})
+	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 	resp, err := exec.doInsert(&ast.InsertStmt{
 		Collection: "docs",
 		Values:     map[string]any{"text": "hello"},

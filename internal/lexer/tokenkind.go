@@ -36,7 +36,6 @@ const (
 	TokenKindDrop
 	TokenKindShow
 	TokenKindCollections
-	TokenKindSearch
 	TokenKindSelect
 	TokenKindScroll
 	TokenKindStar
@@ -145,7 +144,6 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindDrop:        "DROP",
 	TokenKindShow:        "SHOW",
 	TokenKindCollections: "COLLECTIONS",
-	TokenKindSearch:      "SEARCH",
 	TokenKindSelect:      "SELECT",
 	TokenKindScroll:      "SCROLL",
 	TokenKindStar:        "STAR",

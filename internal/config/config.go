@@ -11,9 +11,10 @@ type Config struct {
 	URL                string `json:"url"`
 	Secret             string `json:"secret"`
 	ActiveProfile      string `json:"active_profile"`
-	InferenceModel     string `json:"inference_model"`
-	InferenceMode      string `json:"inference_mode"`
-	EmbeddingEndpoint  string `json:"embedding_endpoint"`
+	InferenceModel     string            `json:"inference_model"`
+	InferenceMode      string            `json:"inference_mode"`
+	CloudModelOptions  map[string]string `json:"cloud_model_options,omitempty"` // e.g. {"openai-api-key": "sk-...", "openrouter-api-key": "..."}
+	EmbeddingEndpoint  string            `json:"embedding_endpoint"`
 	EmbeddingAPIKey    string `json:"embedding_api_key"`
 	EmbeddingModel     string `json:"embedding_model"`
 	EmbeddingDimension int    `json:"embedding_dimension"`

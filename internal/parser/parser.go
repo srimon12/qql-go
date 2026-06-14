@@ -7,6 +7,7 @@ import (
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
 	"github.com/srimon12/qql-go/internal/lexer"
+	"github.com/srimon12/qql-go/internal/utils"
 )
 
 type Parser struct {
@@ -191,7 +192,7 @@ func (p *Parser) parseValue() (any, error) {
 		return nil, nil
 	case lexer.TokenKindIdentifier:
 		p.advance()
-		upper := toUpper(tok.Value)
+		upper := utils.ToUpper(tok.Value)
 		if upper == "TRUE" {
 			return true, nil
 		}
@@ -214,7 +215,7 @@ func (p *Parser) parseBool() (bool, error) {
 	tok := p.peek()
 	if tok.Kind == lexer.TokenKindIdentifier {
 		p.advance()
-		upper := toUpper(tok.Value)
+		upper := utils.ToUpper(tok.Value)
 		if upper == "TRUE" {
 			return true, nil
 		}
@@ -243,29 +244,9 @@ func tokenKindToOp(kind lexer.TokenKind) string {
 	return ""
 }
 
-func toUpper(s string) string {
-	result := make([]byte, len(s))
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c >= 'a' && c <= 'z' {
-			c -= 32
-		}
-		result[i] = c
-	}
-	return string(result)
-}
 
-func toLower(s string) string {
-	result := make([]byte, len(s))
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c >= 'A' && c <= 'Z' {
-			c += 32
-		}
-		result[i] = c
-	}
-	return string(result)
-}
+
+
 
 func (p *Parser) parseEmbeddingOptions() (*string, bool, *string, *string, *string, error) {
 	if p.peek().Kind != lexer.TokenKindUsing {
@@ -408,7 +389,7 @@ func (p *Parser) parseNumericLiteral() (float64, error) {
 
 func (p *Parser) parseOptionalVectorString() (*string, error) {
 	tok := p.peek()
-	if tok.Kind == lexer.TokenKindVector || (tok.Kind == lexer.TokenKindIdentifier && toUpper(tok.Value) == "VECTOR") {
+	if tok.Kind == lexer.TokenKindVector || (tok.Kind == lexer.TokenKindIdentifier && utils.ToUpper(tok.Value) == "VECTOR") {
 		p.advance()
 		return p.parseStringPtr()
 	}
