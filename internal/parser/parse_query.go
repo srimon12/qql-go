@@ -14,21 +14,12 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 	stmt := &ast.QueryStmt{}
 
 	tok := p.peek()
-	switch tok.Kind {
-	case lexer.TokenKindNearest:
-		stmt.Mode = ast.QueryModeNearest
+	if tok.Kind == lexer.TokenKindNearest {
 		p.advance()
-		if tok2 := p.peek(); tok2.Kind == lexer.TokenKindString {
-			text := tok2.Value
-			stmt.QueryText = &text
-			p.advance()
-		} else {
-			id, err := p.parsePointIDValue("QUERY NEAREST")
-			if err != nil {
-				return nil, err
-			}
-			stmt.QueryID = id
-		}
+		tok = p.peek()
+	}
+
+	switch tok.Kind {
 	case lexer.TokenKindRecommend:
 		stmt.Mode = ast.QueryModeRecommend
 		p.advance()
@@ -108,7 +99,21 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 			}
 		}
 	default:
-		return nil, errors.NewQQLSyntaxError("Expected NEAREST, RECOMMEND, CONTEXT, or DISCOVER after QUERY", tok.Pos)
+		// Assume NEAREST mode for any string or ID
+		stmt.Mode = ast.QueryModeNearest
+		if tok.Kind == lexer.TokenKindString {
+			text := tok.Value
+			stmt.QueryText = &text
+			p.advance()
+		} else if tok.Kind == lexer.TokenKindInteger {
+			id, err := p.parsePointIDValue("QUERY")
+			if err != nil {
+				return nil, err
+			}
+			stmt.QueryID = id
+		} else {
+			return nil, errors.NewQQLSyntaxError("Expected a string query, a point ID, or a query mode (RECOMMEND/DISCOVER/CONTEXT) after QUERY", tok.Pos)
+		}
 	}
 
 	if _, err := p.expect(lexer.TokenKindFrom); err != nil {
@@ -194,18 +199,47 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 		}
 	}
 
-	_, hybrid, sparseOnly, _, fusion, _, _, err := p.parseSearchEmbeddingOptions()
-	if err != nil {
-		return nil, err
+	if p.peek().Kind == lexer.TokenKindUsing {
+		p.advance()
+		if p.peek().Kind == lexer.TokenKindHybrid {
+			p.advance()
+			stmt.Hybrid = true
+		} else if p.peek().Kind == lexer.TokenKindSparse {
+			p.advance()
+			stmt.SparseOnly = true
+			if p.peek().Kind == lexer.TokenKindString {
+				vecNameTok := p.peek()
+				p.advance()
+				stmt.Using = &vecNameTok.Value
+			}
+		} else if p.peek().Kind == lexer.TokenKindString {
+			vecNameTok := p.peek()
+			p.advance()
+			stmt.Using = &vecNameTok.Value
+		} else {
+			return nil, errors.NewQQLSyntaxError("Expected HYBRID, SPARSE, or a vector name string after USING", p.peek().Pos)
+		}
 	}
-	stmt.Hybrid = hybrid
-	stmt.SparseOnly = sparseOnly
-	stmt.Fusion = fusion
 
-	// Note: USING was not captured individually by parseSearchEmbeddingOptions unless it was returned. Wait!
-	// parseSearchEmbeddingOptions in parse_search.go skips USING and returns model names, but wait, I can just not use it if I want to support simple `USING`.
-	// Oh, parseSearchEmbeddingOptions does not return `USING string`! It expects `USING sparseModel DENSE denseModel` syntax.
-	// That's fine, let me fix `USING` capturing in a bit.
+	if p.peek().Kind == lexer.TokenKindWith {
+		// Lookahead to check if it's WITH MODEL
+		p.advance() // Consume WITH
+		if p.peek().Kind == lexer.TokenKindIdentifier && toUpper(p.peek().Value) == "MODEL" {
+			p.advance() // Consume MODEL
+			modelTok, err := p.expect(lexer.TokenKindString)
+			if err != nil {
+				return nil, err
+			}
+			stmt.Model = &modelTok.Value
+		} else {
+			// It's a WITH { ... } clause
+			parsedWith, err := p.parseWithClause()
+			if err != nil {
+				return nil, err
+			}
+			mergeSearchWith(&stmt.WithClause, parsedWith)
+		}
+	}
 
 	// For now, let's keep it simple.
 	seenWhere := false
@@ -246,11 +280,20 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 			}
 			seenWith = true
 			p.advance()
-			parsedWith, err := p.parseWithClause()
-			if err != nil {
-				return nil, err
+			if p.peek().Kind == lexer.TokenKindIdentifier && toUpper(p.peek().Value) == "MODEL" {
+				p.advance()
+				modelTok, err := p.expect(lexer.TokenKindString)
+				if err != nil {
+					return nil, err
+				}
+				stmt.Model = &modelTok.Value
+			} else {
+				parsedWith, err := p.parseWithClause()
+				if err != nil {
+					return nil, err
+				}
+				mergeSearchWith(&stmt.WithClause, parsedWith)
 			}
-			mergeSearchWith(&stmt.WithClause, parsedWith)
 		case lexer.TokenKindStrategy:
 			p.advance()
 			strategy, err := p.parseStringPtr()

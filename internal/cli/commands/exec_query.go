@@ -14,15 +14,25 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 	ctx := context.Background()
 
 	// 1. Resolve Embedding Options
-	model := ""
+	denseVectorName := ""
 	if stmt.Using != nil {
-		model = *stmt.Using
+		denseVectorName = *stmt.Using
+	}
+	sparseVectorName := ""
+	if stmt.Hybrid {
+		sparseVectorName = denseVectorName
 	}
 	
-	denseModel := model
+	denseModel := ""
+	if stmt.Model != nil {
+		denseModel = *stmt.Model
+	}
 	var sparseModel *string
 	if stmt.Hybrid {
-		sparseModelStr := model + "-sparse" // Default inference convention
+		sparseModelStr := denseModel
+		if denseModel != "" {
+			sparseModelStr += "-sparse" // Default inference convention
+		}
 		sparseModel = &sparseModelStr
 	}
 

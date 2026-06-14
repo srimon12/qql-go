@@ -193,6 +193,7 @@ type QueryStmt struct {
 	LookupFrom     string
 	LookupVector   *string
 	Using          *string
+	Model          *string
 
 	// Legacy flags mapped to pipeline logic
 	SparseOnly  bool
