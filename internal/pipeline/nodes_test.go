@@ -153,8 +153,8 @@ func TestRerankNode_Execute(t *testing.T) {
 
 func TestRecommendNode_Execute(t *testing.T) {
 	n := &RecommendNode{
-		PositiveIDs: []any{"uuid-1", 42},
-		NegativeIDs: []any{"uuid-2"},
+		PositiveIDs: []any{"123e4567-e89b-12d3-a456-426614174000", 42},
+		NegativeIDs: []any{"123e4567-e89b-12d3-a456-426614174001"},
 	}
 	state := &QueryState{}
 
@@ -165,8 +165,8 @@ func TestRecommendNode_Execute(t *testing.T) {
 	rec := state.TargetQuery.GetRecommend()
 	require.NotNil(t, rec)
 	assert.Len(t, rec.Positive, 2)
-	assert.Equal(t, "uuid-1", rec.Positive[0].GetId().GetUuid())
+	assert.Equal(t, "123e4567-e89b-12d3-a456-426614174000", rec.Positive[0].GetId().GetUuid())
 	assert.Equal(t, uint64(42), rec.Positive[1].GetId().GetNum())
 	assert.Len(t, rec.Negative, 1)
-	assert.Equal(t, "uuid-2", rec.Negative[0].GetId().GetUuid())
+	assert.Equal(t, "123e4567-e89b-12d3-a456-426614174001", rec.Negative[0].GetId().GetUuid())
 }

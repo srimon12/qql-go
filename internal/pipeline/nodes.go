@@ -3,6 +3,8 @@ package pipeline
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/qdrant/go-client/qdrant"
 )
@@ -70,6 +72,10 @@ type SparseEmbedNode struct {
 }
 
 func (n *SparseEmbedNode) Execute(ctx context.Context, state *QueryState) error {
+	if state.HasMMR && !n.AsPrefetch {
+		return fmt.Errorf("MMR is supported only for standard NEAREST queries, not sparse-only queries")
+	}
+
 	var query *qdrant.Query
 
 	if state.LocalEmbed {
@@ -156,37 +162,34 @@ type RecommendNode struct {
 	Strategy    *string
 }
 
-func buildRecommendVectorInputs(ids []any) []*qdrant.VectorInput {
-	var inputs []*qdrant.VectorInput
-	for _, id := range ids {
-		switch v := id.(type) {
-		case string:
-			inputs = append(inputs, qdrant.NewVectorInputID(qdrant.NewID(v)))
-		case int:
-			if v < 0 {
-				return nil
-			}
-			inputs = append(inputs, qdrant.NewVectorInputID(qdrant.NewIDNum(uint64(v))))
-		case float64:
-			if v < 0 || v != float64(uint64(v)) {
-				return nil
-			}
-			inputs = append(inputs, qdrant.NewVectorInputID(qdrant.NewIDNum(uint64(v))))
-		default:
-			return nil
-		}
-	}
-	return inputs
-}
-
 func (n *RecommendNode) Execute(ctx context.Context, state *QueryState) error {
 	if state.HasMMR {
 		return fmt.Errorf("MMR is supported only for standard NEAREST queries")
 	}
+	if len(n.PositiveIDs) == 0 && len(n.NegativeIDs) == 0 {
+		return fmt.Errorf("RECOMMEND requires at least one POSITIVE or NEGATIVE ID")
+	}
+
+	var pos []*qdrant.VectorInput
+	for _, id := range n.PositiveIDs {
+		vi, err := buildVectorInput(ctx, state, id)
+		if err != nil {
+			return err
+		}
+		pos = append(pos, vi)
+	}
+	var neg []*qdrant.VectorInput
+	for _, id := range n.NegativeIDs {
+		vi, err := buildVectorInput(ctx, state, id)
+		if err != nil {
+			return err
+		}
+		neg = append(neg, vi)
+	}
 
 	rec := &qdrant.RecommendInput{
-		Positive: buildRecommendVectorInputs(n.PositiveIDs),
-		Negative: buildRecommendVectorInputs(n.NegativeIDs),
+		Positive: pos,
+		Negative: neg,
 	}
 	if n.Strategy != nil && *n.Strategy != "" {
 		strategy, ok := RecommendStrategy(*n.Strategy)
@@ -200,12 +203,12 @@ func (n *RecommendNode) Execute(ctx context.Context, state *QueryState) error {
 }
 
 func RecommendStrategy(value string) (qdrant.RecommendStrategy, bool) {
-	switch value {
-	case "average_vector", "AVERAGE_VECTOR":
+	switch strings.ToLower(value) {
+	case "average_vector":
 		return qdrant.RecommendStrategy_AverageVector, true
-	case "best_score", "BEST_SCORE":
+	case "best_score":
 		return qdrant.RecommendStrategy_BestScore, true
-	case "sum_scores", "SUM_SCORES":
+	case "sum_scores":
 		return qdrant.RecommendStrategy_SumScores, true
 	default:
 		return 0, false
@@ -280,23 +283,65 @@ func (n *DiscoverNode) Execute(ctx context.Context, state *QueryState) error {
 	return nil
 }
 
+func isUUID(u string) bool {
+	if len(u) != 36 {
+		return false
+	}
+	for i, c := range u {
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			if c != '-' {
+				return false
+			}
+		} else {
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func buildVectorInput(ctx context.Context, state *QueryState, val any) (*qdrant.VectorInput, error) {
 	switch v := val.(type) {
 	case string:
+		if num, err := strconv.ParseUint(v, 10, 64); err == nil {
+			return qdrant.NewVectorInputID(qdrant.NewIDNum(num)), nil
+		}
+		if isUUID(v) {
+			return qdrant.NewVectorInputID(qdrant.NewIDUUID(v)), nil
+		}
 		if state.LocalEmbed {
 			if state.Embedder == nil {
 				return nil, fmt.Errorf("local embedding requested but no Embedder provided")
 			}
-			denseVector, err := state.Embedder.EmbedDense(ctx, v, "")
+			denseVector, err := state.Embedder.EmbedDense(ctx, v, state.DenseModel)
 			if err != nil {
 				return nil, fmt.Errorf("failed to embed target query: %w", err)
 			}
 			return qdrant.NewVectorInputDense(denseVector), nil
 		}
-		return qdrant.NewVectorInputDocument(&qdrant.Document{Text: v}), nil
+		return qdrant.NewVectorInputDocument(&qdrant.Document{
+			Text:    v,
+			Model:   state.DenseModel,
+			Options: buildDocumentOptions(state.CloudModelOptions),
+		}), nil
 	case int:
+		if v < 0 {
+			return nil, fmt.Errorf("unsupported vector input type: negative integer")
+		}
 		return qdrant.NewVectorInputID(qdrant.NewIDNum(uint64(v))), nil
+	case int64:
+		if v < 0 {
+			return nil, fmt.Errorf("unsupported vector input type: negative integer")
+		}
+		return qdrant.NewVectorInputID(qdrant.NewIDNum(uint64(v))), nil
+	case uint64:
+		return qdrant.NewVectorInputID(qdrant.NewIDNum(v)), nil
 	case float64:
+		// Prevent precision loss silently passing the check
+		if v < 0 || v > float64(1<<53) || v != float64(uint64(v)) {
+			return nil, fmt.Errorf("unsupported vector input type: non-integer or oversized float")
+		}
 		return qdrant.NewVectorInputID(qdrant.NewIDNum(uint64(v))), nil
 	case []float32: // In case of raw vectors
 		return qdrant.NewVectorInputDense(v), nil

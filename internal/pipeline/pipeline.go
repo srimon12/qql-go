@@ -27,6 +27,7 @@ type QueryState struct {
 	LocalEmbed        bool
 	Embedder          Embedder
 	CloudModelOptions map[string]string
+	DenseModel        string
 
 	// --- Request assembly (set by executor before pipeline runs) ---
 	CollectionName string
