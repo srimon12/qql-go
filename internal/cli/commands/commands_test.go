@@ -240,18 +240,18 @@ func TestBuildSearchRequestRejectsRerankWithoutCollectionSupport(t *testing.T) {
 }
 
 func TestInsertPointIDAndPayloadHonorsExplicitID(t *testing.T) {
-	pointID, payload, err := insertPointIDAndPayload(42, map[string]interface{}{"text": "hello"})
+	pointID, payload, err := insertPointIDAndPayload(42, map[string]any{"text": "hello"})
 	require.NoError(t, err)
 	require.Equal(t, 42, pointID)
-	require.Equal(t, map[string]interface{}{"text": "hello"}, payload)
+	require.Equal(t, map[string]any{"text": "hello"}, payload)
 }
 
 func TestInsertPointIDAndPayloadExtractsIDFromValues(t *testing.T) {
 	id := "123e4567-e89b-12d3-a456-426614174000"
-	pointID, payload, err := insertPointIDAndPayload(nil, map[string]interface{}{"id": id, "text": "hello"})
+	pointID, payload, err := insertPointIDAndPayload(nil, map[string]any{"id": id, "text": "hello"})
 	require.NoError(t, err)
 	require.Equal(t, id, pointID)
-	require.Equal(t, map[string]interface{}{"text": "hello"}, payload)
+	require.Equal(t, map[string]any{"text": "hello"}, payload)
 }
 
 func TestBuildQuantizationConfigScalar(t *testing.T) {
@@ -510,7 +510,7 @@ func TestDoCreateIndexSupportsKeywordOptions(t *testing.T) {
 		Collection: "docs",
 		Field:      "tenant_id",
 		FieldType:  "keyword",
-		Options: map[string]interface{}{
+		Options: map[string]any{
 			"is_tenant":   true,
 			"on_disk":     true,
 			"enable_hnsw": false,
@@ -534,7 +534,7 @@ func TestDoCreateIndexSupportsTextOptions(t *testing.T) {
 		Collection: "docs",
 		Field:      "title",
 		FieldType:  "text",
-		Options: map[string]interface{}{
+		Options: map[string]any{
 			"tokenizer":       "word",
 			"min_token_len":   2,
 			"max_token_len":   20,
@@ -562,7 +562,7 @@ func TestDoCreateIndexSupportsUUIDOptions(t *testing.T) {
 		Collection: "docs",
 		Field:      "doc_id",
 		FieldType:  "uuid",
-		Options: map[string]interface{}{
+		Options: map[string]any{
 			"on_disk": true,
 		},
 	})
@@ -582,7 +582,7 @@ func TestDoCreateIndexRejectsUnknownOption(t *testing.T) {
 		Collection: "docs",
 		Field:      "tenant_id",
 		FieldType:  "keyword",
-		Options: map[string]interface{}{
+		Options: map[string]any{
 			"tokenizer": "word",
 		},
 	})
@@ -596,7 +596,7 @@ func TestInsertAutoCreatesMissingCollection(t *testing.T) {
 
 	resp, err := exec.doInsert(&ast.InsertStmt{
 		Collection: "docs",
-		Values:     map[string]interface{}{"text": "hello"},
+		Values:     map[string]any{"text": "hello"},
 	})
 	require.NoError(t, err)
 	require.True(t, resp.OK)
@@ -625,7 +625,7 @@ func TestInsertPreservesHybridAutodetectionOnExistingCollection(t *testing.T) {
 	exec := NewExecutor(client, &config.Config{})
 	resp, err := exec.doInsert(&ast.InsertStmt{
 		Collection: "docs",
-		Values:     map[string]interface{}{"text": "hello"},
+		Values:     map[string]any{"text": "hello"},
 	})
 	require.NoError(t, err)
 	require.True(t, resp.OK)
@@ -1441,7 +1441,7 @@ func TestDoSearchRejectsMMRWithSparse(t *testing.T) {
 func TestBuildRecommendRequestRejectsMMR(t *testing.T) {
 	_, err := buildRecommendRequest(&ast.RecommendStmt{
 		Collection:  "docs",
-		PositiveIDs: []interface{}{"a"},
+		PositiveIDs: []any{"a"},
 		Limit:       5,
 		WithClause:  &ast.SearchWith{MmrDiversity: float64Ptr(0.5)},
 	})
@@ -1477,7 +1477,7 @@ func TestBuildUpdatePayloadRequestSupportsFilterSelector(t *testing.T) {
 	req, err := buildUpdatePayloadRequest(&ast.UpdatePayloadStmt{
 		Collection:  "docs",
 		QueryFilter: &ast.CompareExpr{Field: "status", Op: "=", Value: "draft"},
-		Payload:     map[string]interface{}{"status": "published"},
+		Payload:     map[string]any{"status": "published"},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, req.GetPointsSelector().GetFilter())
@@ -1608,7 +1608,7 @@ func TestBuildSearchRequestHybridLocalModePropagatesError(t *testing.T) {
 func TestBuildRecommendRequestDefaults(t *testing.T) {
 	req, err := buildRecommendRequest(&ast.RecommendStmt{
 		Collection:  "docs",
-		PositiveIDs: []interface{}{"a"},
+		PositiveIDs: []any{"a"},
 		Limit:       5,
 	})
 	require.NoError(t, err)
@@ -1625,8 +1625,8 @@ func TestBuildRecommendRequestDefaults(t *testing.T) {
 func TestBuildRecommendRequestWithAllNewFields(t *testing.T) {
 	req, err := buildRecommendRequest(&ast.RecommendStmt{
 		Collection:     "docs",
-		PositiveIDs:    []interface{}{"a", "b"},
-		NegativeIDs:    []interface{}{"c"},
+		PositiveIDs:    []any{"a", "b"},
+		NegativeIDs:    []any{"c"},
 		Limit:          5,
 		Strategy:       strPtr("best_score"),
 		Offset:         2,
@@ -1658,7 +1658,7 @@ func TestBuildRecommendRequestWithAllNewFields(t *testing.T) {
 func TestBuildRecommendRequestWithLookupFromNoVector(t *testing.T) {
 	req, err := buildRecommendRequest(&ast.RecommendStmt{
 		Collection:  "docs",
-		PositiveIDs: []interface{}{"a"},
+		PositiveIDs: []any{"a"},
 		Limit:       5,
 		LookupFrom:  "src",
 	})
@@ -1671,7 +1671,7 @@ func TestBuildRecommendRequestWithLookupFromNoVector(t *testing.T) {
 func TestBuildRecommendRequestUnknownStrategy(t *testing.T) {
 	_, err := buildRecommendRequest(&ast.RecommendStmt{
 		Collection:  "docs",
-		PositiveIDs: []interface{}{"a"},
+		PositiveIDs: []any{"a"},
 		Limit:       5,
 		Strategy:    strPtr("bad_strategy"),
 	})
@@ -1682,8 +1682,8 @@ func TestBuildRecommendRequestUnknownStrategy(t *testing.T) {
 func TestBuildRecommendRequestFilterExcludesIDs(t *testing.T) {
 	req, err := buildRecommendRequest(&ast.RecommendStmt{
 		Collection:  "docs",
-		PositiveIDs: []interface{}{"a"},
-		NegativeIDs: []interface{}{"b"},
+		PositiveIDs: []any{"a"},
+		NegativeIDs: []any{"b"},
 		Limit:       5,
 		QueryFilter: &ast.CompareExpr{Field: "status", Op: "=", Value: "active"},
 	})

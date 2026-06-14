@@ -17,29 +17,29 @@ type FilterExpr interface {
 type CompareExpr struct {
 	Field string
 	Op    string
-	Value interface{}
+	Value any
 }
 
 func (CompareExpr) isFilterExpr() {}
 
 type BetweenExpr struct {
 	Field string
-	Low   interface{}
-	High  interface{}
+	Low   any
+	High  any
 }
 
 func (BetweenExpr) isFilterExpr() {}
 
 type InExpr struct {
 	Field  string
-	Values []interface{}
+	Values []any
 }
 
 func (InExpr) isFilterExpr() {}
 
 type NotInExpr struct {
 	Field  string
-	Values []interface{}
+	Values []any
 }
 
 func (NotInExpr) isFilterExpr() {}

@@ -100,7 +100,7 @@ func normalizeFilterExpr(expr ast.FilterExpr) (ast.FilterExpr, error) {
 	}
 
 	value := reflect.ValueOf(expr)
-	if value.Kind() != reflect.Ptr {
+	if value.Kind() != reflect.Pointer {
 		return expr, nil
 	}
 	if value.IsNil() {
@@ -221,7 +221,7 @@ func (fc *FilterConverter) wrapAsFilter(condition *qdrant.Condition) *qdrant.Fil
 	}
 }
 
-func (fc *FilterConverter) buildEqualCondition(field string, value interface{}) (*qdrant.Condition, error) {
+func (fc *FilterConverter) buildEqualCondition(field string, value any) (*qdrant.Condition, error) {
 	switch v := value.(type) {
 	case string:
 		return qdrant.NewMatch(field, v), nil
@@ -241,7 +241,7 @@ func (fc *FilterConverter) buildEqualCondition(field string, value interface{}) 
 	}
 }
 
-func (fc *FilterConverter) buildNotEqualCondition(field string, value interface{}) (*qdrant.Condition, error) {
+func (fc *FilterConverter) buildNotEqualCondition(field string, value any) (*qdrant.Condition, error) {
 	switch v := value.(type) {
 	case string:
 		return qdrant.NewMatchExcept(field, v), nil
@@ -266,7 +266,7 @@ func (fc *FilterConverter) buildNotEqualCondition(field string, value interface{
 	}
 }
 
-func (fc *FilterConverter) buildSetCondition(field string, values []interface{}, negate bool) (*qdrant.Condition, error) {
+func (fc *FilterConverter) buildSetCondition(field string, values []any, negate bool) (*qdrant.Condition, error) {
 	if len(values) == 0 {
 		if negate {
 			return qdrant.NewMatchExceptKeywords(field), nil
@@ -357,7 +357,7 @@ const (
 	literalKindBool
 )
 
-func literalKindOf(v interface{}) (literalKind, error) {
+func literalKindOf(v any) (literalKind, error) {
 	switch v.(type) {
 	case string:
 		return literalKindString, nil
@@ -372,7 +372,7 @@ func literalKindOf(v interface{}) (literalKind, error) {
 	}
 }
 
-func toInt64(v interface{}) int64 {
+func toInt64(v any) int64 {
 	switch val := v.(type) {
 	case int:
 		return int64(val)
@@ -382,7 +382,7 @@ func toInt64(v interface{}) int64 {
 	return 0
 }
 
-func toFloat64Value(v interface{}) float64 {
+func toFloat64Value(v any) float64 {
 	switch val := v.(type) {
 	case float32:
 		return float64(val)
@@ -392,7 +392,7 @@ func toFloat64Value(v interface{}) float64 {
 	return 0
 }
 
-func toFloat64(v interface{}) *float64 {
+func toFloat64(v any) *float64 {
 	switch val := v.(type) {
 	case float64:
 		return &val

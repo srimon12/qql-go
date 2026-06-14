@@ -229,7 +229,7 @@ func TestReadLineIgnoresDelimitersInsideQuotedStrings(t *testing.T) {
 func TestAddToHistoryDeduplicatesAndCapsSize(t *testing.T) {
 	repl := NewREPL(&config.Config{URL: "http://localhost:6333"}, &stubExecutor{})
 
-	for i := 0; i < 101; i++ {
+	for i := range 101 {
 		repl.addToHistory(fmt.Sprintf("cmd-%d", i))
 	}
 	repl.addToHistory("cmd-50")

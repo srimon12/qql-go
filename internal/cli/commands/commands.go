@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/url"
 	"strconv"
 	"strings"
@@ -1193,8 +1194,8 @@ func (e *Executor) doInsertBulk(n *ast.InsertBulkStmt) (*ExecResponse, error) {
 	sparseModel := e.resolveSparseModel(n.SparseModel)
 
 	texts := make([]string, 0, len(n.ValuesList))
-	pointIDs := make([]interface{}, 0, len(n.ValuesList))
-	payloads := make([]map[string]interface{}, 0, len(n.ValuesList))
+	pointIDs := make([]any, 0, len(n.ValuesList))
+	payloads := make([]map[string]any, 0, len(n.ValuesList))
 	for idx, values := range n.ValuesList {
 		textVal, ok := values["text"]
 		if !ok {
@@ -1343,7 +1344,7 @@ func (e *Executor) doScroll(n *ast.ScrollStmt) (*ExecResponse, error) {
 		})
 	}
 
-	var next interface{}
+	var next any
 	if nextOffset != nil {
 		next = pointIDValue(nextOffset)
 	}
@@ -1359,15 +1360,15 @@ func (e *Executor) doScroll(n *ast.ScrollStmt) (*ExecResponse, error) {
 	}, nil
 }
 
-func convertRetrievedPayload(payload map[string]*qdrant.Value) map[string]interface{} {
-	result := make(map[string]interface{}, len(payload))
+func convertRetrievedPayload(payload map[string]*qdrant.Value) map[string]any {
+	result := make(map[string]any, len(payload))
 	for key, val := range payload {
 		result[key] = convertValue(val)
 	}
 	return result
 }
 
-func convertValue(val *qdrant.Value) interface{} {
+func convertValue(val *qdrant.Value) any {
 	switch v := val.GetKind().(type) {
 	case *qdrant.Value_StringValue:
 		return v.StringValue
@@ -1380,7 +1381,7 @@ func convertValue(val *qdrant.Value) interface{} {
 	case *qdrant.Value_NullValue:
 		return nil
 	case *qdrant.Value_ListValue:
-		items := make([]interface{}, 0, len(v.ListValue.GetValues()))
+		items := make([]any, 0, len(v.ListValue.GetValues()))
 		for _, item := range v.ListValue.GetValues() {
 			items = append(items, convertValue(item))
 		}
@@ -1557,9 +1558,9 @@ func buildRecommendRequest(n *ast.RecommendStmt) (*qdrant.QueryPoints, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to build filter: %w", err)
 		}
-		req.Filter = addExcludedIDsToFilter(filter, append(append([]interface{}{}, n.PositiveIDs...), n.NegativeIDs...))
+		req.Filter = addExcludedIDsToFilter(filter, append(append([]any{}, n.PositiveIDs...), n.NegativeIDs...))
 	} else {
-		req.Filter = addExcludedIDsToFilter(nil, append(append([]interface{}{}, n.PositiveIDs...), n.NegativeIDs...))
+		req.Filter = addExcludedIDsToFilter(nil, append(append([]any{}, n.PositiveIDs...), n.NegativeIDs...))
 	}
 
 	return req, nil
@@ -1755,7 +1756,7 @@ func (e *Executor) doCreateIndex(n *ast.CreateIndexStmt) (*ExecResponse, error) 
 	}, nil
 }
 
-func (e *Executor) buildPayload(values map[string]interface{}) map[string]*qdrant.Value {
+func (e *Executor) buildPayload(values map[string]any) map[string]*qdrant.Value {
 	return qdrant.NewValueMap(values)
 }
 
@@ -2372,7 +2373,7 @@ func searchParamsFromWithClause(withClause *ast.SearchWith) *qdrant.SearchParams
 	return params
 }
 
-func buildPayloadIndexParams(fieldType string, options map[string]interface{}) (*qdrant.PayloadIndexParams, error) {
+func buildPayloadIndexParams(fieldType string, options map[string]any) (*qdrant.PayloadIndexParams, error) {
 	if len(options) == 0 {
 		return nil, nil
 	}
@@ -2479,7 +2480,7 @@ func buildPayloadIndexParams(fieldType string, options map[string]interface{}) (
 	}
 }
 
-func validateIndexOptionKeys(fieldType string, options map[string]interface{}, allowed []string) error {
+func validateIndexOptionKeys(fieldType string, options map[string]any, allowed []string) error {
 	allowedSet := make(map[string]struct{}, len(allowed))
 	for _, key := range allowed {
 		allowedSet[key] = struct{}{}
@@ -2492,7 +2493,7 @@ func validateIndexOptionKeys(fieldType string, options map[string]interface{}, a
 	return nil
 }
 
-func boolOption(options map[string]interface{}, key string) (*bool, error) {
+func boolOption(options map[string]any, key string) (*bool, error) {
 	value, ok := options[key]
 	if !ok {
 		return nil, nil
@@ -2504,7 +2505,7 @@ func boolOption(options map[string]interface{}, key string) (*bool, error) {
 	return qdrant.PtrOf(typed), nil
 }
 
-func uint64Option(options map[string]interface{}, key string) (*uint64, error) {
+func uint64Option(options map[string]any, key string) (*uint64, error) {
 	value, ok := options[key]
 	if !ok {
 		return nil, nil
@@ -2517,7 +2518,7 @@ func uint64Option(options map[string]interface{}, key string) (*uint64, error) {
 	return &result, nil
 }
 
-func tokenizerOption(options map[string]interface{}, key string) (qdrant.TokenizerType, error) {
+func tokenizerOption(options map[string]any, key string) (qdrant.TokenizerType, error) {
 	value, ok := options[key]
 	if !ok {
 		return qdrant.TokenizerType_Unknown, nil
@@ -2540,7 +2541,7 @@ func tokenizerOption(options map[string]interface{}, key string) (qdrant.Tokeniz
 	}
 }
 
-func stopwordsOption(options map[string]interface{}, key string) (*qdrant.StopwordsSet, error) {
+func stopwordsOption(options map[string]any, key string) (*qdrant.StopwordsSet, error) {
 	value, ok := options[key]
 	if !ok {
 		return nil, nil
@@ -2548,7 +2549,7 @@ func stopwordsOption(options map[string]interface{}, key string) (*qdrant.Stopwo
 	switch typed := value.(type) {
 	case string:
 		return &qdrant.StopwordsSet{Languages: []string{strings.ToLower(typed)}}, nil
-	case []interface{}:
+	case []any:
 		words := make([]string, 0, len(typed))
 		for _, item := range typed {
 			word, ok := item.(string)
@@ -2725,11 +2726,9 @@ func (e *Executor) shouldUseHybrid(ctx context.Context, collection string, reque
 	return e.collectionHasSparseVector(ctx, collection)
 }
 
-func insertPointIDAndPayload(pointID interface{}, values map[string]interface{}) (interface{}, map[string]interface{}, error) {
-	payload := make(map[string]interface{}, len(values))
-	for key, value := range values {
-		payload[key] = value
-	}
+func insertPointIDAndPayload(pointID any, values map[string]any) (any, map[string]any, error) {
+	payload := make(map[string]any, len(values))
+	maps.Copy(payload, values)
 	rawID := pointID
 	if rawID == nil {
 		var ok bool
@@ -2757,7 +2756,7 @@ func insertPointIDAndPayload(pointID interface{}, values map[string]interface{})
 	}
 }
 
-func newPointID(value interface{}) *qdrant.PointId {
+func newPointID(value any) *qdrant.PointId {
 	switch id := value.(type) {
 	case int:
 		return qdrant.NewIDNum(uint64(id))
@@ -2770,7 +2769,7 @@ func newPointID(value interface{}) *qdrant.PointId {
 	}
 }
 
-func buildRecommendVectorInputs(ids []interface{}) []*qdrant.VectorInput {
+func buildRecommendVectorInputs(ids []any) []*qdrant.VectorInput {
 	if len(ids) == 0 {
 		return nil
 	}
@@ -2809,7 +2808,7 @@ func turboBitsEnum(value float64) *qdrant.TurboQuantBitSize {
 	}
 }
 
-func addExcludedIDsToFilter(filter *qdrant.Filter, ids []interface{}) *qdrant.Filter {
+func addExcludedIDsToFilter(filter *qdrant.Filter, ids []any) *qdrant.Filter {
 	if len(ids) == 0 {
 		return filter
 	}

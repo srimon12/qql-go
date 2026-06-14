@@ -2,8 +2,8 @@ package ast
 
 type InsertStmt struct {
 	Collection  string
-	PointID     interface{}
-	Values      map[string]interface{}
+	PointID     any
+	Values      map[string]any
 	Model       *string
 	Hybrid      bool
 	SparseModel *string
@@ -11,7 +11,7 @@ type InsertStmt struct {
 
 type InsertBulkStmt struct {
 	Collection  string
-	ValuesList  []map[string]interface{}
+	ValuesList  []map[string]any
 	Model       *string
 	Hybrid      bool
 	SparseModel *string
@@ -39,7 +39,7 @@ type OptimizersRuntimeConfig struct {
 	MemmapThreshold        *uint64
 	IndexingThreshold      *uint64
 	FlushIntervalSec       *uint64
-	MaxOptimizationThreads interface{} // int or "auto" string
+	MaxOptimizationThreads any // int or "auto" string
 	PreventUnoptimized     *bool
 }
 
@@ -107,14 +107,14 @@ type ShowCollectionStmt struct {
 
 type SelectStmt struct {
 	Collection string
-	PointID    interface{}
+	PointID    any
 }
 
 type ScrollStmt struct {
 	Collection  string
 	Limit       int
 	QueryFilter FilterExpr
-	After       interface{}
+	After       any
 }
 
 type SearchStmt struct {
@@ -146,8 +146,8 @@ type QuantizationSearchWith struct {
 
 type RecommendStmt struct {
 	Collection     string
-	PositiveIDs    []interface{}
-	NegativeIDs    []interface{}
+	PositiveIDs    []any
+	NegativeIDs    []any
 	Limit          int
 	Strategy       *string
 	QueryFilter    FilterExpr
@@ -161,29 +161,29 @@ type RecommendStmt struct {
 
 type DeleteStmt struct {
 	Collection string
-	PointID    interface{}
+	PointID    any
 	Field      string
-	Value      interface{}
+	Value      any
 }
 
 type UpdateVectorStmt struct {
 	Collection string
-	PointID    interface{}
+	PointID    any
 	Vector     []float32
 }
 
 type UpdatePayloadStmt struct {
 	Collection  string
-	PointID     interface{}
+	PointID     any
 	QueryFilter FilterExpr
-	Payload     map[string]interface{}
+	Payload     map[string]any
 }
 
 type CreateIndexStmt struct {
 	Collection string
 	Field      string
 	FieldType  string
-	Options    map[string]interface{}
+	Options    map[string]any
 }
 
 type ASTNode interface {

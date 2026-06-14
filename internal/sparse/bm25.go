@@ -2,7 +2,7 @@ package sparse
 
 import (
 	"math"
-	"sort"
+	"slices"
 )
 
 // BM25 parameters matching Qdrant FastEmbed defaults.
@@ -35,7 +35,7 @@ func BuildQuery(text string) Vector {
 	for idx := range counts {
 		indices = append(indices, idx)
 	}
-	sort.Slice(indices, func(i, j int) bool { return indices[i] < indices[j] })
+	slices.Sort(indices)
 
 	values := make([]float32, len(indices))
 	for i, idx := range indices {
@@ -64,7 +64,7 @@ func BuildDocument(text string) Vector {
 	for idx := range counts {
 		indices = append(indices, idx)
 	}
-	sort.Slice(indices, func(i, j int) bool { return indices[i] < indices[j] })
+	slices.Sort(indices)
 
 	values := make([]float32, len(indices))
 	for i, idx := range indices {

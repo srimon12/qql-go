@@ -78,7 +78,7 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 			break
 		}
 
-		batch := make([]map[string]interface{}, 0, len(points))
+		batch := make([]map[string]any, 0, len(points))
 		for _, point := range points {
 			payload := point.GetPayload()
 			textValue, ok := payload["text"]
@@ -129,20 +129,20 @@ func isHybrid(ctx context.Context, client Client, collection string) (bool, erro
 	return info.GetConfig().GetParams().GetSparseVectorsConfig() != nil, nil
 }
 
-func payloadToMap(payload map[string]*qdrant.Value) map[string]interface{} {
+func payloadToMap(payload map[string]*qdrant.Value) map[string]any {
 	keys := make([]string, 0, len(payload))
 	for key := range payload {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	result := make(map[string]interface{}, len(payload))
+	result := make(map[string]any, len(payload))
 	for _, key := range keys {
 		result[key] = payloadValue(payload[key])
 	}
 	return result
 }
 
-func payloadValue(value *qdrant.Value) interface{} {
+func payloadValue(value *qdrant.Value) any {
 	switch kind := value.GetKind().(type) {
 	case *qdrant.Value_NullValue:
 		return nil
@@ -155,7 +155,7 @@ func payloadValue(value *qdrant.Value) interface{} {
 	case *qdrant.Value_StringValue:
 		return kind.StringValue
 	case *qdrant.Value_ListValue:
-		items := make([]interface{}, 0, len(kind.ListValue.GetValues()))
+		items := make([]any, 0, len(kind.ListValue.GetValues()))
 		for _, item := range kind.ListValue.GetValues() {
 			items = append(items, payloadValue(item))
 		}
@@ -167,7 +167,7 @@ func payloadValue(value *qdrant.Value) interface{} {
 	}
 }
 
-func pointIDValue(id *qdrant.PointId) interface{} {
+func pointIDValue(id *qdrant.PointId) any {
 	if id == nil {
 		return ""
 	}
@@ -181,7 +181,7 @@ func pointIDValue(id *qdrant.PointId) interface{} {
 	}
 }
 
-func serializeMap(values map[string]interface{}) string {
+func serializeMap(values map[string]any) string {
 	keys := make([]string, 0, len(values))
 	for key := range values {
 		keys = append(keys, key)
@@ -201,7 +201,7 @@ func serializeMap(values map[string]interface{}) string {
 	return builder.String()
 }
 
-func serializeValue(value interface{}) string {
+func serializeValue(value any) string {
 	switch typed := value.(type) {
 	case nil:
 		return "null"
@@ -216,13 +216,13 @@ func serializeValue(value interface{}) string {
 		return fmt.Sprintf("%v", typed)
 	case string:
 		return "'" + escapeString(typed) + "'"
-	case []interface{}:
+	case []any:
 		parts := make([]string, 0, len(typed))
 		for _, item := range typed {
 			parts = append(parts, serializeValue(item))
 		}
 		return "[" + strings.Join(parts, ", ") + "]"
-	case map[string]interface{}:
+	case map[string]any:
 		return serializeMap(typed)
 	default:
 		return "'" + escapeString(fmt.Sprintf("%v", value)) + "'"

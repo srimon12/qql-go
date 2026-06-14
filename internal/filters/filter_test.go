@@ -137,7 +137,7 @@ func TestBuildFilterTypedInAndNotIn(t *testing.T) {
 	}{
 		{
 			name: "string in",
-			expr: ast.InExpr{Field: "status", Values: []interface{}{"active", "pending"}},
+			expr: ast.InExpr{Field: "status", Values: []any{"active", "pending"}},
 			checkFunc: func(t *testing.T, filter *qdrant.Filter) {
 				require.Len(t, filter.Must, 1)
 				match := filter.Must[0].GetField().GetMatch()
@@ -147,7 +147,7 @@ func TestBuildFilterTypedInAndNotIn(t *testing.T) {
 		},
 		{
 			name: "int in",
-			expr: ast.InExpr{Field: "count", Values: []interface{}{1, 2}},
+			expr: ast.InExpr{Field: "count", Values: []any{1, 2}},
 			checkFunc: func(t *testing.T, filter *qdrant.Filter) {
 				require.Len(t, filter.Must, 1)
 				match := filter.Must[0].GetField().GetMatch()
@@ -157,7 +157,7 @@ func TestBuildFilterTypedInAndNotIn(t *testing.T) {
 		},
 		{
 			name: "float in",
-			expr: ast.InExpr{Field: "score", Values: []interface{}{1.25, 2.5}},
+			expr: ast.InExpr{Field: "score", Values: []any{1.25, 2.5}},
 			checkFunc: func(t *testing.T, filter *qdrant.Filter) {
 				require.Len(t, filter.Should, 2)
 				for i, want := range []float64{1.25, 2.5} {
@@ -170,7 +170,7 @@ func TestBuildFilterTypedInAndNotIn(t *testing.T) {
 		},
 		{
 			name: "bool in",
-			expr: ast.InExpr{Field: "is_active", Values: []interface{}{true, false}},
+			expr: ast.InExpr{Field: "is_active", Values: []any{true, false}},
 			checkFunc: func(t *testing.T, filter *qdrant.Filter) {
 				require.Len(t, filter.Should, 2)
 				assert.True(t, filter.Should[0].GetField().GetMatch().GetBoolean())
@@ -179,7 +179,7 @@ func TestBuildFilterTypedInAndNotIn(t *testing.T) {
 		},
 		{
 			name: "string not in",
-			expr: ast.NotInExpr{Field: "status", Values: []interface{}{"deleted", "archived"}},
+			expr: ast.NotInExpr{Field: "status", Values: []any{"deleted", "archived"}},
 			checkFunc: func(t *testing.T, filter *qdrant.Filter) {
 				require.Len(t, filter.Must, 1)
 				match := filter.Must[0].GetField().GetMatch()
@@ -189,7 +189,7 @@ func TestBuildFilterTypedInAndNotIn(t *testing.T) {
 		},
 		{
 			name: "int not in",
-			expr: ast.NotInExpr{Field: "count", Values: []interface{}{3, 4}},
+			expr: ast.NotInExpr{Field: "count", Values: []any{3, 4}},
 			checkFunc: func(t *testing.T, filter *qdrant.Filter) {
 				require.Len(t, filter.Must, 1)
 				match := filter.Must[0].GetField().GetMatch()
@@ -199,7 +199,7 @@ func TestBuildFilterTypedInAndNotIn(t *testing.T) {
 		},
 		{
 			name: "float not in",
-			expr: ast.NotInExpr{Field: "score", Values: []interface{}{4.5, 9.0}},
+			expr: ast.NotInExpr{Field: "score", Values: []any{4.5, 9.0}},
 			checkFunc: func(t *testing.T, filter *qdrant.Filter) {
 				require.Len(t, filter.MustNot, 2)
 				for i, want := range []float64{4.5, 9.0} {
@@ -212,7 +212,7 @@ func TestBuildFilterTypedInAndNotIn(t *testing.T) {
 		},
 		{
 			name: "bool not in",
-			expr: ast.NotInExpr{Field: "is_active", Values: []interface{}{true, false}},
+			expr: ast.NotInExpr{Field: "is_active", Values: []any{true, false}},
 			checkFunc: func(t *testing.T, filter *qdrant.Filter) {
 				require.Len(t, filter.MustNot, 2)
 				assert.True(t, filter.MustNot[0].GetField().GetMatch().GetBoolean())
@@ -237,7 +237,7 @@ func TestBuildFilterRejectsMixedInTypes(t *testing.T) {
 
 	_, err := converter.BuildFilter(ast.InExpr{
 		Field:  "mixed",
-		Values: []interface{}{"active", 1},
+		Values: []any{"active", 1},
 	})
 
 	require.Error(t, err)

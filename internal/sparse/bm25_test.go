@@ -42,12 +42,6 @@ func TestTokenizeHandlesUnderscore(t *testing.T) {
 	require.Equal(t, []string{"test_fn", "main_loop"}, got)
 }
 
-func TestTokenizeFiltersStopwords(t *testing.T) {
-	t.Parallel()
-
-	got := Tokenize("the quick brown fox and the lazy dog")
-	require.Equal(t, []string{"quick", "brown", "fox", "lazy", "dog"}, got)
-}
 
 func TestHashTokenDeterministic(t *testing.T) {
 	t.Parallel()

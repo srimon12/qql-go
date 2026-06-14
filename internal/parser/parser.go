@@ -143,9 +143,9 @@ func (p *Parser) parseInsertBulk() (*ast.InsertBulkStmt, error) {
 	if err != nil {
 		return nil, err
 	}
-	valuesList := make([]map[string]interface{}, 0, len(rawItems))
+	valuesList := make([]map[string]any, 0, len(rawItems))
 	for idx, item := range rawItems {
-		dict, ok := item.(map[string]interface{})
+		dict, ok := item.(map[string]any)
 		if !ok {
 			return nil, errors.NewQQLSyntaxError("INSERT BULK VALUES item at index "+strconv.Itoa(idx)+" must be a dict", p.peek().Pos)
 		}
@@ -568,7 +568,7 @@ func (p *Parser) parseCollectionParamsConfigBlock(forAlter bool) (*ast.Collectio
 	}, nil
 }
 
-func collectionBool(config map[string]interface{}, key string) *bool {
+func collectionBool(config map[string]any, key string) *bool {
 	v, ok := collectionValue(config, key)
 	if !ok {
 		return nil
@@ -580,7 +580,7 @@ func collectionBool(config map[string]interface{}, key string) *bool {
 	return nil
 }
 
-func collectionPositiveUint64(config map[string]interface{}, key string, pos int) (*uint64, error) {
+func collectionPositiveUint64(config map[string]any, key string, pos int) (*uint64, error) {
 	v, ok := collectionValue(config, key)
 	if !ok {
 		return nil, nil
@@ -592,7 +592,7 @@ func collectionPositiveUint64(config map[string]interface{}, key string, pos int
 	return nil, errors.NewQQLSyntaxError(key+" must be a positive integer", pos)
 }
 
-func collectionNonNegativeUint64(config map[string]interface{}, key string, pos int) (*uint64, error) {
+func collectionNonNegativeUint64(config map[string]any, key string, pos int) (*uint64, error) {
 	v, ok := collectionValue(config, key)
 	if !ok {
 		return nil, nil
@@ -604,7 +604,7 @@ func collectionNonNegativeUint64(config map[string]interface{}, key string, pos 
 	return nil, errors.NewQQLSyntaxError(key+" must be a non-negative integer", pos)
 }
 
-func collectionFloatRange(config map[string]interface{}, key string, min, max float64) *float64 {
+func collectionFloatRange(config map[string]any, key string, min, max float64) *float64 {
 	v, ok := collectionValue(config, key)
 	if !ok {
 		return nil
@@ -623,7 +623,7 @@ func collectionFloatRange(config map[string]interface{}, key string, min, max fl
 	return nil
 }
 
-func collectionMaxOptimizationThreads(config map[string]interface{}, key string) interface{} {
+func collectionMaxOptimizationThreads(config map[string]any, key string) any {
 	v, ok := collectionValue(config, key)
 	if !ok {
 		return nil
@@ -641,7 +641,7 @@ func collectionMaxOptimizationThreads(config map[string]interface{}, key string)
 	return nil
 }
 
-func collectionValue(config map[string]interface{}, key string) (interface{}, bool) {
+func collectionValue(config map[string]any, key string) (any, bool) {
 	if v, ok := config[key]; ok {
 		return v, true
 	}
@@ -658,12 +658,12 @@ func collectionValue(config map[string]interface{}, key string) (interface{}, bo
 	return config[matches[0]], true
 }
 
-func configHasKey(config map[string]interface{}, key string) bool {
+func configHasKey(config map[string]any, key string) bool {
 	_, ok := collectionValue(config, key)
 	return ok
 }
 
-func (p *Parser) validateHnswValue(key string, raw interface{}) error {
+func (p *Parser) validateHnswValue(key string, raw any) error {
 	lower := toLower(key)
 	switch lower {
 	case "m", "ef_construct", "full_scan_threshold", "max_indexing_threads", "payload_m":
@@ -678,7 +678,7 @@ func (p *Parser) validateHnswValue(key string, raw interface{}) error {
 	return nil
 }
 
-func (p *Parser) validateVectorsValue(key string, raw interface{}) error {
+func (p *Parser) validateVectorsValue(key string, raw any) error {
 	lower := toLower(key)
 	switch lower {
 	case "on_disk":
@@ -689,7 +689,7 @@ func (p *Parser) validateVectorsValue(key string, raw interface{}) error {
 	return nil
 }
 
-func (p *Parser) validateOptimizersValue(key string, raw interface{}) error {
+func (p *Parser) validateOptimizersValue(key string, raw any) error {
 	lower := toLower(key)
 	switch lower {
 	case "deleted_threshold":
@@ -716,7 +716,7 @@ func (p *Parser) validateOptimizersValue(key string, raw interface{}) error {
 	return nil
 }
 
-func (p *Parser) validateParamsValue(key string, raw interface{}) error {
+func (p *Parser) validateParamsValue(key string, raw any) error {
 	lower := toLower(key)
 	switch lower {
 	case "replication_factor", "write_consistency_factor", "read_fan_out_factor", "read_fan_out_delay_ms":
@@ -852,7 +852,7 @@ func (p *Parser) parseCreateIndex() (*ast.CreateIndexStmt, error) {
 		}
 		fieldType = toLower(typeTok.Value)
 	}
-	var options map[string]interface{}
+	var options map[string]any
 	if p.peek().Kind == lexer.TokenKindWith {
 		p.advance()
 		dict, err := p.parseDict()
@@ -1122,7 +1122,7 @@ func (p *Parser) parseRecommend() (*ast.RecommendStmt, error) {
 	if err != nil {
 		return nil, err
 	}
-	var negativeIDs []interface{}
+	var negativeIDs []any
 	if p.peek().Kind == lexer.TokenKindNegative {
 		p.advance()
 		if _, err := p.expect(lexer.TokenKindIds); err != nil {
@@ -1297,7 +1297,7 @@ func (p *Parser) parseScroll() (*ast.ScrollStmt, error) {
 			return nil, err
 		}
 	}
-	var after interface{}
+	var after any
 	if p.peek().Kind == lexer.TokenKindAfter {
 		p.advance()
 		after, err = p.parsePointIDValue("SCROLL AFTER")
@@ -1324,7 +1324,7 @@ func (p *Parser) parseScroll() (*ast.ScrollStmt, error) {
 	}, nil
 }
 
-func (p *Parser) parsePointIDValue(statement string) (interface{}, error) {
+func (p *Parser) parsePointIDValue(statement string) (any, error) {
 	tok := p.peek()
 	if tok.Kind == lexer.TokenKindString {
 		p.advance()
@@ -1356,7 +1356,7 @@ func (p *Parser) parseDelete() (*ast.DeleteStmt, error) {
 			return nil, err
 		}
 		tok := p.peek()
-		var pointID interface{}
+		var pointID any
 		if tok.Kind == lexer.TokenKindString {
 			p.advance()
 			pointID = tok.Value
@@ -1416,7 +1416,7 @@ func (p *Parser) parseUpdate() (ast.ASTNode, error) {
 		if err != nil {
 			return nil, err
 		}
-		rawVector, ok := vectorValue.([]interface{})
+		rawVector, ok := vectorValue.([]any)
 		if !ok {
 			return nil, errors.NewQQLSyntaxError("Expected a vector list [...] after point ID in UPDATE SET VECTOR", p.peek().Pos)
 		}
@@ -1655,7 +1655,7 @@ func (p *Parser) parseFieldPath() (string, error) {
 	return tok.Value, nil
 }
 
-func (p *Parser) parseLiteral() (interface{}, error) {
+func (p *Parser) parseLiteral() (any, error) {
 	tok := p.peek()
 	switch tok.Kind {
 	case lexer.TokenKindString:
@@ -1680,7 +1680,7 @@ func (p *Parser) parseLiteral() (interface{}, error) {
 	return nil, errors.NewQQLSyntaxError("Expected a literal value (string, integer, float, or boolean), got '"+tok.Value+"'", tok.Pos)
 }
 
-func (p *Parser) parseNumber() (interface{}, error) {
+func (p *Parser) parseNumber() (any, error) {
 	tok := p.peek()
 	switch tok.Kind {
 	case lexer.TokenKindInteger:
@@ -1693,11 +1693,11 @@ func (p *Parser) parseNumber() (interface{}, error) {
 	return nil, errors.NewQQLSyntaxError("Expected a number, got '"+tok.Value+"'", tok.Pos)
 }
 
-func (p *Parser) parseLiteralList() ([]interface{}, error) {
+func (p *Parser) parseLiteralList() ([]any, error) {
 	if _, err := p.expect(lexer.TokenKindLparen); err != nil {
 		return nil, err
 	}
-	var items []interface{}
+	var items []any
 	if p.peek().Kind == lexer.TokenKindRparen {
 		p.advance()
 		return items, nil
@@ -1723,7 +1723,7 @@ func (p *Parser) parseLiteralList() ([]interface{}, error) {
 	return items, nil
 }
 
-func (p *Parser) parsePointIDList() ([]interface{}, error) {
+func (p *Parser) parsePointIDList() ([]any, error) {
 	values, err := p.parseLiteralList()
 	if err != nil {
 		return nil, err
@@ -1759,11 +1759,11 @@ func isContextualFieldName(kind lexer.TokenKind) bool {
 	return isContextualIdentifier(kind)
 }
 
-func (p *Parser) parseDict() (map[string]interface{}, error) {
+func (p *Parser) parseDict() (map[string]any, error) {
 	if _, err := p.expect(lexer.TokenKindLbrace); err != nil {
 		return nil, err
 	}
-	result := make(map[string]interface{})
+	result := make(map[string]any)
 	if p.peek().Kind == lexer.TokenKindRbrace {
 		p.advance()
 		return result, nil
@@ -1798,7 +1798,7 @@ func (p *Parser) parseDict() (map[string]interface{}, error) {
 	return result, nil
 }
 
-func extractInsertPointID(values map[string]interface{}) (interface{}, map[string]interface{}) {
+func extractInsertPointID(values map[string]any) (any, map[string]any) {
 	for key, value := range values {
 		if toLower(key) == "id" {
 			delete(values, key)
@@ -1808,11 +1808,11 @@ func extractInsertPointID(values map[string]interface{}) (interface{}, map[strin
 	return nil, values
 }
 
-func (p *Parser) parseList() ([]interface{}, error) {
+func (p *Parser) parseList() ([]any, error) {
 	if _, err := p.expect(lexer.TokenKindLbracket); err != nil {
 		return nil, err
 	}
-	var items []interface{}
+	var items []any
 	if p.peek().Kind == lexer.TokenKindRbracket {
 		p.advance()
 		return items, nil
@@ -1838,7 +1838,7 @@ func (p *Parser) parseList() ([]interface{}, error) {
 	return items, nil
 }
 
-func (p *Parser) parseValue() (interface{}, error) {
+func (p *Parser) parseValue() (any, error) {
 	tok := p.peek()
 	switch tok.Kind {
 	case lexer.TokenKindString:
@@ -2280,7 +2280,7 @@ func parseFloatToken(tok lexer.Token) (float64, error) {
 	return value, nil
 }
 
-func coerceVectorValues(values []interface{}) ([]float32, error) {
+func coerceVectorValues(values []any) ([]float32, error) {
 	vector := make([]float32, 0, len(values))
 	for _, value := range values {
 		switch v := value.(type) {

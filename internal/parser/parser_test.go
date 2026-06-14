@@ -22,7 +22,7 @@ func TestParseInsert(t *testing.T) {
 			input: `INSERT INTO COLLECTION test VALUES {"text": "hello"}`,
 			want: &ast.InsertStmt{
 				Collection: "test",
-				Values:     map[string]interface{}{"text": "hello"},
+				Values:     map[string]any{"text": "hello"},
 			},
 		},
 		{
@@ -30,7 +30,7 @@ func TestParseInsert(t *testing.T) {
 			input: `INSERT INTO COLLECTION test VALUES {text: 'hello', topic: 'search'}`,
 			want: &ast.InsertStmt{
 				Collection: "test",
-				Values:     map[string]interface{}{"text": "hello", "topic": "search"},
+				Values:     map[string]any{"text": "hello", "topic": "search"},
 			},
 		},
 		{
@@ -39,7 +39,7 @@ func TestParseInsert(t *testing.T) {
 			want: &ast.InsertStmt{
 				Collection: "test",
 				PointID:    "point-123",
-				Values:     map[string]interface{}{"text": "hello"},
+				Values:     map[string]any{"text": "hello"},
 			},
 		},
 		{
@@ -47,7 +47,7 @@ func TestParseInsert(t *testing.T) {
 			input: `INSERT INTO COLLECTION test VALUES {"text": "hello"} USING MODEL 'model-name'`,
 			want: &ast.InsertStmt{
 				Collection: "test",
-				Values:     map[string]interface{}{"text": "hello"},
+				Values:     map[string]any{"text": "hello"},
 				Model:      strPtr("model-name"),
 			},
 		},
@@ -56,7 +56,7 @@ func TestParseInsert(t *testing.T) {
 			input: `INSERT INTO COLLECTION test VALUES {"text": "hello"} USING HYBRID`,
 			want: &ast.InsertStmt{
 				Collection: "test",
-				Values:     map[string]interface{}{"text": "hello"},
+				Values:     map[string]any{"text": "hello"},
 				Hybrid:     true,
 			},
 		},
@@ -65,7 +65,7 @@ func TestParseInsert(t *testing.T) {
 			input: `INSERT INTO COLLECTION test VALUES {"text": "hello"} USING HYBRID DENSE MODEL 'dense-model' SPARSE MODEL 'sparse-model'`,
 			want: &ast.InsertStmt{
 				Collection:  "test",
-				Values:      map[string]interface{}{"text": "hello"},
+				Values:      map[string]any{"text": "hello"},
 				Hybrid:      true,
 				Model:       strPtr("dense-model"),
 				SparseModel: strPtr("sparse-model"),
@@ -76,7 +76,7 @@ func TestParseInsert(t *testing.T) {
 			input: `INSERT INTO COLLECTION test VALUES {"text": "hello"} USING HYBRID SPARSE MODEL 'sparse-model'`,
 			want: &ast.InsertStmt{
 				Collection:  "test",
-				Values:      map[string]interface{}{"text": "hello"},
+				Values:      map[string]any{"text": "hello"},
 				Hybrid:      true,
 				SparseModel: strPtr("sparse-model"),
 			},
@@ -353,7 +353,7 @@ func TestParseInsertBulk(t *testing.T) {
 			input: `INSERT BULK INTO COLLECTION test VALUES [{"text": "hello"}, {"text": "world"}]`,
 			want: &ast.InsertBulkStmt{
 				Collection: "test",
-				ValuesList: []map[string]interface{}{
+				ValuesList: []map[string]any{
 					{"text": "hello"},
 					{"text": "world"},
 				},
@@ -364,7 +364,7 @@ func TestParseInsertBulk(t *testing.T) {
 			input: `INSERT BULK INTO COLLECTION test VALUES [{"text": "hello"}] USING HYBRID DENSE MODEL 'dense-model' SPARSE MODEL 'sparse-model'`,
 			want: &ast.InsertBulkStmt{
 				Collection: "test",
-				ValuesList: []map[string]interface{}{
+				ValuesList: []map[string]any{
 					{"text": "hello"},
 				},
 				Hybrid:      true,
@@ -475,7 +475,7 @@ func TestParseCreateIndex(t *testing.T) {
 				Collection: "mycollection",
 				Field:      "tenant_id",
 				FieldType:  "keyword",
-				Options: map[string]interface{}{
+				Options: map[string]any{
 					"is_tenant":   true,
 					"on_disk":     true,
 					"enable_hnsw": false,
@@ -489,7 +489,7 @@ func TestParseCreateIndex(t *testing.T) {
 				Collection: "mycollection",
 				Field:      "title",
 				FieldType:  "text",
-				Options: map[string]interface{}{
+				Options: map[string]any{
 					"tokenizer":     "word",
 					"min_token_len": 2,
 					"max_token_len": 20,
@@ -988,8 +988,8 @@ func TestParseRecommend(t *testing.T) {
 			input: "RECOMMEND FROM docs POSITIVE IDS ('seed-1', 'seed-2') NEGATIVE IDS ('seed-3') STRATEGY 'average' LIMIT 5 WHERE score > 0",
 			want: &ast.RecommendStmt{
 				Collection:  "docs",
-				PositiveIDs: []interface{}{"seed-1", "seed-2"},
-				NegativeIDs: []interface{}{"seed-3"},
+				PositiveIDs: []any{"seed-1", "seed-2"},
+				NegativeIDs: []any{"seed-3"},
 				Limit:       5,
 				Strategy:    strPtr("average"),
 				QueryFilter: &ast.CompareExpr{Field: "score", Op: ">", Value: 0},
@@ -1000,7 +1000,7 @@ func TestParseRecommend(t *testing.T) {
 			input: "RECOMMEND FROM docs POSITIVE IDS ('a') LIMIT 10 OFFSET 5",
 			want: &ast.RecommendStmt{
 				Collection:  "docs",
-				PositiveIDs: []interface{}{"a"},
+				PositiveIDs: []any{"a"},
 				Limit:       10,
 				Offset:      5,
 			},
@@ -1010,7 +1010,7 @@ func TestParseRecommend(t *testing.T) {
 			input: "RECOMMEND FROM docs POSITIVE IDS ('a') LIMIT 10 SCORE THRESHOLD 0.5",
 			want: &ast.RecommendStmt{
 				Collection:     "docs",
-				PositiveIDs:    []interface{}{"a"},
+				PositiveIDs:    []any{"a"},
 				Limit:          10,
 				ScoreThreshold: float64Ptr(0.5),
 			},
@@ -1020,7 +1020,7 @@ func TestParseRecommend(t *testing.T) {
 			input: "RECOMMEND FROM docs POSITIVE IDS ('a') LIMIT 10 SCORE THRESHOLD 1",
 			want: &ast.RecommendStmt{
 				Collection:     "docs",
-				PositiveIDs:    []interface{}{"a"},
+				PositiveIDs:    []any{"a"},
 				Limit:          10,
 				ScoreThreshold: float64Ptr(1.0),
 			},
@@ -1030,7 +1030,7 @@ func TestParseRecommend(t *testing.T) {
 			input: "RECOMMEND FROM docs POSITIVE IDS ('a') LIMIT 10 WITH {exact: true, hnsw_ef: 128, indexed_only: true, quantization: {rescore: true}}",
 			want: &ast.RecommendStmt{
 				Collection:  "docs",
-				PositiveIDs: []interface{}{"a"},
+				PositiveIDs: []any{"a"},
 				Limit:       10,
 				WithClause: &ast.SearchWith{
 					Exact:       true,
@@ -1047,7 +1047,7 @@ func TestParseRecommend(t *testing.T) {
 			input: "RECOMMEND FROM target_collection POSITIVE IDS ('a') LOOKUP FROM source_collection LIMIT 5",
 			want: &ast.RecommendStmt{
 				Collection:  "target_collection",
-				PositiveIDs: []interface{}{"a"},
+				PositiveIDs: []any{"a"},
 				Limit:       5,
 				LookupFrom:  "source_collection",
 			},
@@ -1057,7 +1057,7 @@ func TestParseRecommend(t *testing.T) {
 			input: "RECOMMEND FROM target_collection POSITIVE IDS ('a') LOOKUP FROM source_collection VECTOR 'dense' LIMIT 5",
 			want: &ast.RecommendStmt{
 				Collection:   "target_collection",
-				PositiveIDs:  []interface{}{"a"},
+				PositiveIDs:  []any{"a"},
 				Limit:        5,
 				LookupFrom:   "source_collection",
 				LookupVector: strPtr("dense"),
@@ -1068,7 +1068,7 @@ func TestParseRecommend(t *testing.T) {
 			input: "RECOMMEND FROM docs POSITIVE IDS ('a') USING 'sparse' LIMIT 5",
 			want: &ast.RecommendStmt{
 				Collection:  "docs",
-				PositiveIDs: []interface{}{"a"},
+				PositiveIDs: []any{"a"},
 				Limit:       5,
 				Using:       strPtr("sparse"),
 			},
@@ -1078,7 +1078,7 @@ func TestParseRecommend(t *testing.T) {
 			input: "RECOMMEND FROM target_collection POSITIVE IDS ('a') LOOKUP FROM source_collection VECTOR 'dense' USING 'sparse' LIMIT 5",
 			want: &ast.RecommendStmt{
 				Collection:   "target_collection",
-				PositiveIDs:  []interface{}{"a"},
+				PositiveIDs:  []any{"a"},
 				Limit:        5,
 				LookupFrom:   "source_collection",
 				LookupVector: strPtr("dense"),
@@ -1090,8 +1090,8 @@ func TestParseRecommend(t *testing.T) {
 			input: "RECOMMEND FROM docs POSITIVE IDS ('a', 'b') NEGATIVE IDS ('c') STRATEGY 'best_score' LOOKUP FROM src VECTOR 'dense' USING 'sparse' LIMIT 5 OFFSET 2 SCORE THRESHOLD 0.25 WHERE status = 'active' WITH {exact: true}",
 			want: &ast.RecommendStmt{
 				Collection:     "docs",
-				PositiveIDs:    []interface{}{"a", "b"},
-				NegativeIDs:    []interface{}{"c"},
+				PositiveIDs:    []any{"a", "b"},
+				NegativeIDs:    []any{"c"},
 				Limit:          5,
 				Strategy:       strPtr("best_score"),
 				Offset:         2,
@@ -1249,7 +1249,7 @@ func TestParseUpdate(t *testing.T) {
 				assert.Equal(t, "articles", stmt.Collection)
 				assert.Nil(t, stmt.PointID)
 				assertFilterExprEqual(t, &ast.CompareExpr{Field: "category", Op: "=", Value: "draft"}, stmt.QueryFilter)
-				assert.Equal(t, map[string]interface{}{"status": "published"}, stmt.Payload)
+				assert.Equal(t, map[string]any{"status": "published"}, stmt.Payload)
 			},
 		},
 		{
@@ -1259,7 +1259,7 @@ func TestParseUpdate(t *testing.T) {
 				stmt, ok := node.(*ast.UpdatePayloadStmt)
 				require.True(t, ok)
 				assert.Equal(t, "abc-123", stmt.PointID)
-				assert.Equal(t, map[string]interface{}{"year": 2025}, stmt.Payload)
+				assert.Equal(t, map[string]any{"year": 2025}, stmt.Payload)
 			},
 		},
 		{
@@ -1328,7 +1328,7 @@ func TestParseDocumentedExamples(t *testing.T) {
 				require.True(t, ok, "expected InsertStmt")
 				assert.Equal(t, "docs", stmt.Collection)
 				assert.True(t, stmt.Hybrid)
-				assert.Equal(t, map[string]interface{}{"text": "Qdrant stores vectors", "topic": "search"}, stmt.Values)
+				assert.Equal(t, map[string]any{"text": "Qdrant stores vectors", "topic": "search"}, stmt.Values)
 			},
 		},
 		{
@@ -1512,7 +1512,7 @@ func TestParseFilterIn(t *testing.T) {
 	inExpr, ok := stmt.QueryFilter.(*ast.InExpr)
 	require.True(t, ok)
 	assert.Equal(t, "status", inExpr.Field)
-	assert.Equal(t, []interface{}{"active", "pending"}, inExpr.Values)
+	assert.Equal(t, []any{"active", "pending"}, inExpr.Values)
 }
 
 func TestParseFilterNotIn(t *testing.T) {
@@ -1532,7 +1532,7 @@ func TestParseFilterNotIn(t *testing.T) {
 	notIn, ok := stmt.QueryFilter.(*ast.NotInExpr)
 	require.True(t, ok)
 	assert.Equal(t, "status", notIn.Field)
-	assert.Equal(t, []interface{}{"deleted", "archived"}, notIn.Values)
+	assert.Equal(t, []any{"deleted", "archived"}, notIn.Values)
 }
 
 func TestParseFilterIsNull(t *testing.T) {
