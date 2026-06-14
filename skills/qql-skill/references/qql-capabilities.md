@@ -13,11 +13,20 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - `CREATE COLLECTION <name> USING MODEL '<dense_model>'`
 - `CREATE COLLECTION <name> USING HYBRID`
 - `CREATE COLLECTION <name> USING HYBRID DENSE MODEL '<model>'`
+- `CREATE COLLECTION <name> (name VECTOR(size, DISTANCE), ...)`
 - `CREATE COLLECTION <name> QUANTIZE SCALAR [QUANTILE <0.0-1.0>] [ALWAYS RAM]`
 - `CREATE COLLECTION <name> QUANTIZE BINARY [ALWAYS RAM]`
 - `CREATE COLLECTION <name> QUANTIZE PRODUCT [ALWAYS RAM]`
 - `CREATE COLLECTION <name> QUANTIZE TURBO [BITS <1|1.5|2|4>] [ALWAYS RAM]`
 - `CREATE COLLECTION <name> WITH HNSW { payload_m: <n> }`
+- `CREATE COLLECTION <name> WITH OPTIMIZERS { deleted_threshold: 0.2, ... }`
+- `CREATE COLLECTION <name> WITH PARAMS { replication_factor: 2, ... }`
+- `ALTER COLLECTION <name> WITH VECTORS { on_disk: true }`
+- `ALTER COLLECTION <name> WITH HNSW { ... }`
+- `ALTER COLLECTION <name> WITH OPTIMIZERS { ... }`
+- `ALTER COLLECTION <name> WITH PARAMS { ... }`
+- `ALTER COLLECTION <name> QUANTIZE ...`
+- `ALTER COLLECTION <name> QUANTIZE DISABLED`
 - `SHOW COLLECTION <name>`
 - `SHOW COLLECTIONS`
 - `DROP COLLECTION <name>`
@@ -45,59 +54,82 @@ If it disagrees with [README.md](../../../README.md), follow the README.
 - keys inside `VALUES {...}` can be bare identifiers or quoted strings
 - explicit `id` is accepted inside `VALUES` (unsigned int or UUID string)
 
-### Search
+### Query (unified statement)
 
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n>`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> OFFSET <n>`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> SCORE THRESHOLD <float|int>`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> LOOKUP FROM <collection> [VECTOR '<name>']`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING MODEL '<model>'`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID FUSION 'rrf|dbsf'`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE MODEL '<model>'` (cloud only; local uses client-side sparse term weighting with Qdrant `idf`)
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WHERE <filter>`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> GROUP BY <field>`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> GROUP BY <field> GROUP_SIZE <m>`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID GROUP BY <field> [GROUP_SIZE <m>]`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef: <n> }`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { exact: true|false }`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { acorn: true|false }`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { indexed_only: true|false }`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { quantization: { ignore: true|false, rescore: true|false, oversampling: <n> } }`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE RERANK`
-- `SELECT * FROM <name> WHERE id = '<uuid>'`
-- `SELECT * FROM <name> WHERE id = <integer>`
-- `SCROLL FROM <name> LIMIT <n>`
-- `SCROLL FROM <name> WHERE <filter> LIMIT <n>`
-- `SCROLL FROM <name> AFTER '<point_id>' LIMIT <n>`
-- `SCROLL FROM <name> WHERE <filter> AFTER <point_id> LIMIT <n>`
+The `QUERY` statement replaces the old `SEARCH` and `RECOMMEND` statements. It supports 4 modes:
 
-### Recommend
+#### NEAREST (default — semantic search)
 
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n>`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) NEGATIVE IDS (<id>, ...) LIMIT <n>`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) STRATEGY '<strategy>' LIMIT <n>`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> OFFSET <n>`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> SCORE THRESHOLD <f>`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> WITH { exact: true, hnsw_ef: <n> }`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LOOKUP FROM <collection> LIMIT <n>`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LOOKUP FROM <collection> VECTOR '<model>' LIMIT <n>`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) USING '<vector_name>' LIMIT <n>`
+- `QUERY '<text>' FROM <name> LIMIT <n>`
+- `QUERY <id> FROM <name> LIMIT <n>` (query by point ID)
+- `QUERY NEAREST '<text>' FROM <name> LIMIT <n>` (explicit mode)
+
+#### RECOMMEND (find similar by example IDs)
+
+- `QUERY RECOMMEND POSITIVE IDS (<id>, ...) FROM <name> LIMIT <n>`
+- `QUERY RECOMMEND POSITIVE IDS (<id>, ...) NEGATIVE IDS (<id>, ...) FROM <name> LIMIT <n>`
+- `QUERY RECOMMEND POSITIVE IDS (<id>, ...) STRATEGY '<strategy>' FROM <name> LIMIT <n>`
 
 Supported strategies: `average_vector`, `best_score`, `sum_scores`.
 
-All recommend clauses can be combined in order: `POSITIVE IDS`, `NEGATIVE IDS`, `STRATEGY`, `LOOKUP FROM`, `USING`, `LIMIT`, `OFFSET`, `SCORE THRESHOLD`, `WHERE`, `WITH`.
+#### CONTEXT (context-aware search with pairs)
+
+- `QUERY CONTEXT PAIRS ((<pos_id>, <neg_id>), ...) FROM <name> LIMIT <n>`
+
+#### DISCOVER (target + context exploration)
+
+- `QUERY DISCOVER TARGET <id> CONTEXT PAIRS ((<pos_id>, <neg_id>), ...) FROM <name> LIMIT <n>`
+
+#### Clauses (shared across all modes)
+
+All 4 modes support these trailing clauses in any order:
+
+- `LIMIT <n>` (default: 10)
+- `OFFSET <n>`
+- `SCORE THRESHOLD <float|int>`
+- `LOOKUP FROM <collection> [VECTOR '<name>']`
+- `USING HYBRID` / `USING SPARSE` / `USING '<vector_name>'`
+- `WITH MODEL '<model>'`
+- `WITH { hnsw_ef: <n>, exact: true|false, acorn: true|false, indexed_only: true|false }`
+- `WITH { quantization: { ignore: true|false, rescore: true|false, oversampling: <n> } }`
+- `WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }`
+- `WITH { rrf_k: <n>, rrf_weights: [<float>, ...] }` (parameterized RRF)
+- `WHERE <filter>`
+- `RERANK [MODEL '<model>']`
+- `EXACT`
+- `GROUP BY '<field>'` + `GROUP_SIZE <n>`
+- `STRATEGY '<strategy>'`
+
+#### Manual prefetch DAGs
+
+For multi-stage retrieval with per-prefetch filtering:
+
+```sql
+QUERY '<text>' FROM <name> LIMIT 10
+  PREFETCH (
+    QUERY '<text>' USING 'dense' LIMIT 100 WHERE category = 'tech' SCORE THRESHOLD 0.8,
+    QUERY '<text>' USING 'sparse' LIMIT 100 WITH { exact: true }
+  )
+  FUSION RRF WITH { rrf_k: 10, rrf_weights: [0.7, 0.3] }
+```
+
+- `PREFETCH` is mutually exclusive with `USING HYBRID`
+- `FUSION RRF` or `FUSION DBSF` selects the fusion mode for manual prefetches
+- `WITH { rrf_k, rrf_weights }` tunes parameterized RRF
+- Nested prefetches are supported: `PREFETCH (PREFETCH (...), ...)`
+
+#### Hybrid search (auto-prefetch sugar)
+
+```sql
+QUERY '<text>' FROM <name> LIMIT 10 USING HYBRID
+QUERY '<text>' FROM <name> LIMIT 10 USING HYBRID FUSION DBSF
+QUERY '<text>' FROM <name> LIMIT 10 USING HYBRID WITH { rrf_k: 30, rrf_weights: [0.7, 0.3] }
+```
 
 ### Delete
 
 - `DELETE FROM <name> WHERE id = '<uuid>'`
+- `DELETE FROM <name> WHERE id = <integer>`
 - `DELETE FROM <name> WHERE <field> = '<value>'`
 
 ### Update
@@ -107,6 +139,15 @@ All recommend clauses can be combined in order: `POSITIVE IDS`, `NEGATIVE IDS`, 
 - `UPDATE <name> SET PAYLOAD WHERE id = '<uuid>' {...}`
 - `UPDATE <name> SET PAYLOAD WHERE id = <integer> {...}`
 - `UPDATE <name> SET PAYLOAD WHERE <filter> {...}`
+
+### Select and Scroll
+
+- `SELECT * FROM <name> WHERE id = '<uuid>'`
+- `SELECT * FROM <name> WHERE id = <integer>`
+- `SCROLL FROM <name> LIMIT <n>`
+- `SCROLL FROM <name> WHERE <filter> LIMIT <n>`
+- `SCROLL FROM <name> AFTER '<point_id>' LIMIT <n>`
+- `SCROLL FROM <name> WHERE <filter> AFTER <point_id> LIMIT <n>`
 
 ### Explain
 
@@ -139,7 +180,7 @@ Script files (`.qql`) use **newline-delimited statements WITHOUT semicolons**:
 CREATE COLLECTION my_collection
 CREATE INDEX ON COLLECTION my_collection FOR category TYPE keyword
 INSERT INTO COLLECTION my_collection VALUES {'text': 'hello world', 'category': 'greeting'}
-SEARCH my_collection SIMILAR TO 'hello' LIMIT 5
+QUERY 'hello' FROM my_collection LIMIT 5
 DROP COLLECTION my_collection
 ```
 
@@ -176,7 +217,7 @@ Text-mode quiet behavior:
 
 ### Dense
 
-Use plain `SEARCH` for semantic retrieval.
+Use plain `QUERY '<text>' FROM <collection>` for semantic retrieval.
 
 Default dense model:
 - `sentence-transformers/all-MiniLM-L6-v2`
@@ -185,7 +226,7 @@ Default dense model:
 
 Use `USING HYBRID` when both semantic similarity and exact term matching matter.
 
-Default fusion is `RRF`. Use `FUSION 'dbsf'` only when you want to explicitly switch to DBSF.
+Default fusion is `RRF`. Use `FUSION DBSF` only when you want to explicitly switch to DBSF.
 
 Default sparse model name (for cloud inference):
 - `qdrant/bm25`
@@ -205,6 +246,14 @@ Use `GROUP BY` when the result needs grouped top matches by payload field.
 `GROUP BY` works with dense, sparse, hybrid, `WHERE`, and query-time params, but not with `RERANK`.
 
 `GROUP BY` does not support `OFFSET`; use flat search pagination when you need offset-style result windows.
+
+### Manual prefetch DAGs
+
+Use `PREFETCH (...)` when you need per-prefetch filters, limits, or score thresholds for multi-stage retrieval.
+
+Combine with `FUSION RRF` or `FUSION DBSF` for the top-level fusion.
+
+Tune RRF with `WITH { rrf_k: <n>, rrf_weights: [<float>, ...] }`.
 
 ### Collection quantization
 
@@ -252,6 +301,7 @@ Supported params:
 - `WITH { indexed_only: true }`
 - `WITH { quantization: { ignore: true, oversampling: 2 } }`
 - `WITH { mmr_diversity: 0.5, mmr_candidates: 50 }`
+- `WITH { rrf_k: 30, rrf_weights: [0.7, 0.3] }`
 
 Use them for:
 
@@ -259,6 +309,7 @@ Use them for:
 - query-time recall tuning
 - filtered-query experiments
 - semantic diversity in dense search results or the dense leg of hybrid search
+- parameterized RRF tuning for hybrid search
 
 ## Filters
 
@@ -288,10 +339,11 @@ Supported logical composition:
 ## Constraints
 
 - `INSERT` and `INSERT BULK` require a `text` field in every row.
-- In **cloud mode**, text `INSERT` and text `SEARCH ... SIMILAR TO ...` depend on Qdrant Cloud inference.
+- In **cloud mode**, text `INSERT` and text `QUERY` depend on Qdrant Cloud inference.
 - In **local/external mode**, text operations work against any Qdrant instance with client-side vector generation.
 - Use payload indexes before relying on `WHERE`.
 - Rerank is **cloud-only**.
 - Hybrid collections use named vectors: `dense` and `sparse`.
-- MMR currently supports dense `SEARCH`, `USING HYBRID`, and their grouped variants.
+- MMR currently supports dense queries and the dense leg of hybrid search.
+- `PREFETCH` and `USING HYBRID` are mutually exclusive.
 - Stay inside the implemented syntax. Do not invent clauses because Qdrant supports them in principle.

@@ -108,63 +108,63 @@ BASE_STATEMENTS = [
     # Basic HYBRID search
     (
         "search-hybrid",
-        f"SEARCH {COLLECTION} SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 USING HYBRID",
+        f"QUERY 'acute stroke weakness slurred speech' FROM {COLLECTION} LIMIT 3 USING HYBRID",
     ),
     # HYBRID search with DBSF fusion
     (
         "search-hybrid-dbsf",
-        f"SEARCH {COLLECTION} SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 USING HYBRID FUSION 'dbsf'",
+        f"QUERY 'acute stroke weakness slurred speech' FROM {COLLECTION} LIMIT 3 USING HYBRID FUSION DBSF",
     ),
     # Sparse-only search
     (
         "search-sparse",
-        f"SEARCH {COLLECTION} SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 USING SPARSE",
+        f"QUERY 'acute stroke weakness slurred speech' FROM {COLLECTION} LIMIT 3 USING SPARSE",
     ),
     # Exact baseline for comparison
     (
         "search-exact",
-        f"SEARCH {COLLECTION} SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 EXACT",
+        f"QUERY 'acute stroke weakness slurred speech' FROM {COLLECTION} LIMIT 3 EXACT",
     ),
     (
         "search-hybrid-mmr",
-        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency triage' LIMIT 3 USING HYBRID WITH {{ mmr_diversity: 0.5, mmr_candidates: 20 }}",
+        f"QUERY 'acute neurological emergency triage' FROM {COLLECTION} LIMIT 3 USING HYBRID WITH {{ mmr_diversity: 0.5, mmr_candidates: 20 }}",
     ),
     # HYBRID with specialty filter
     (
         "search-neurology",
-        f"SEARCH {COLLECTION} SIMILAR TO 'headache neurological' LIMIT 3 USING HYBRID WHERE specialty = 'neurology'",
+        f"QUERY 'headache neurological' FROM {COLLECTION} LIMIT 3 USING HYBRID WHERE specialty = 'neurology'",
     ),
     # HYBRID with priority filter (IN)
     (
         "search-high-priority",
-        f"SEARCH {COLLECTION} SIMILAR TO 'chest pain cardiac' LIMIT 3 USING HYBRID WHERE priority IN ('high', 'medium')",
+        f"QUERY 'chest pain cardiac' FROM {COLLECTION} LIMIT 3 USING HYBRID WHERE priority IN ('high', 'medium')",
     ),
     # HYBRID with status filter
     (
         "search-admitted",
-        f"SEARCH {COLLECTION} SIMILAR TO 'pain' LIMIT 3 USING HYBRID WHERE status = 'admitted'",
+        f"QUERY 'pain' FROM {COLLECTION} LIMIT 3 USING HYBRID WHERE status = 'admitted'",
     ),
     # Combined filters
     (
         "search-combined",
-        f"SEARCH {COLLECTION} SIMILAR TO 'cardiac emergency chest' LIMIT 3 USING HYBRID WHERE priority = 'high' AND status = 'admitted'",
+        f"QUERY 'cardiac emergency chest' FROM {COLLECTION} LIMIT 3 USING HYBRID WHERE priority = 'high' AND status = 'admitted'",
     ),
     (
         "group-by-specialty",
-        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency' LIMIT 3 USING HYBRID GROUP BY specialty GROUP_SIZE 2",
+        f"QUERY 'acute neurological emergency' FROM {COLLECTION} LIMIT 3 USING HYBRID GROUP BY specialty GROUP_SIZE 2",
     ),
     (
         "grouped-hybrid-mmr",
-        f"SEARCH {COLLECTION} SIMILAR TO 'acute neurological emergency' LIMIT 3 USING HYBRID WITH {{ mmr_diversity: 0.35, mmr_candidates: 20 }} GROUP BY specialty GROUP_SIZE 2",
+        f"QUERY 'acute neurological emergency' FROM {COLLECTION} LIMIT 3 USING HYBRID WITH {{ mmr_diversity: 0.35, mmr_candidates: 20 }} GROUP BY specialty GROUP_SIZE 2",
     ),
     (
         "group-by-priority-with-params",
-        f"SEARCH {COLLECTION} SIMILAR TO 'critical care escalation' LIMIT 3 USING HYBRID WITH {{ hnsw_ef: 128, acorn: true }} GROUP BY priority GROUP_SIZE 2",
+        f"QUERY 'critical care escalation' FROM {COLLECTION} LIMIT 3 USING HYBRID WITH {{ hnsw_ef: 128, acorn: true }} GROUP BY priority GROUP_SIZE 2",
     ),
     # Recommend from an explicit ID
     (
         "recommend-stroke",
-        f"RECOMMEND FROM {COLLECTION} POSITIVE IDS (414) LIMIT 3",
+        f"QUERY RECOMMEND POSITIVE IDS (414) FROM {COLLECTION} LIMIT 3",
     ),
     (
         "update-stroke-payload",
@@ -232,14 +232,14 @@ def main() -> None:
             len(statements) - 1,
             (
                 "search-hybrid-rerank",
-                f"SEARCH {COLLECTION} SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 USING HYBRID RERANK",
+                f"QUERY 'acute stroke weakness slurred speech' FROM {COLLECTION} LIMIT 3 USING HYBRID RERANK",
             ),
         )
         statements.insert(
             len(statements) - 1,
             (
                 "search-sparse-rerank",
-                f"SEARCH {COLLECTION} SIMILAR TO 'acute stroke weakness slurred speech' LIMIT 3 USING SPARSE RERANK",
+                f"QUERY 'acute stroke weakness slurred speech' FROM {COLLECTION} LIMIT 3 USING SPARSE RERANK",
             ),
         )
 

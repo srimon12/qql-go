@@ -48,42 +48,38 @@ Supported syntax in this repo includes:
 - `INSERT BULK INTO COLLECTION <name> VALUES [{...}, {...}] USING HYBRID`
 - keys inside `VALUES {...}` can be bare identifiers or quoted strings
 - explicit `id` inside `VALUES` is accepted (unsigned int or UUID string)
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n>`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> OFFSET <n>`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> SCORE THRESHOLD <float|int>`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> LOOKUP FROM <collection> [VECTOR '<name>']`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING MODEL '<model>'`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID FUSION 'rrf|dbsf'`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE MODEL '<model>'` (cloud only)
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WHERE <filter>`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> GROUP BY <field>`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> GROUP BY <field> GROUP_SIZE <m>`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID GROUP BY <field> [GROUP_SIZE <m>]`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef, exact, acorn }`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { indexed_only, quantization }`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { mmr_diversity, mmr_candidates }`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK`
-- `SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE RERANK`
-- `SELECT * FROM <name> WHERE id = '<uuid>'`
-- `SELECT * FROM <name> WHERE id = <integer>`
-- `SCROLL FROM <name> LIMIT <n>`
-- `SCROLL FROM <name> WHERE <filter> LIMIT <n>`
-- `SCROLL FROM <name> AFTER '<point_id>' LIMIT <n>`
-- `SCROLL FROM <name> WHERE <filter> AFTER <point_id> LIMIT <n>`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n>`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) NEGATIVE IDS (<id>, ...) LIMIT <n>`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) STRATEGY '<strategy>' LIMIT <n>`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> OFFSET <n>`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> SCORE THRESHOLD <f>`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> WITH { exact: true, hnsw_ef: <n> }`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LOOKUP FROM <collection> [VECTOR '<name>'] LIMIT <n>`
-- `RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) USING '<vector_name>' LIMIT <n>`
+- `QUERY '<text>' FROM <name> LIMIT <n>`
+- `QUERY '<text>' FROM <name> LIMIT <n> OFFSET <n>`
+- `QUERY '<text>' FROM <name> LIMIT <n> SCORE THRESHOLD <float|int>`
+- `QUERY '<text>' FROM <name> LIMIT <n> LOOKUP FROM <collection> [VECTOR '<name>']`
+- `QUERY '<text>' FROM <name> LIMIT <n> USING MODEL '<model>'`
+- `QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID`
+- `QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID FUSION DBSF`
+- `QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID WITH { rrf_k: <n>, rrf_weights: [...] }`
+- `QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'`
+- `QUERY '<text>' FROM <name> LIMIT <n> USING SPARSE`
+- `QUERY '<text>' FROM <name> LIMIT <n> WHERE <filter>`
+- `QUERY '<text>' FROM <name> LIMIT <n> GROUP BY <field>`
+- `QUERY '<text>' FROM <name> LIMIT <n> GROUP BY <field> GROUP_SIZE <m>`
+- `QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID GROUP BY <field> [GROUP_SIZE <m>]`
+- `QUERY '<text>' FROM <name> LIMIT <n> EXACT`
+- `QUERY '<text>' FROM <name> LIMIT <n> WITH { hnsw_ef, exact, acorn }`
+- `QUERY '<text>' FROM <name> LIMIT <n> WITH { indexed_only, quantization }`
+- `QUERY '<text>' FROM <name> LIMIT <n> WITH { mmr_diversity, mmr_candidates }`
+- `QUERY '<text>' FROM <name> LIMIT <n> RERANK`
+- `QUERY '<text>' FROM <name> LIMIT <n> RERANK MODEL '<model>'`
+- `QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID RERANK`
+- `QUERY '<text>' FROM <name> LIMIT <n> USING SPARSE RERANK`
+- `QUERY RECOMMEND POSITIVE IDS (<id>, ...) FROM <name> LIMIT <n>`
+- `QUERY RECOMMEND POSITIVE IDS (<id>, ...) NEGATIVE IDS (<id>, ...) FROM <name> LIMIT <n>`
+- `QUERY RECOMMEND POSITIVE IDS (<id>, ...) STRATEGY '<strategy>' FROM <name> LIMIT <n>`
+- `QUERY RECOMMEND POSITIVE IDS (<id>, ...) FROM <name> LIMIT <n> OFFSET <n>`
+- `QUERY RECOMMEND POSITIVE IDS (<id>, ...) FROM <name> LIMIT <n> SCORE THRESHOLD <f>`
+- `QUERY RECOMMEND POSITIVE IDS (<id>, ...) FROM <name> LIMIT <n> WITH { exact: true, hnsw_ef: <n> }`
+- `QUERY RECOMMEND POSITIVE IDS (<id>, ...) FROM <name> LOOKUP FROM <collection> [VECTOR '<name>'] LIMIT <n>`
+- `QUERY CONTEXT PAIRS ((<pos>, <neg>), ...) FROM <name> LIMIT <n>`
+- `QUERY DISCOVER TARGET <id> CONTEXT PAIRS ((<pos>, <neg>), ...) FROM <name> LIMIT <n>`
+- `QUERY '<text>' FROM <name> LIMIT <n> PREFETCH (...) FUSION RRF`
 - `DELETE FROM <name> WHERE ...`
 - `UPDATE <name> SET VECTOR WHERE id = <id> [<float>, ...]`
 - `UPDATE <name> SET PAYLOAD WHERE id = <id> {...}`
@@ -104,7 +100,7 @@ Supported syntax in this repo includes:
 ### Cloud mode (default)
 
 - `qql-go connect --url <qdrant-cloud-url> --secret <api-key>`
-- Text `INSERT` and `SEARCH ... SIMILAR TO ...` use Qdrant Cloud inference via `qdrant.Document` objects.
+- Text `INSERT` and `QUERY` use Qdrant Cloud inference via `qdrant.Document` objects.
 - `RERANK` is available.
 
 ### Local mode
@@ -146,7 +142,7 @@ CREATE COLLECTION my_collection
 SHOW COLLECTIONS
 SHOW COLLECTION my_collection
 INSERT INTO COLLECTION my_collection VALUES {'text': 'hello'}
-SEARCH my_collection SIMILAR TO 'hello' LIMIT 5
+QUERY 'hello' FROM my_collection LIMIT 5
 DROP COLLECTION my_collection
 ```
 
@@ -162,13 +158,13 @@ Use this decision sequence.
 
 ### Dense search
 
-Use plain `SEARCH` when the request is mostly semantic and exact keyword matching is not important.
+Use plain `QUERY` when the request is mostly semantic and exact keyword matching is not important.
 
 ### Hybrid search
 
 Use `USING HYBRID` when exact terms, model names, acronyms, codes, or domain vocabulary matter alongside semantic similarity.
 
-Hybrid search uses `RRF` by default. Add `FUSION 'dbsf'` only when you want to explicitly switch the fusion strategy.
+Hybrid search uses `RRF` by default. Add `FUSION DBSF` only when you want to explicitly switch the fusion strategy.
 
 Works in cloud, local, and external modes.
 
@@ -190,8 +186,8 @@ Use `WITH { acorn: true }` only when filtered-query recall is the actual problem
 
 Use `WITH { mmr_diversity: ..., mmr_candidates: ... }` when the user wants semantic diversity inside dense results or the dense leg of hybrid retrieval.
 
-MMR currently works for dense `SEARCH`, `USING HYBRID`, and their `GROUP BY` variants.
-Do not suggest it for `USING SPARSE` or `RECOMMEND`.
+MMR currently works for dense `QUERY`, `USING HYBRID`, and their `GROUP BY` variants.
+Do not suggest it for `USING SPARSE` or `QUERY RECOMMEND`.
 
 ### Rerank
 
@@ -219,9 +215,23 @@ Use `SCROLL` when the user needs pagination, export preparation, or a filtered w
 
 ### Recommend
 
-Use `RECOMMEND` when the user has example document IDs and wants to find similar items.
+Use `QUERY RECOMMEND POSITIVE IDS (...)` when the user has example document IDs and wants to find similar items.
 
 Works in all modes because it operates on stored vectors, not query-time inference.
+
+### Context and Discover
+
+Use `QUERY CONTEXT PAIRS ((pos, neg), ...)` for context-aware search.
+
+Use `QUERY DISCOVER TARGET <id> CONTEXT PAIRS (...)` for exploration search.
+
+### Manual prefetch DAGs
+
+Use `PREFETCH (...) FUSION RRF` when the user needs per-prefetch filters, limits, or score thresholds for multi-stage retrieval.
+
+Combine with `WITH { rrf_k: <n>, rrf_weights: [...] }` for parameterized RRF tuning.
+
+`PREFETCH` and `USING HYBRID` are mutually exclusive.
 
 ## Index Before You Filter
 

@@ -9,7 +9,7 @@ EXAMPLES = [
     {
         "mode": "dense",
         "when": "Use when semantic similarity matters more than exact term matching.",
-        "query": "SEARCH articles SIMILAR TO 'vector database performance tuning' LIMIT 5",
+        "query": "QUERY 'vector database performance tuning' FROM articles LIMIT 5",
         "setup": [],
         "requires_index": [],
     },
@@ -17,7 +17,7 @@ EXAMPLES = [
         "mode": "hybrid",
         "when": "Use when exact terms, acronyms, model names, or error strings matter.",
         "query": (
-            "SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' "
+            "QUERY 'out of memory hnsw_ef acorn' FROM incidents "
             "LIMIT 10 USING HYBRID"
         ),
         "setup": [],
@@ -27,8 +27,8 @@ EXAMPLES = [
         "mode": "hybrid-dbsf",
         "when": "Use when you want hybrid retrieval with DBSF fusion instead of the default RRF.",
         "query": (
-            "SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' "
-            "LIMIT 10 USING HYBRID FUSION 'dbsf'"
+            "QUERY 'out of memory hnsw_ef acorn' FROM incidents "
+            "LIMIT 10 USING HYBRID FUSION DBSF"
         ),
         "setup": [],
         "requires_index": [],
@@ -37,7 +37,7 @@ EXAMPLES = [
         "mode": "sparse",
         "when": "Use when keyword or BM25 retrieval matters more than semantic similarity.",
         "query": (
-            "SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' "
+            "QUERY 'out of memory hnsw_ef acorn' FROM incidents "
             "LIMIT 10 USING SPARSE"
         ),
         "setup": [],
@@ -46,7 +46,7 @@ EXAMPLES = [
     {
         "mode": "exact",
         "when": "Use when debugging recall and you need an exact KNN baseline.",
-        "query": "SEARCH articles SIMILAR TO 'attention mechanism' LIMIT 10 EXACT",
+        "query": "QUERY 'attention mechanism' FROM articles LIMIT 10 EXACT",
         "setup": [],
         "requires_index": [],
     },
@@ -54,7 +54,7 @@ EXAMPLES = [
         "mode": "with-hnsw-ef",
         "when": "Use when you want query-time recall tuning without changing collection config.",
         "query": (
-            "SEARCH articles SIMILAR TO 'transformer inference' "
+            "QUERY 'transformer inference' FROM articles "
             "LIMIT 10 WITH { hnsw_ef: 256 }"
         ),
         "setup": [],
@@ -64,7 +64,7 @@ EXAMPLES = [
         "mode": "hybrid-mmr",
         "when": "Use when hybrid search results are too redundant and you want semantic diversity on the dense leg before fusion.",
         "query": (
-            "SEARCH articles SIMILAR TO 'vector database performance tuning' "
+            "QUERY 'vector database performance tuning' FROM articles "
             "LIMIT 10 USING HYBRID WITH { mmr_diversity: 0.5, mmr_candidates: 25 }"
         ),
         "setup": [],
@@ -77,7 +77,7 @@ EXAMPLES = [
             "CREATE INDEX ON COLLECTION articles FOR category TYPE keyword",
         ],
         "query": (
-            "SEARCH articles SIMILAR TO 'transformer inference' "
+            "QUERY 'transformer inference' FROM articles "
             "LIMIT 10 WHERE category = 'ml'"
         ),
         "requires_index": ["category"],
@@ -86,7 +86,7 @@ EXAMPLES = [
         "mode": "with-acorn",
         "when": "Use when filtered-query recall is the focus and ACORN should be tested.",
         "query": (
-            "SEARCH incidents SIMILAR TO 'retrieval recall regression' "
+            "QUERY 'retrieval recall regression' FROM incidents "
             "LIMIT 10 WHERE team = 'search' WITH { acorn: true }"
         ),
         "setup": [
@@ -98,7 +98,7 @@ EXAMPLES = [
         "mode": "tenant-aware-indexing",
         "when": "Use when a filter field acts like a tenant boundary and Qdrant should optimize for that grouping.",
         "query": (
-            "SEARCH tenant_docs SIMILAR TO 'stroke discharge summary' "
+            "QUERY 'stroke discharge summary' FROM tenant_docs "
             "LIMIT 5 WHERE tenant_id = 'tenant-a'"
         ),
         "setup": [
@@ -121,7 +121,7 @@ EXAMPLES = [
         "mode": "grouped",
         "when": "Use when results should be grouped by a payload field instead of returned as one flat list.",
         "query": (
-            "SEARCH incidents SIMILAR TO 'retrieval recall regression' "
+            "QUERY 'retrieval recall regression' FROM incidents "
             "LIMIT 5 GROUP BY team GROUP_SIZE 2"
         ),
         "setup": [
@@ -133,7 +133,7 @@ EXAMPLES = [
         "mode": "grouped-hybrid",
         "when": "Use when grouped results still need hybrid recall and query-time tuning.",
         "query": (
-            "SEARCH incidents SIMILAR TO 'retrieval recall regression' "
+            "QUERY 'retrieval recall regression' FROM incidents "
             "LIMIT 4 USING HYBRID WITH { hnsw_ef: 128, acorn: true } "
             "GROUP BY team GROUP_SIZE 2"
         ),
@@ -146,7 +146,7 @@ EXAMPLES = [
         "mode": "rerank",
         "when": "Use when recall is likely good but top-result ordering needs help. Requires Qdrant Cloud and a rerank-capable collection.",
         "query": (
-            "SEARCH papers SIMILAR TO 'late interaction retrieval' LIMIT 5 RERANK"
+            "QUERY 'late interaction retrieval' FROM papers LIMIT 5 RERANK"
         ),
         "setup": [],
         "requires_index": [],
@@ -156,7 +156,7 @@ EXAMPLES = [
         "mode": "hybrid-rerank",
         "when": "Use when both keyword recall and top-rank precision matter. Requires Qdrant Cloud and a rerank-capable collection.",
         "query": (
-            "SEARCH docs SIMILAR TO 'cross encoder ms marco minimlm' "
+            "QUERY 'cross encoder ms marco minimlm' FROM docs "
             "LIMIT 8 USING HYBRID RERANK"
         ),
         "setup": [],
@@ -167,7 +167,7 @@ EXAMPLES = [
         "mode": "sparse-rerank",
         "when": "Use when sparse recall is strong but the top ordering still needs rerank. Requires Qdrant Cloud and a rerank-capable collection.",
         "query": (
-            "SEARCH docs SIMILAR TO 'cross encoder ms marco minimlm' "
+            "QUERY 'cross encoder ms marco minimlm' FROM docs "
             "LIMIT 8 USING SPARSE RERANK"
         ),
         "setup": [],

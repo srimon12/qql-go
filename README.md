@@ -25,7 +25,9 @@ Use `qql-go` when you need repeatable commands, stable JSON output, version-cont
 - document insertion
 - vector and payload update
 - point retrieval and scroll pagination
-- dense, sparse, and hybrid retrieval
+- dense, sparse, hybrid, recommendation, context, and discover retrieval
+- manual prefetch DAGs for multi-stage retrieval
+- parameterized RRF tuning
 - search pagination, score thresholds, and cross-collection lookup
 - grouped retrieval
 - recommendation by example IDs
@@ -74,7 +76,7 @@ In short:
   Store `.qql` scripts in git for seeding, validation, cleanup, and repeatable maintenance.
 
 - **Retrieval diagnostics**  
-  Compare dense, sparse, hybrid, and rerank behavior through readable commands.
+  Compare dense, sparse, hybrid, recommendation, and rerank behavior through readable commands.
 
 - **Agent and scripting workflows**  
   Use `--json` output as a stable interface for agents, shell scripts, `jq`, and automation pipelines.
@@ -164,7 +166,7 @@ qql-go exec "SHOW COLLECTION docs"
 Explain a query without executing it:
 
 ```bash
-qql-go explain "SEARCH docs SIMILAR TO 'vector db' LIMIT 5 USING HYBRID"
+qql-go explain "QUERY 'vector db' FROM docs LIMIT 5 USING HYBRID"
 ```
 
 Check saved connection health:
@@ -181,11 +183,13 @@ Use the CLI directly:
 qql-go exec "CREATE COLLECTION docs HYBRID"
 qql-go exec "CREATE COLLECTION docs HYBRID QUANTIZE TURBO BITS 2 ALWAYS RAM"
 qql-go exec "INSERT INTO COLLECTION docs VALUES {'text': 'Qdrant stores vectors', 'topic': 'search'} USING HYBRID"
-qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID"
-qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID FUSION 'dbsf'"
-qql-go exec "SEARCH docs SIMILAR TO 'bm25 keyword' LIMIT 5 USING SPARSE"
-qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID RERANK"
-qql-go exec "SEARCH docs SIMILAR TO 'vector database' LIMIT 5 USING HYBRID GROUP BY topic GROUP_SIZE 2"
+qql-go exec "QUERY 'vector database' FROM docs LIMIT 5 USING HYBRID"
+qql-go exec "QUERY 'vector database' FROM docs LIMIT 5 USING HYBRID FUSION DBSF"
+qql-go exec "QUERY 'bm25 keyword' FROM docs LIMIT 5 USING SPARSE"
+qql-go exec "QUERY 'vector database' FROM docs LIMIT 5 USING HYBRID RERANK"
+qql-go exec "QUERY 'vector database' FROM docs LIMIT 5 USING HYBRID GROUP BY topic GROUP_SIZE 2"
+qql-go exec "QUERY RECOMMEND POSITIVE IDS ('uuid-1', 'uuid-2') FROM docs LIMIT 5"
+qql-go exec "QUERY 'search' FROM docs LIMIT 10 PREFETCH (QUERY 'search' USING 'dense' LIMIT 100, QUERY 'search' USING 'sparse' LIMIT 100) FUSION RRF"
 qql-go exec "SHOW COLLECTION docs"
 qql-go exec "SELECT * FROM docs WHERE id = 'pt-1'"
 qql-go exec "SCROLL FROM docs LIMIT 10"
@@ -230,7 +234,7 @@ Recommended agent examples:
 ```bash
 qql-go exec --quiet --json "SHOW COLLECTIONS"
 qql-go exec --quiet --json "SHOW COLLECTION docs"
-qql-go explain --quiet --json "SEARCH docs SIMILAR TO 'vector db' LIMIT 5 USING HYBRID"
+qql-go explain --quiet --json "QUERY 'vector db' FROM docs LIMIT 5 USING HYBRID"
 qql-go doctor --quiet --json
 ```
 
@@ -253,11 +257,11 @@ Output contract notes:
 
 Important behavior in the current Go build:
 
-- cloud mode uses Qdrant Cloud inference for text `INSERT` and text `SEARCH ... SIMILAR TO ...`
+- cloud mode uses Qdrant Cloud inference for text `INSERT` and text `QUERY`
 - local and external modes generate dense and sparse vectors client-side through an OpenAI-compatible embeddings API
 - use `--embedding-key` when the embedding provider requires bearer auth
 - `RERANK` is still cloud-only in this build
-- `SELECT`, `SCROLL`, `DELETE`, and `RECOMMEND` operate on stored vectors and work in every inference mode
+- `SELECT`, `SCROLL`, `DELETE`, and `QUERY RECOMMEND` operate on stored vectors and work in every inference mode
 - self-hosted/local Qdrant works well for management operations such as `SHOW`, `CREATE`, `DROP`, `CREATE INDEX`, `SELECT`, `SCROLL`, and `DELETE`
 - collections auto-create on insert when missing
 - `text` is required in `INSERT ... VALUES {...}`
@@ -278,6 +282,7 @@ CREATE COLLECTION <name>
 CREATE COLLECTION <name> HYBRID
 CREATE COLLECTION <name> HYBRID RERANK
 CREATE COLLECTION <name> USING MODEL '<model>'
+CREATE COLLECTION <name> (name VECTOR(size, DISTANCE), ...)
 CREATE COLLECTION <name> QUANTIZE SCALAR
 CREATE COLLECTION <name> QUANTIZE SCALAR QUANTILE <0.0-1.0>
 CREATE COLLECTION <name> QUANTIZE SCALAR QUANTILE <0.0-1.0> ALWAYS RAM
@@ -289,6 +294,12 @@ CREATE COLLECTION <name> QUANTIZE TURBO
 CREATE COLLECTION <name> QUANTIZE TURBO BITS <1|1.5|2|4>
 CREATE COLLECTION <name> QUANTIZE TURBO BITS <1|1.5|2|4> ALWAYS RAM
 CREATE COLLECTION <name> WITH HNSW { payload_m: <n> }
+ALTER COLLECTION <name> WITH VECTORS { on_disk: true }
+ALTER COLLECTION <name> WITH HNSW { ... }
+ALTER COLLECTION <name> WITH OPTIMIZERS { ... }
+ALTER COLLECTION <name> WITH PARAMS { ... }
+ALTER COLLECTION <name> QUANTIZE ...
+ALTER COLLECTION <name> QUANTIZE DISABLED
 DROP COLLECTION <name>
 SHOW COLLECTIONS
 SHOW COLLECTION <name>
@@ -309,27 +320,44 @@ INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID SPARSE MODEL '<model>'
 INSERT BULK INTO COLLECTION <name> VALUES [{...}, {...}]
 INSERT BULK INTO COLLECTION <name> VALUES [{...}, {...}] USING HYBRID
 
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n>
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> OFFSET <n>
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> SCORE THRESHOLD <float|int>
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> LOOKUP FROM <collection> [VECTOR '<name>']
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING MODEL '<model>'
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID FUSION 'rrf|dbsf'
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE MODEL '<model>'
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WHERE <filter>
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> EXACT
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { hnsw_ef: <n>, exact: true|false, acorn: true|false, indexed_only: true|false }
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { quantization: { ignore: true|false, rescore: true|false, oversampling: <n> } }
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> RERANK MODEL '<model>'
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING HYBRID RERANK
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> USING SPARSE RERANK
-SEARCH <name> SIMILAR TO '<query>' LIMIT <n> GROUP BY <field> [GROUP_SIZE <n>]
+QUERY '<text>' FROM <name> LIMIT <n>
+QUERY '<text>' FROM <name> LIMIT <n> OFFSET <n>
+QUERY '<text>' FROM <name> LIMIT <n> SCORE THRESHOLD <float|int>
+QUERY '<text>' FROM <name> LIMIT <n> LOOKUP FROM <collection> [VECTOR '<name>']
+QUERY '<text>' FROM <name> LIMIT <n> USING MODEL '<model>'
+QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID
+QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID FUSION DBSF
+QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID WITH { rrf_k: <n>, rrf_weights: [...] }
+QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'
+QUERY '<text>' FROM <name> LIMIT <n> USING SPARSE
+QUERY '<text>' FROM <name> LIMIT <n> WHERE <filter>
+QUERY '<text>' FROM <name> LIMIT <n> EXACT
+QUERY '<text>' FROM <name> LIMIT <n> WITH { hnsw_ef: <n>, exact: true|false, acorn: true|false, indexed_only: true|false }
+QUERY '<text>' FROM <name> LIMIT <n> WITH { quantization: { ignore: true|false, rescore: true|false, oversampling: <n> } }
+QUERY '<text>' FROM <name> LIMIT <n> WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }
+QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }
+QUERY '<text>' FROM <name> LIMIT <n> RERANK
+QUERY '<text>' FROM <name> LIMIT <n> RERANK MODEL '<model>'
+QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID RERANK
+QUERY '<text>' FROM <name> LIMIT <n> USING SPARSE RERANK
+QUERY '<text>' FROM <name> LIMIT <n> GROUP BY <field> [GROUP_SIZE <n>]
+
+QUERY RECOMMEND POSITIVE IDS (<id>, ...) FROM <name> LIMIT <n>
+QUERY RECOMMEND POSITIVE IDS (<id>, ...) NEGATIVE IDS (<id>, ...) FROM <name> LIMIT <n>
+QUERY RECOMMEND POSITIVE IDS (<id>, ...) STRATEGY '<strategy>' FROM <name> LIMIT <n>
+QUERY RECOMMEND POSITIVE IDS (<id>, ...) FROM <name> LIMIT <n> OFFSET <n>
+QUERY RECOMMEND POSITIVE IDS (<id>, ...) FROM <name> LIMIT <n> SCORE THRESHOLD <float|int>
+QUERY RECOMMEND POSITIVE IDS (<id>, ...) FROM <name> LOOKUP FROM <collection> [VECTOR '<name>'] LIMIT <n>
+
+QUERY CONTEXT PAIRS ((<pos_id>, <neg_id>), ...) FROM <name> LIMIT <n>
+QUERY DISCOVER TARGET <id> CONTEXT PAIRS ((<pos_id>, <neg_id>), ...) FROM <name> LIMIT <n>
+
+QUERY '<text>' FROM <name> LIMIT 10
+  PREFETCH (
+    QUERY '<text>' USING 'dense' LIMIT 100 WHERE <filter>,
+    QUERY '<text>' USING 'sparse' LIMIT 100
+  )
+  FUSION RRF WITH { rrf_k: <n>, rrf_weights: [...] }
 
 SELECT * FROM <name> WHERE id = '<uuid>'
 SELECT * FROM <name> WHERE id = <integer>
@@ -338,13 +366,6 @@ SCROLL FROM <name> LIMIT <n>
 SCROLL FROM <name> WHERE <filter> LIMIT <n>
 SCROLL FROM <name> AFTER '<point_id>' LIMIT <n>
 SCROLL FROM <name> WHERE <filter> AFTER <point_id> LIMIT <n>
-
-RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n>
-RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) NEGATIVE IDS (<id>, ...) LIMIT <n>
-RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) STRATEGY '<strategy>' LIMIT <n>
-RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> OFFSET <n>
-RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LIMIT <n> SCORE THRESHOLD <float|int>
-RECOMMEND FROM <name> POSITIVE IDS (<id>, ...) LOOKUP FROM <collection> [VECTOR '<name>'] USING '<vector_name>' LIMIT <n>
 
 DELETE FROM <name> WHERE id = '<uuid>'
 DELETE FROM <name> WHERE id = <integer>
@@ -362,7 +383,7 @@ qql-go dump --batch-size <n> <collection> <output.qql>
 
 Dense search:
 
-- use plain `SEARCH`
+- use plain `QUERY '<text>' FROM <collection>`
 - use `USING MODEL '<model>'` when you want to pin the dense model
 - add `OFFSET <n>` for flat search pagination
 - add `SCORE THRESHOLD <float|int>` to drop low-score matches
@@ -381,10 +402,17 @@ Collection quantization:
 Hybrid search:
 
 - use `USING HYBRID` when exact terms and semantic similarity both matter; this uses `RRF` by default
-- use `FUSION 'dbsf'` when you want the DBSF hybrid fusion strategy instead of the default RRF
+- use `FUSION DBSF` when you want the DBSF hybrid fusion strategy instead of the default RRF
+- use `WITH { rrf_k: <n>, rrf_weights: [...] }` to tune parameterized RRF
 - use `WITH { mmr_diversity, mmr_candidates }` with hybrid search when you want diversity on the dense leg before fusion
 - combine `GROUP BY` with hybrid search when you need grouped top results; do not combine grouped search with `OFFSET`
 - default sparse model: `qdrant/bm25`
+
+Manual prefetch DAGs:
+
+- use `PREFETCH (...)` for multi-stage retrieval with per-prefetch filters, limits, and score thresholds
+- combine with `FUSION RRF` or `FUSION DBSF` for the top-level fusion
+- `PREFETCH` and `USING HYBRID` are mutually exclusive
 
 Sparse-only search:
 
@@ -395,6 +423,16 @@ Point access:
 
 - use `SELECT` when you already know the exact point ID
 - use `SCROLL` when you need pagination or to browse points page by page
+
+Recommendation:
+
+- use `QUERY RECOMMEND POSITIVE IDS (...)` to find similar items by example IDs
+- use `STRATEGY 'average_vector|best_score|sum_scores'` to control recommendation strategy
+
+Context and Discover:
+
+- use `QUERY CONTEXT PAIRS ((pos, neg), ...)` for context-aware search
+- use `QUERY DISCOVER TARGET <id> CONTEXT PAIRS (...)` for exploration search
 
 Rerank:
 
@@ -411,6 +449,7 @@ Search-time tuning:
 - `WITH { indexed_only: true|false }`
 - `WITH { quantization: { ignore, rescore, oversampling } }`
 - `WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }` for dense search and the dense leg of hybrid search
+- `WITH { rrf_k: <n>, rrf_weights: [...] }` for parameterized RRF
 
 ## Filter Syntax
 
@@ -434,10 +473,10 @@ Supported logical operators:
 Examples:
 
 ```sql
-SEARCH articles SIMILAR TO 'deep learning' LIMIT 10 WHERE year >= 2020
-SEARCH articles SIMILAR TO 'retrieval' LIMIT 10 WHERE status IN ('published', 'reviewed')
-SEARCH articles SIMILAR TO 'search' LIMIT 10 WHERE title MATCH PHRASE 'semantic search'
-SEARCH docs SIMILAR TO 'incident' LIMIT 10 WHERE (team = 'search' OR team = 'infra') AND severity >= 3
+QUERY 'deep learning' FROM articles LIMIT 10 WHERE year >= 2020
+QUERY 'retrieval' FROM articles LIMIT 10 WHERE status IN ('published', 'reviewed')
+QUERY 'search' FROM articles LIMIT 10 WHERE title MATCH PHRASE 'semantic search'
+QUERY 'incident' FROM docs LIMIT 10 WHERE (team = 'search' OR team = 'infra') AND severity >= 3
 ```
 
 If you filter heavily, create payload indexes first.
@@ -516,6 +555,7 @@ qql-go/
 ├── internal/lexer/
 ├── internal/output/
 ├── internal/parser/
+├── internal/pipeline/
 ├── internal/repl/
 ├── skills/qql-skill/
 ├── install.sh
