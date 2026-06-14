@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -2087,16 +2088,30 @@ func (e *Executor) buildInsertVectorsBatch(ctx context.Context, texts []string, 
 			return nil, fmt.Errorf("local/external rerank vectors are not implemented yet")
 		}
 
-		batch := make([]map[string]*qdrant.Vector, 0, len(texts))
-		for idx, text := range texts {
+		batch := make([]map[string]*qdrant.Vector, len(texts))
+		sparseVectors := make([]sparse.Vector, len(texts))
+
+		if includeSparse {
+			var wg sync.WaitGroup
+			wg.Add(len(texts))
+			for i, text := range texts {
+				go func(idx int, t string) {
+					defer wg.Done()
+					sparseVectors[idx] = sparse.BuildDocument(t)
+				}(i, text)
+			}
+			wg.Wait()
+		}
+
+		for idx := range texts {
 			vectors := map[string]*qdrant.Vector{
 				denseVectorName: qdrant.NewVectorDense(denseVectors[idx]),
 			}
 			if includeSparse {
-				sv := sparse.BuildDocument(text)
+				sv := sparseVectors[idx]
 				vectors[sparseVectorName] = qdrant.NewVectorSparse(sv.Indices, sv.Values)
 			}
-			batch = append(batch, vectors)
+			batch[idx] = vectors
 		}
 		return batch, nil
 	}
