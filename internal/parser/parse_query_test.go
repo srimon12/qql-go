@@ -115,9 +115,7 @@ func TestParseQueryErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			l := &lexer.Lexer{}
 			tokens, err := l.Tokenize(tt.input)
-			if err != nil {
-				return // Lexer error is fine
-			}
+			require.NoError(t, err)
 
 			p := NewParser()
 			_, err = p.Parse(tokens)

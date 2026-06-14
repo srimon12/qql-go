@@ -2,11 +2,11 @@ package parser
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
 	"github.com/srimon12/qql-go/internal/lexer"
-	"github.com/srimon12/qql-go/internal/utils"
 )
 
 func (p *Parser) parseScroll() (*ast.ScrollStmt, error) {
@@ -278,7 +278,7 @@ func (p *Parser) parseLiteral() (any, error) {
 		return parseFloatToken(tok)
 	case lexer.TokenKindIdentifier:
 		p.advance()
-		upper := utils.ToUpper(tok.Value)
+		upper := strings.ToUpper(tok.Value)
 		if upper == "TRUE" {
 			return true, nil
 		}
@@ -378,7 +378,7 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 			return nil, errors.NewQQLSyntaxError("Expected a WITH parameter name, got '"+keyTok.Value+"'", keyTok.Pos)
 		}
 		p.advance()
-		key := utils.ToLower(keyTok.Value)
+		key := strings.ToLower(keyTok.Value)
 		if _, err := p.expect(lexer.TokenKindColon); err != nil {
 			return nil, err
 		}
@@ -484,7 +484,7 @@ func (p *Parser) parseQuantizationSearchWith() (*ast.QuantizationSearchWith, err
 			return nil, errors.NewQQLSyntaxError("Expected a quantization parameter name, got '"+keyTok.Value+"'", keyTok.Pos)
 		}
 		p.advance()
-		key := utils.ToLower(keyTok.Value)
+		key := strings.ToLower(keyTok.Value)
 		if _, err := p.expect(lexer.TokenKindColon); err != nil {
 			return nil, err
 		}

@@ -212,11 +212,9 @@ type QueryStmt struct {
 	Model          *string
 
 	// Legacy flags mapped to pipeline logic
-	SparseOnly  bool
 	Hybrid      bool
 	Rerank      bool
 	RerankModel *string
-	Fusion      *string
 }
 
 type DeleteStmt struct {

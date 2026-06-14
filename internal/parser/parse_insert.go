@@ -3,11 +3,11 @@ package parser
 import (
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
 	"github.com/srimon12/qql-go/internal/lexer"
-	"github.com/srimon12/qql-go/internal/utils"
 )
 
 func (p *Parser) parseInsert() (ast.ASTNode, error) {
@@ -94,7 +94,7 @@ func (p *Parser) parseInsertBulk() (*ast.InsertBulkStmt, error) {
 func extractInsertPointID(values map[string]any) (any, map[string]any) {
 	var matches []string
 	for key := range values {
-		if utils.ToLower(key) == "id" {
+		if strings.ToLower(key) == "id" {
 			matches = append(matches, key)
 		}
 	}

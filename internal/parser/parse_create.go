@@ -2,11 +2,11 @@ package parser
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
 	"github.com/srimon12/qql-go/internal/lexer"
-	"github.com/srimon12/qql-go/internal/utils"
 )
 
 func (p *Parser) parseCreate() (ast.ASTNode, error) {
@@ -105,7 +105,7 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 		} else {
 			for p.peek().Kind == lexer.TokenKindDense || p.peek().Kind == lexer.TokenKindSparse {
 				mode := p.advance().Kind
-				if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && utils.ToUpper(p.peek().Value) == "VECTOR") {
+				if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && strings.ToUpper(p.peek().Value) == "VECTOR") {
 					p.advance()
 					v, err := p.parseStringPtr()
 					if err != nil {
@@ -269,7 +269,7 @@ func (p *Parser) parseHnswConfigBlock() (*ast.CollectionConfig, error) {
 		return nil, err
 	}
 	for key := range config {
-		lower := utils.ToLower(key)
+		lower := strings.ToLower(key)
 		switch lower {
 		case "m", "ef_construct", "full_scan_threshold", "max_indexing_threads", "on_disk", "payload_m", "inline_storage":
 			continue
@@ -324,7 +324,7 @@ func (p *Parser) parseVectorsConfigBlock() (*ast.CollectionConfig, error) {
 		return nil, err
 	}
 	for key := range config {
-		if utils.ToLower(key) != "on_disk" {
+		if strings.ToLower(key) != "on_disk" {
 			return nil, errors.NewQQLSyntaxError("Unknown VECTORS parameter '"+key+"'. Expected: on_disk", p.peek().Pos)
 		}
 	}
@@ -346,7 +346,7 @@ func (p *Parser) parseOptimizersConfigBlock() (*ast.CollectionConfig, error) {
 		return nil, err
 	}
 	for key := range config {
-		lower := utils.ToLower(key)
+		lower := strings.ToLower(key)
 		switch lower {
 		case "deleted_threshold", "vacuum_min_vector_number", "default_segment_number", "max_segment_size", "memmap_threshold", "indexing_threshold", "flush_interval_sec", "max_optimization_threads", "prevent_unoptimized":
 			continue
@@ -360,7 +360,7 @@ func (p *Parser) parseOptimizersConfigBlock() (*ast.CollectionConfig, error) {
 		}
 	}
 	for key, raw := range config {
-		lower := utils.ToLower(key)
+		lower := strings.ToLower(key)
 		if lower == "deleted_threshold" {
 			switch v := raw.(type) {
 			case int:
@@ -381,7 +381,7 @@ func (p *Parser) parseOptimizersConfigBlock() (*ast.CollectionConfig, error) {
 					return nil, errors.NewQQLSyntaxError("max_optimization_threads must be a positive integer or 'auto'", p.peek().Pos)
 				}
 			case string:
-				if utils.ToLower(v) != "auto" {
+				if strings.ToLower(v) != "auto" {
 					return nil, errors.NewQQLSyntaxError("max_optimization_threads must be a positive integer or 'auto'", p.peek().Pos)
 				}
 			}
@@ -432,7 +432,7 @@ func (p *Parser) parseCollectionParamsConfigBlock(forAlter bool) (*ast.Collectio
 		return nil, err
 	}
 	for key := range config {
-		lower := utils.ToLower(key)
+		lower := strings.ToLower(key)
 		switch lower {
 		case "replication_factor", "write_consistency_factor", "read_fan_out_factor", "read_fan_out_delay_ms", "on_disk_payload":
 			continue
@@ -559,7 +559,7 @@ func collectionMaxOptimizationThreads(config map[string]any, key string) *ast.Op
 			return &ast.OptimizationThreads{Value: uint64(typed)}
 		}
 	case string:
-		if utils.ToLower(typed) == "auto" {
+		if strings.ToLower(typed) == "auto" {
 			return &ast.OptimizationThreads{Auto: true}
 		}
 	}
@@ -572,7 +572,7 @@ func collectionValue(config map[string]any, key string) (any, bool) {
 	}
 	var matches []string
 	for k := range config {
-		if utils.ToLower(k) == key {
+		if strings.ToLower(k) == key {
 			matches = append(matches, k)
 		}
 	}
@@ -589,7 +589,7 @@ func configHasKey(config map[string]any, key string) bool {
 }
 
 func (p *Parser) validateHnswValue(key string, raw any) error {
-	lower := utils.ToLower(key)
+	lower := strings.ToLower(key)
 	switch lower {
 	case "m", "ef_construct", "full_scan_threshold", "max_indexing_threads", "payload_m":
 		if _, ok := raw.(int); !ok {
@@ -604,7 +604,7 @@ func (p *Parser) validateHnswValue(key string, raw any) error {
 }
 
 func (p *Parser) validateVectorsValue(key string, raw any) error {
-	lower := utils.ToLower(key)
+	lower := strings.ToLower(key)
 	switch lower {
 	case "on_disk":
 		if _, ok := raw.(bool); !ok {
@@ -615,7 +615,7 @@ func (p *Parser) validateVectorsValue(key string, raw any) error {
 }
 
 func (p *Parser) validateOptimizersValue(key string, raw any) error {
-	lower := utils.ToLower(key)
+	lower := strings.ToLower(key)
 	switch lower {
 	case "deleted_threshold":
 		switch raw.(type) {
@@ -642,7 +642,7 @@ func (p *Parser) validateOptimizersValue(key string, raw any) error {
 }
 
 func (p *Parser) validateParamsValue(key string, raw any) error {
-	lower := utils.ToLower(key)
+	lower := strings.ToLower(key)
 	switch lower {
 	case "replication_factor", "write_consistency_factor", "read_fan_out_factor", "read_fan_out_delay_ms":
 		if _, ok := raw.(int); !ok {
@@ -775,7 +775,7 @@ func (p *Parser) parseCreateIndex() (*ast.CreateIndexStmt, error) {
 		if err != nil {
 			return nil, err
 		}
-		fieldType = utils.ToLower(typeTok.Value)
+		fieldType = strings.ToLower(typeTok.Value)
 	}
 	var options map[string]any
 	if p.peek().Kind == lexer.TokenKindWith {

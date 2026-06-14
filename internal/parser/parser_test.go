@@ -509,18 +509,18 @@ func TestParseError(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "search missing limit",
-			input:   "SEARCH test SIMILAR TO 'text'",
+			name:    "search missing from",
+			input:   "QUERY NEAREST 'text'",
 			wantErr: true,
 		},
 		{
 			name:    "search missing query text",
-			input:   "SEARCH test SIMILAR TO LIMIT 10",
+			input:   "QUERY NEAREST FROM test",
 			wantErr: true,
 		},
 		{
 			name:    "search with invalid with boolean",
-			input:   "SEARCH test SIMILAR TO 'text' LIMIT 10 WITH {exact: maybe}",
+			input:   "QUERY NEAREST 'text' FROM test LIMIT 10 WITH {exact: maybe}",
 			wantErr: true,
 		},
 		{
@@ -530,12 +530,12 @@ func TestParseError(t *testing.T) {
 		},
 		{
 			name:    "reject explain in parser",
-			input:   "EXPLAIN SEARCH test SIMILAR TO 'text' LIMIT 10",
+			input:   "EXPLAIN QUERY NEAREST 'text' FROM test LIMIT 10",
 			wantErr: true,
 		},
 		{
 			name:    "reject overflowing limit",
-			input:   "SEARCH test SIMILAR TO 'text' LIMIT 999999999999999999999999999",
+			input:   "QUERY NEAREST 'text' FROM test LIMIT 999999999999999999999999999",
 			wantErr: true,
 		},
 		{
@@ -545,17 +545,17 @@ func TestParseError(t *testing.T) {
 		},
 		{
 			name:    "reject overflowing float literal",
-			input:   "SEARCH test SIMILAR TO 'text' LIMIT 10 WHERE score = " + strings.Repeat("9", 400) + ".0",
+			input:   "QUERY NEAREST 'text' FROM test LIMIT 10 WHERE score = " + strings.Repeat("9", 400) + ".0",
 			wantErr: true,
 		},
 		{
 			name:    "reject duplicate where clause",
-			input:   "SEARCH test SIMILAR TO 'text' LIMIT 10 WHERE a = 1 WHERE b = 2",
+			input:   "QUERY NEAREST 'text' FROM test LIMIT 10 WHERE a = 1 WHERE b = 2",
 			wantErr: true,
 		},
 		{
 			name:    "reject duplicate with clause",
-			input:   "SEARCH test SIMILAR TO 'text' LIMIT 10 WITH {exact: true} WITH {acorn: true}",
+			input:   "QUERY NEAREST 'text' FROM test LIMIT 10 WITH {exact: true} WITH {acorn: true}",
 			wantErr: true,
 		},
 	}
@@ -564,11 +564,13 @@ func TestParseError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			l := &lexer.Lexer{}
 			tokens, err := l.Tokenize(tt.input)
-			if err != nil {
-				if tt.wantErr {
+			if tt.name == "reject overflowing limit" || tt.name == "reject overflowing integer literal" || tt.name == "reject overflowing float literal" {
+				if err != nil {
+					// Lexer will catch overflow errors during tokenization, which is fine
 					return
 				}
-				t.Fatalf("lexer error: %v", err)
+			} else {
+				require.NoError(t, err)
 			}
 
 			p := NewParser()

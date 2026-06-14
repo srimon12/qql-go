@@ -3,11 +3,11 @@ package parser
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
 	"github.com/srimon12/qql-go/internal/lexer"
-	"github.com/srimon12/qql-go/internal/utils"
 )
 
 type Parser struct {
@@ -195,7 +195,7 @@ func (p *Parser) parseValue() (any, error) {
 		return nil, nil
 	case lexer.TokenKindIdentifier:
 		p.advance()
-		upper := utils.ToUpper(tok.Value)
+		upper := strings.ToUpper(tok.Value)
 		if upper == "TRUE" {
 			return true, nil
 		}
@@ -218,7 +218,7 @@ func (p *Parser) parseBool() (bool, error) {
 	tok := p.peek()
 	if tok.Kind == lexer.TokenKindIdentifier {
 		p.advance()
-		upper := utils.ToUpper(tok.Value)
+		upper := strings.ToUpper(tok.Value)
 		if upper == "TRUE" {
 			return true, nil
 		}
@@ -253,7 +253,6 @@ func (p *Parser) parseEmbeddingOptions() (*string, bool, *string, *string, *stri
 	}
 	p.advance()
 	if p.peek().Kind != lexer.TokenKindHybrid {
-		var denseVector *string
 		if p.peek().Kind == lexer.TokenKindDense {
 			p.advance()
 		}
@@ -386,7 +385,7 @@ func (p *Parser) parseNumericLiteral() (float64, error) {
 
 func (p *Parser) parseOptionalVectorString() (*string, error) {
 	tok := p.peek()
-	if tok.Kind == lexer.TokenKindVector || (tok.Kind == lexer.TokenKindIdentifier && utils.ToUpper(tok.Value) == "VECTOR") {
+	if tok.Kind == lexer.TokenKindVector || (tok.Kind == lexer.TokenKindIdentifier && strings.ToUpper(tok.Value) == "VECTOR") {
 		p.advance()
 		return p.parseStringPtr()
 	}

@@ -1,10 +1,11 @@
 package parser
 
 import (
+	"strings"
+
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
 	"github.com/srimon12/qql-go/internal/lexer"
-	"github.com/srimon12/qql-go/internal/utils"
 )
 
 func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
@@ -186,14 +187,15 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 			return nil, err
 		}
 		scoreTok := p.peek()
-		if scoreTok.Kind == lexer.TokenKindFloat {
+		switch scoreTok.Kind {
+		case lexer.TokenKindFloat:
 			p.advance()
 			f, err := parseFloatToken(scoreTok)
 			if err != nil {
 				return nil, err
 			}
 			stmt.ScoreThreshold = &f
-		} else if scoreTok.Kind == lexer.TokenKindInteger {
+		case lexer.TokenKindInteger:
 			p.advance()
 			v, err := parseIntToken(scoreTok)
 			if err != nil {
@@ -201,7 +203,7 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 			}
 			f := float64(v)
 			stmt.ScoreThreshold = &f
-		} else {
+		default:
 			return nil, errors.NewQQLSyntaxError("Expected float or integer for SCORE THRESHOLD", scoreTok.Pos)
 		}
 	}
@@ -216,7 +218,7 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 			return nil, err
 		}
 		stmt.LookupFrom = lookupFrom
-		if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && utils.ToUpper(p.peek().Value) == "VECTOR") {
+		if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && strings.ToUpper(p.peek().Value) == "VECTOR") {
 			p.advance()
 			lookupVector, err := p.parseStringPtr()
 			if err != nil {
@@ -256,7 +258,7 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 		// Lookahead to check if it's WITH MODEL
 		seenWith = true
 		p.advance() // Consume WITH
-		if p.peek().Kind == lexer.TokenKindIdentifier && utils.ToUpper(p.peek().Value) == "MODEL" {
+		if p.peek().Kind == lexer.TokenKindIdentifier && strings.ToUpper(p.peek().Value) == "MODEL" {
 			p.advance() // Consume MODEL
 			modelTok, err := p.expect(lexer.TokenKindString)
 			if err != nil {
@@ -277,6 +279,9 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 	seenWhere := false
 	seenRerank := false
 	seenGroup := false
+	seenExact := false
+	seenGroupSize := false
+	seenStrategy := false
 
 	for {
 		switch p.peek().Kind {
@@ -304,6 +309,10 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 			}
 			stmt.RerankModel = rerankModel
 		case lexer.TokenKindExact:
+			if seenExact {
+				return nil, errors.NewQQLSyntaxError("Duplicate EXACT clause", p.peek().Pos)
+			}
+			seenExact = true
 			p.advance()
 			ensureSearchWith(&stmt.WithClause).Exact = true
 		case lexer.TokenKindWith:
@@ -312,7 +321,7 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 			}
 			seenWith = true
 			p.advance()
-			if p.peek().Kind == lexer.TokenKindIdentifier && utils.ToUpper(p.peek().Value) == "MODEL" {
+			if p.peek().Kind == lexer.TokenKindIdentifier && strings.ToUpper(p.peek().Value) == "MODEL" {
 				p.advance()
 				modelTok, err := p.expect(lexer.TokenKindString)
 				if err != nil {
@@ -341,6 +350,11 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 			}
 			stmt.GroupBy = groupField
 		case lexer.TokenKindGroupSize:
+			if seenGroupSize {
+				return nil, errors.NewQQLSyntaxError("Duplicate GROUP_SIZE clause", p.peek().Pos)
+			}
+			seenGroupSize = true
+			p.advance()
 			groupSizeTok := p.peek()
 			groupSizeVal, err := p.parseNumericLiteral()
 			if err != nil {
@@ -352,6 +366,10 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 			sizeInt := int(groupSizeVal)
 			stmt.GroupSize = &sizeInt
 		case lexer.TokenKindStrategy:
+			if seenStrategy {
+				return nil, errors.NewQQLSyntaxError("Duplicate STRATEGY clause", p.peek().Pos)
+			}
+			seenStrategy = true
 			p.advance()
 			strategy, err := p.parseStringPtr()
 			if err != nil {
