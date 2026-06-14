@@ -215,36 +215,13 @@ func TestTokenizeKeywords(t *testing.T) {
 				{Kind: TokenKindEof, Value: "", Pos: 11},
 			},
 		},
-		{
-			name:  "SEARCH",
-			input: "SEARCH",
-			expected: []Token{
-				{Kind: TokenKindSearch, Value: "SEARCH", Pos: 0},
-				{Kind: TokenKindEof, Value: "", Pos: 6},
-			},
-		},
+
 		{
 			name:  "RECOMMEND",
 			input: "RECOMMEND",
 			expected: []Token{
 				{Kind: TokenKindRecommend, Value: "RECOMMEND", Pos: 0},
 				{Kind: TokenKindEof, Value: "", Pos: 9},
-			},
-		},
-		{
-			name:  "SIMILAR",
-			input: "SIMILAR",
-			expected: []Token{
-				{Kind: TokenKindSimilar, Value: "SIMILAR", Pos: 0},
-				{Kind: TokenKindEof, Value: "", Pos: 7},
-			},
-		},
-		{
-			name:  "TO",
-			input: "TO",
-			expected: []Token{
-				{Kind: TokenKindTo, Value: "TO", Pos: 0},
-				{Kind: TokenKindEof, Value: "", Pos: 2},
 			},
 		},
 		{
@@ -910,11 +887,12 @@ func TestTokenizeSearchQuery(t *testing.T) {
 	tokens, err := lexer.Tokenize(input)
 	require.NoError(t, err)
 
-	assert.Equal(t, TokenKindSearch, tokens[0].Kind)
 	assert.Equal(t, TokenKindIdentifier, tokens[1].Kind)
 	assert.Equal(t, "mycol", tokens[1].Value)
-	assert.Equal(t, TokenKindSimilar, tokens[2].Kind)
-	assert.Equal(t, TokenKindTo, tokens[3].Kind)
+	assert.Equal(t, TokenKindIdentifier, tokens[2].Kind)
+	assert.Equal(t, "SIMILAR", tokens[2].Value)
+	assert.Equal(t, TokenKindIdentifier, tokens[3].Kind)
+	assert.Equal(t, "TO", tokens[3].Value)
 	assert.Equal(t, TokenKindString, tokens[4].Kind)
 	assert.Equal(t, "query text", tokens[4].Value)
 	assert.Equal(t, TokenKindLimit, tokens[5].Kind)

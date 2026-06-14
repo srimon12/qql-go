@@ -1,0 +1,235 @@
+package parser
+
+import (
+	"testing"
+
+	"github.com/srimon12/qql-go/internal/ast"
+	"github.com/srimon12/qql-go/internal/lexer"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestParseQueryNearest(t *testing.T) {
+	input := "QUERY NEAREST 'vector search' FROM docs LIMIT 10 OFFSET 5 USING HYBRID RERANK WHERE topic = 'search' WITH { hnsw_ef: 128 }"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	assert.Equal(t, ast.QueryModeNearest, stmt.Mode)
+	assert.Equal(t, "docs", stmt.Collection)
+	require.NotNil(t, stmt.QueryText)
+	assert.Equal(t, "vector search", *stmt.QueryText)
+	assert.Equal(t, 10, stmt.Limit)
+	assert.Equal(t, 5, stmt.Offset)
+	assert.Equal(t, ast.QueryTypeHybrid, stmt.Type)
+	assert.True(t, stmt.Rerank)
+	require.NotNil(t, stmt.QueryFilter)
+	require.NotNil(t, stmt.WithClause)
+	assert.Equal(t, 128, stmt.WithClause.HnswEf)
+}
+
+func TestParseQueryRecommend(t *testing.T) {
+	input := "QUERY RECOMMEND POSITIVE IDS (1, 2) NEGATIVE IDS (3) FROM users"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	assert.Equal(t, ast.QueryModeRecommend, stmt.Mode)
+	assert.Equal(t, "users", stmt.Collection)
+	assert.Equal(t, []any{1, 2}, stmt.PositiveIDs)
+	assert.Equal(t, []any{3}, stmt.NegativeIDs)
+	assert.Equal(t, 10, stmt.Limit) // Default limit
+}
+
+func TestParseQueryDiscover(t *testing.T) {
+	input := "QUERY DISCOVER TARGET 100 CONTEXT PAIRS (1, 2), (3, 4) FROM products LIMIT 20"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	assert.Equal(t, ast.QueryModeDiscover, stmt.Mode)
+	assert.Equal(t, "products", stmt.Collection)
+	assert.Equal(t, 100, stmt.Target)
+	assert.Len(t, stmt.ContextPairs, 2)
+	assert.Equal(t, 1, stmt.ContextPairs[0].Positive)
+	assert.Equal(t, 2, stmt.ContextPairs[0].Negative)
+	assert.Equal(t, 3, stmt.ContextPairs[1].Positive)
+	assert.Equal(t, 4, stmt.ContextPairs[1].Negative)
+	assert.Equal(t, 20, stmt.Limit)
+}
+
+func TestParseQueryContext(t *testing.T) {
+	input := "QUERY CONTEXT PAIRS ('uuid-1', 'uuid-2') FROM logs"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	assert.Equal(t, ast.QueryModeContext, stmt.Mode)
+	assert.Equal(t, "logs", stmt.Collection)
+	assert.Len(t, stmt.ContextPairs, 1)
+	assert.Equal(t, "uuid-1", stmt.ContextPairs[0].Positive)
+	assert.Equal(t, "uuid-2", stmt.ContextPairs[0].Negative)
+}
+
+func TestParseQueryErrors(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"missing from", "QUERY NEAREST 'text' LIMIT 10"},
+		{"invalid mode", "QUERY SOMETHING 'text' FROM docs"},
+		{"missing context pairs", "QUERY CONTEXT FROM docs"},
+		{"missing discover target", "QUERY DISCOVER FROM docs"},
+		{"missing positive ids", "QUERY RECOMMEND NEGATIVE IDS 1 FROM docs"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.input)
+			require.NoError(t, err)
+
+			p := NewParser()
+			_, err = p.Parse(tokens)
+			assert.Error(t, err)
+		})
+	}
+}
+
+func TestParseQueryPrefetch(t *testing.T) {
+	input := `QUERY 'search' FROM docs LIMIT 10
+  PREFETCH (
+    QUERY 'search' USING 'dense' LIMIT 100 WHERE category = 'tech' SCORE THRESHOLD 0.8,
+    QUERY 'search' USING 'sparse' LIMIT 100 WITH { exact: true }
+  )
+  FUSION RRF WITH { rrf_k: 10, rrf_weights: [0.7, 0.3] }`
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	assert.Equal(t, "docs", stmt.Collection)
+	assert.Equal(t, 10, stmt.Limit)
+	require.Len(t, stmt.Prefetches, 2)
+	assert.Equal(t, "dense", *stmt.Prefetches[0].Using)
+	assert.Equal(t, 100, stmt.Prefetches[0].Limit)
+	require.NotNil(t, stmt.Prefetches[0].ScoreThreshold)
+	assert.Equal(t, float64(0.8), *stmt.Prefetches[0].ScoreThreshold)
+	require.NotNil(t, stmt.Prefetches[0].QueryFilter)
+
+	assert.Equal(t, "sparse", *stmt.Prefetches[1].Using)
+	assert.Equal(t, 100, stmt.Prefetches[1].Limit)
+	require.NotNil(t, stmt.Prefetches[1].WithClause)
+	assert.True(t, stmt.Prefetches[1].WithClause.Exact)
+
+	require.NotNil(t, stmt.FusionType)
+	assert.Equal(t, "RRF", *stmt.FusionType)
+	require.NotNil(t, stmt.WithClause)
+	require.NotNil(t, stmt.WithClause.RrfK)
+	assert.Equal(t, 10, *stmt.WithClause.RrfK)
+	require.Len(t, stmt.WithClause.RrfWeights, 2)
+	assert.Equal(t, float32(0.7), stmt.WithClause.RrfWeights[0])
+	assert.Equal(t, float32(0.3), stmt.WithClause.RrfWeights[1])
+}
+
+func TestParseQueryPrefetchEdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			"PREFETCH + USING HYBRID mutual exclusion",
+			"QUERY 'test' FROM docs USING HYBRID PREFETCH (QUERY 'test' USING 'dense')",
+			true,
+		},
+		{
+			"FUSION without PREFETCH or USING HYBRID",
+			"QUERY 'test' FROM docs FUSION RRF",
+			true,
+		},
+		{
+			"Empty PREFETCH block",
+			"QUERY 'test' FROM docs PREFETCH ()",
+			true,
+		},
+		{
+			"Duplicate FUSION clause",
+			"QUERY 'test' FROM docs USING HYBRID FUSION RRF FUSION DBSF",
+			true,
+		},
+		{
+			"Nested prefetches and ID query",
+			"QUERY 'test' FROM docs PREFETCH (PREFETCH (QUERY 123 USING 'dense'), QUERY 'text' USING 'sparse')",
+			false,
+		},
+		{
+			"FUSION DBSF",
+			"QUERY 'test' FROM docs USING HYBRID FUSION DBSF",
+			false,
+		},
+		{
+			"Prefetch with LOOKUP FROM",
+			"QUERY 'test' FROM docs PREFETCH (QUERY 123 USING 'dense' LOOKUP FROM other_collection)",
+			false,
+		},
+		{
+			"Prefetch with RECOMMEND mode",
+			"QUERY 'test' FROM docs PREFETCH (QUERY RECOMMEND POSITIVE IDS (1, 2) NEGATIVE IDS (3) USING 'dense')",
+			false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.input)
+			if err != nil && tt.wantErr {
+				return
+			}
+			require.NoError(t, err)
+
+			p := NewParser()
+			_, err = p.Parse(tokens)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

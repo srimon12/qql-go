@@ -1,6 +1,8 @@
 package lexer
 
 import (
+	"strings"
+
 	"github.com/srimon12/qql-go/internal/errors"
 )
 
@@ -38,14 +40,16 @@ var keywords = map[string]TokenKind{
 	"DROP":        TokenKindDrop,
 	"SHOW":        TokenKindShow,
 	"COLLECTIONS": TokenKindCollections,
-	"SEARCH":      TokenKindSearch,
 	"SELECT":      TokenKindSelect,
 	"SCROLL":      TokenKindScroll,
-	"FUSION":      TokenKindFusion,
 	"AFTER":       TokenKindAfter,
 	"RECOMMEND":   TokenKindRecommend,
-	"SIMILAR":     TokenKindSimilar,
-	"TO":          TokenKindTo,
+	"QUERY":       TokenKindQuery,
+	"NEAREST":     TokenKindNearest,
+	"CONTEXT":     TokenKindContext,
+	"DISCOVER":    TokenKindDiscover,
+	"PAIRS":       TokenKindPairs,
+	"TARGET":      TokenKindTarget,
 	"LIMIT":       TokenKindLimit,
 	"GROUP":       TokenKindGroup,
 	"BY":          TokenKindBy,
@@ -81,6 +85,12 @@ var keywords = map[string]TokenKind{
 	"SCORE":       TokenKindScore,
 	"THRESHOLD":   TokenKindThreshold,
 	"LOOKUP":      TokenKindLookup,
+	"COSINE":      TokenKindCosine,
+	"DOT":         TokenKindDot,
+	"EUCLID":      TokenKindEuclid,
+	"MANHATTAN":   TokenKindManhattan,
+	"PREFETCH":    TokenKindPrefetch,
+	"FUSION":      TokenKindFusion,
 }
 
 type Lexer struct{}
@@ -167,8 +177,14 @@ func (l *Lexer) Tokenize(query string) ([]Token, error) {
 				token := l.readNumber(query, i)
 				tokens = append(tokens, token)
 				i = token.Pos + len(token.Value)
+			} else if i+1 < n && (isAlpha(query[i+1]) || query[i+1] == '_') {
+				token := l.readIdentifier(query, i+1)
+				token.Value = "-" + token.Value
+				token.Pos = i
+				tokens = append(tokens, token)
+				i = token.Pos + len(token.Value)
 			} else {
-				return nil, errors.NewQQLSyntaxError("Unexpected character '-'", i)
+				return nil, errors.NewQQLSyntaxError("Unexpected character '-' (use quotes for UUIDs: '123e4567-e89b-...')", i)
 			}
 		default:
 			if isDigit(ch) {
@@ -271,9 +287,9 @@ func (l *Lexer) readIdentifier(query string, start int) Token {
 	word := query[start:i]
 	firstSegment := word[:findDot(word)]
 	if len(firstSegment) > 0 {
-		upperFirst := toUpper(firstSegment)
-		if _, ok := keywords[upperFirst]; ok && !containsDot(word) {
-			return Token{Kind: keywords[upperFirst], Value: word, Pos: start}
+		upperFirst := strings.ToUpper(firstSegment)
+		if kind, ok := keywords[upperFirst]; ok && !containsDot(word) {
+			return Token{Kind: kind, Value: word, Pos: start}
 		}
 	}
 
@@ -296,18 +312,6 @@ func containsDot(s string) bool {
 		}
 	}
 	return false
-}
-
-func toUpper(s string) string {
-	result := make([]byte, len(s))
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c >= 'a' && c <= 'z' {
-			c -= 32
-		}
-		result[i] = c
-	}
-	return string(result)
 }
 
 func isWhitespace(ch byte) bool {

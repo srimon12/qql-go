@@ -36,15 +36,11 @@ const (
 	TokenKindDrop
 	TokenKindShow
 	TokenKindCollections
-	TokenKindSearch
 	TokenKindSelect
 	TokenKindScroll
 	TokenKindStar
 	TokenKindAfter
-	TokenKindFusion
 	TokenKindRecommend
-	TokenKindSimilar
-	TokenKindTo
 	TokenKindLimit
 	TokenKindGroup
 	TokenKindBy
@@ -80,6 +76,16 @@ const (
 	TokenKindScore
 	TokenKindThreshold
 	TokenKindLookup
+	TokenKindCosine
+	TokenKindDot
+	TokenKindEuclid
+	TokenKindManhattan
+	TokenKindQuery
+	TokenKindNearest
+	TokenKindContext
+	TokenKindDiscover
+	TokenKindPairs
+	TokenKindTarget
 	TokenKindIdentifier
 	TokenKindString
 	TokenKindInteger
@@ -98,6 +104,8 @@ const (
 	TokenKindGte
 	TokenKindLt
 	TokenKindLte
+	TokenKindPrefetch
+	TokenKindFusion
 	TokenKindEof
 )
 
@@ -135,15 +143,11 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindDrop:        "DROP",
 	TokenKindShow:        "SHOW",
 	TokenKindCollections: "COLLECTIONS",
-	TokenKindSearch:      "SEARCH",
 	TokenKindSelect:      "SELECT",
 	TokenKindScroll:      "SCROLL",
 	TokenKindStar:        "STAR",
 	TokenKindAfter:       "AFTER",
-	TokenKindFusion:      "FUSION",
 	TokenKindRecommend:   "RECOMMEND",
-	TokenKindSimilar:     "SIMILAR",
-	TokenKindTo:          "TO",
 	TokenKindLimit:       "LIMIT",
 	TokenKindGroup:       "GROUP",
 	TokenKindBy:          "BY",
@@ -179,6 +183,16 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindScore:       "SCORE",
 	TokenKindThreshold:   "THRESHOLD",
 	TokenKindLookup:      "LOOKUP",
+	TokenKindCosine:      "COSINE",
+	TokenKindDot:         "DOT",
+	TokenKindEuclid:      "EUCLID",
+	TokenKindManhattan:   "MANHATTAN",
+	TokenKindQuery:       "QUERY",
+	TokenKindNearest:     "NEAREST",
+	TokenKindContext:     "CONTEXT",
+	TokenKindDiscover:    "DISCOVER",
+	TokenKindPairs:       "PAIRS",
+	TokenKindTarget:      "TARGET",
 	TokenKindIdentifier:  "IDENTIFIER",
 	TokenKindString:      "STRING",
 	TokenKindInteger:     "INTEGER",
@@ -197,6 +211,8 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindGte:         "GTE",
 	TokenKindLt:          "LT",
 	TokenKindLte:         "LTE",
+	TokenKindPrefetch:    "PREFETCH",
+	TokenKindFusion:      "FUSION",
 	TokenKindEof:         "EOF",
 }
 

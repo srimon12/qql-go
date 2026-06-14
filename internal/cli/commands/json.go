@@ -1,10 +1,10 @@
 package commands
 
 type ExecResponse struct {
-	OK        bool        `json:"ok"`
-	Operation string      `json:"operation"`
-	Message   string      `json:"message"`
-	Data      interface{} `json:"data,omitempty"`
+	OK        bool   `json:"ok"`
+	Operation string `json:"operation"`
+	Message   string `json:"message"`
+	Data      any    `json:"data,omitempty"`
 }
 
 type ExplainResponse struct {
