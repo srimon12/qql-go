@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/qdrant/go-client/qdrant"
@@ -10,7 +9,8 @@ import (
 )
 
 func (e *Executor) doSelect(n *ast.SelectStmt) (*ExecResponse, error) {
-	ctx := context.Background()
+	ctx, cancel := e.defaultContext()
+	defer cancel()
 	exists, err := e.client.CollectionExists(ctx, n.Collection)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check collection: %w", err)
@@ -18,7 +18,10 @@ func (e *Executor) doSelect(n *ast.SelectStmt) (*ExecResponse, error) {
 	if !exists {
 		return nil, fmt.Errorf("collection '%s' does not exist", n.Collection)
 	}
-	pointID := newPointID(n.PointID)
+	pointID, err := newPointID(n.PointID)
+	if err != nil {
+		return nil, err
+	}
 	records, err := e.client.Get(ctx, &qdrant.GetPoints{
 		CollectionName: n.Collection,
 		Ids:            []*qdrant.PointId{pointID},
@@ -49,7 +52,8 @@ func (e *Executor) doSelect(n *ast.SelectStmt) (*ExecResponse, error) {
 }
 
 func (e *Executor) doScroll(n *ast.ScrollStmt) (*ExecResponse, error) {
-	ctx := context.Background()
+	ctx, cancel := e.defaultContext()
+	defer cancel()
 	exists, err := e.client.CollectionExists(ctx, n.Collection)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check collection: %w", err)
@@ -65,7 +69,11 @@ func (e *Executor) doScroll(n *ast.ScrollStmt) (*ExecResponse, error) {
 		WithVectors:    qdrant.NewWithVectors(false),
 	}
 	if n.After != nil {
-		req.Offset = newPointID(n.After)
+		pID, err := newPointID(n.After)
+		if err != nil {
+			return nil, err
+		}
+		req.Offset = pID
 	}
 	if n.QueryFilter != nil {
 		filter, err := filters.NewFilterConverter().BuildFilter(n.QueryFilter)

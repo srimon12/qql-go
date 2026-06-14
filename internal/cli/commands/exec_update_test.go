@@ -60,7 +60,7 @@ func TestBuildUpdateVectorRequestUsesNamedDenseVectorForHybridCollections(t *tes
 		Collection: "docs",
 		PointID:    7,
 		Vector:     []float32{0.1, 0.2},
-	}, "dense")
+	}, "dense", true)
 	require.NoError(t, err)
 	require.Len(t, req.GetPoints(), 1)
 	require.NotNil(t, req.GetPoints()[0].GetVectors().GetVectors().GetVectors()[denseVectorName])

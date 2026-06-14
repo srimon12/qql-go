@@ -10,7 +10,8 @@ import (
 )
 
 func (e *Executor) doUpdateVector(n *ast.UpdateVectorStmt) (*ExecResponse, error) {
-	ctx := context.Background()
+	ctx, cancel := e.defaultContext()
+	defer cancel()
 
 	exists, err := e.client.CollectionExists(ctx, n.Collection)
 	if err != nil {
@@ -25,13 +26,15 @@ func (e *Executor) doUpdateVector(n *ast.UpdateVectorStmt) (*ExecResponse, error
 		return nil, fmt.Errorf("failed to inspect collection: %w", err)
 	}
 	denseName := denseVectorName
+	isMultiVector := false
 	if topo != nil && topo.DenseVector != nil && *topo.DenseVector != "" {
 		denseName = *topo.DenseVector
+		isMultiVector = true
 	}
 	if n.VectorName != nil {
 		denseName = *n.VectorName
 	}
-	request, err := e.buildUpdateVectorRequest(ctx, n, denseName)
+	request, err := e.buildUpdateVectorRequest(ctx, n, denseName, isMultiVector)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +54,8 @@ func (e *Executor) doUpdateVector(n *ast.UpdateVectorStmt) (*ExecResponse, error
 }
 
 func (e *Executor) doUpdatePayload(n *ast.UpdatePayloadStmt) (*ExecResponse, error) {
-	ctx := context.Background()
+	ctx, cancel := e.defaultContext()
+	defer cancel()
 
 	exists, err := e.client.CollectionExists(ctx, n.Collection)
 	if err != nil {
@@ -85,7 +89,8 @@ func (e *Executor) doUpdatePayload(n *ast.UpdatePayloadStmt) (*ExecResponse, err
 }
 
 func (e *Executor) doDelete(n *ast.DeleteStmt) (*ExecResponse, error) {
-	ctx := context.Background()
+	ctx, cancel := e.defaultContext()
+	defer cancel()
 
 	exists, err := e.client.CollectionExists(ctx, n.Collection)
 	if err != nil {
@@ -129,15 +134,10 @@ func (e *Executor) doDelete(n *ast.DeleteStmt) (*ExecResponse, error) {
 	}, nil
 }
 
-func (e *Executor) buildUpdateVectorRequest(ctx context.Context, n *ast.UpdateVectorStmt, vectorName string) (*qdrant.UpdatePointVectors, error) {
-	info, err := e.client.GetCollectionInfo(ctx, n.Collection)
-	if err != nil {
-		return nil, fmt.Errorf("failed to inspect collection: %w", err)
-	}
-
+func (e *Executor) buildUpdateVectorRequest(ctx context.Context, n *ast.UpdateVectorStmt, vectorName string, isMultiVector bool) (*qdrant.UpdatePointVectors, error) {
 	wait := true
 	vectors := qdrant.NewVectors(n.Vector...)
-	if info.GetConfig().GetParams().GetVectorsConfig().GetParamsMap() != nil {
+	if isMultiVector {
 		name := vectorName
 		if n.VectorName != nil {
 			name = *n.VectorName
@@ -147,12 +147,17 @@ func (e *Executor) buildUpdateVectorRequest(ctx context.Context, n *ast.UpdateVe
 		})
 	}
 
+	pID, err := newPointID(n.PointID)
+	if err != nil {
+		return nil, err
+	}
+
 	return &qdrant.UpdatePointVectors{
 		CollectionName: n.Collection,
 		Wait:           &wait,
 		Points: []*qdrant.PointVectors{
 			{
-				Id:      newPointID(n.PointID),
+				Id:      pID,
 				Vectors: vectors,
 			},
 		},
@@ -176,7 +181,11 @@ func buildUpdatePayloadRequest(n *ast.UpdatePayloadStmt) (*qdrant.SetPayloadPoin
 		return request, nil
 	}
 
-	request.PointsSelector = qdrant.NewPointsSelector(newPointID(n.PointID))
+	pID, err := newPointID(n.PointID)
+	if err != nil {
+		return nil, err
+	}
+	request.PointsSelector = qdrant.NewPointsSelector(pID)
 	return request, nil
 }
 
@@ -199,12 +208,9 @@ func buildDeleteRequest(n *ast.DeleteStmt) (*qdrant.DeletePoints, error) {
 		}, nil
 	}
 
-	pointID := fmt.Sprintf("%v", n.PointID)
-	var pid *qdrant.PointId
-	if num, err := parseUint64(pointID); err == nil {
-		pid = qdrant.NewIDNum(num)
-	} else {
-		pid = qdrant.NewIDUUID(pointID)
+	pid, err := newPointID(n.PointID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid point ID: %w", err)
 	}
 
 	return &qdrant.DeletePoints{

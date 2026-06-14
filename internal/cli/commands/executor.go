@@ -106,8 +106,10 @@ func (e *Executor) ensureCollectionForInsert(ctx context.Context, collection str
 	if explicitDense != nil {
 		denseName = *explicitDense
 	}
-	vectorsMap := map[string]*qdrant.VectorParams{
-		denseName: collectionVectorParams(denseSize, false)[denseVectorName],
+	vectorsMap := map[string]*qdrant.VectorParams{}
+	params := collectionVectorParams(denseSize, false)
+	if v, ok := params[denseVectorName]; ok {
+		vectorsMap[denseName] = v
 	}
 	createReq := &qdrant.CreateCollection{
 		CollectionName: collection,
@@ -231,6 +233,11 @@ func (e *Executor) resolveDenseModel(override *string) string {
 func (e *Executor) resolveSparseModel(override *string) string {
 	if override != nil && *override != "" {
 		return *override
+	}
+	if e != nil && e.config != nil {
+		if e.config.SparseInferenceModel != "" {
+			return e.config.SparseInferenceModel
+		}
 	}
 	return sparseModelDefault
 }
@@ -373,8 +380,7 @@ func (e *Executor) resolveDenseVectorSize(ctx context.Context, model *string) (i
 	if e != nil && e.config != nil && e.config.EmbeddingDimension > 0 {
 		return e.config.EmbeddingDimension, nil
 	}
-	_ = ctx
-	if model != nil && *model != "" && e != nil && e.config != nil && e.config.EmbeddingDimension == 0 {
+	if model != nil && *model != "" && e.config != nil && e.config.EmbeddingDimension == 0 {
 		return 0, fmt.Errorf("embedding_dimension must be configured when creating collections with USING MODEL")
 	}
 	return denseVectorSize, nil
@@ -446,6 +452,10 @@ type Executor struct {
 	config *config.Config
 }
 
+func (e *Executor) defaultContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 30*time.Second)
+}
+
 type qdrantClient interface {
 	ListCollections(context.Context) ([]string, error)
 	CollectionExists(context.Context, string) (bool, error)
@@ -473,7 +483,9 @@ func NewClient(cfg *config.Config) (*qdrant.Client, error) {
 }
 
 func (e *Executor) DumpCollection(collection, outputPath string, batchSize int) (string, error) {
-	written, skipped, err := dump.Collection(context.Background(), e.client, collection, outputPath, batchSize)
+	ctx, cancel := e.defaultContext()
+	defer cancel()
+	written, skipped, err := dump.Collection(ctx, e.client, collection, outputPath, batchSize)
 	if err != nil {
 		return "", err
 	}
@@ -672,7 +684,8 @@ func (e *Executor) configuredModel() string {
 }
 
 func (e *Executor) doShowCollection(n *ast.ShowCollectionStmt) (*ExecResponse, error) {
-	ctx := context.Background()
+	ctx, cancel := e.defaultContext()
+	defer cancel()
 
 	exists, err := e.client.CollectionExists(ctx, n.Collection)
 	if err != nil {
@@ -777,7 +790,8 @@ func formatCollectionDiagnostics(data map[string]any) string {
 					}
 					line += " (" + strings.Join(rendered, ", ") + ")"
 				}
-				b.WriteString(line + "\n")
+				b.WriteString(line)
+				b.WriteString("\n")
 				continue
 			}
 			fmt.Fprintf(&b, "    %s: %v\n", field, raw)
@@ -1061,7 +1075,8 @@ func serializeTextIndexParams(params *qdrant.TextIndexParams) map[string]any {
 }
 
 func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecResponse, error) {
-	ctx := context.Background()
+	ctx, cancel := e.defaultContext()
+	defer cancel()
 
 	exists, err := e.client.CollectionExists(ctx, n.Collection)
 	if err != nil {
@@ -1189,7 +1204,8 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 }
 
 func (e *Executor) doAlterCollection(n *ast.AlterCollectionStmt) (*ExecResponse, error) {
-	ctx := context.Background()
+	ctx, cancel := e.defaultContext()
+	defer cancel()
 
 	exists, err := e.client.CollectionExists(ctx, n.Collection)
 	if err != nil {
@@ -1272,7 +1288,8 @@ func (e *Executor) doAlterCollection(n *ast.AlterCollectionStmt) (*ExecResponse,
 }
 
 func (e *Executor) doDropCollection(n *ast.DropCollectionStmt) (*ExecResponse, error) {
-	ctx := context.Background()
+	ctx, cancel := e.defaultContext()
+	defer cancel()
 
 	exists, err := e.client.CollectionExists(ctx, n.Collection)
 	if err != nil {

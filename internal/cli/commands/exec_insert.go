@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -13,7 +14,8 @@ import (
 )
 
 func (e *Executor) doInsert(n *ast.InsertStmt) (*ExecResponse, error) {
-	ctx := context.Background()
+	ctx, cancel := e.defaultContext()
+	defer cancel()
 
 	textVal, ok := n.Values["text"]
 	if !ok {
@@ -64,15 +66,21 @@ func (e *Executor) doInsert(n *ast.InsertStmt) (*ExecResponse, error) {
 		return nil, err
 	}
 
+	pID, err := newPointID(pointID)
+	if err != nil {
+		return nil, err
+	}
+
 	_, err = e.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: n.Collection,
 		Points: []*qdrant.PointStruct{
 			{
-				Id:      newPointID(pointID),
+				Id:      pID,
 				Vectors: qdrant.NewVectorsMap(vectors),
 				Payload: e.buildPayload(payload),
 			},
 		},
+		Wait: qdrant.PtrOf(true),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert: %w", err)
@@ -95,7 +103,8 @@ func (e *Executor) doInsert(n *ast.InsertStmt) (*ExecResponse, error) {
 }
 
 func (e *Executor) doInsertBulk(n *ast.InsertBulkStmt) (*ExecResponse, error) {
-	ctx := context.Background()
+	ctx, cancel := e.defaultContext()
+	defer cancel()
 	if len(n.ValuesList) == 0 {
 		return nil, fmt.Errorf("INSERT BULK VALUES list is empty")
 	}
@@ -158,8 +167,12 @@ func (e *Executor) doInsertBulk(n *ast.InsertBulkStmt) (*ExecResponse, error) {
 
 	points := make([]*qdrant.PointStruct, 0, len(texts))
 	for idx, vectors := range vectorsBatch {
+		pID, err := newPointID(pointIDs[idx])
+		if err != nil {
+			return nil, err
+		}
 		points = append(points, &qdrant.PointStruct{
-			Id:      newPointID(pointIDs[idx]),
+			Id:      pID,
 			Vectors: qdrant.NewVectorsMap(vectors),
 			Payload: e.buildPayload(payloads[idx]),
 		})
@@ -168,6 +181,7 @@ func (e *Executor) doInsertBulk(n *ast.InsertBulkStmt) (*ExecResponse, error) {
 	_, err = e.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: n.Collection,
 		Points:         points,
+		Wait:           qdrant.PtrOf(true),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert bulk points: %w", err)
@@ -191,6 +205,9 @@ func (e *Executor) doInsertBulk(n *ast.InsertBulkStmt) (*ExecResponse, error) {
 
 func (e *Executor) buildInsertVectors(ctx context.Context, text, denseModel, sparseModel string, includeSparse, includeRerank bool, collection string, denseName, sparseName string) (map[string]*qdrant.Vector, error) {
 	if e.usesLocalEmbeddings() {
+		if includeSparse && sparseModel != "" {
+			return nil, fmt.Errorf("local embedding mode only supports BM25 sparse vectors; custom sparse model %q is not supported in local mode", sparseModel)
+		}
 		embedClient, err := e.embeddingClient(denseModel)
 		if err != nil {
 			return nil, err
@@ -241,6 +258,9 @@ func (e *Executor) buildInsertVectors(ctx context.Context, text, denseModel, spa
 
 func (e *Executor) buildInsertVectorsBatch(ctx context.Context, texts []string, denseModel, sparseModel string, includeSparse, includeRerank bool, collection string, denseName, sparseName string) ([]map[string]*qdrant.Vector, error) {
 	if e.usesLocalEmbeddings() {
+		if includeSparse && sparseModel != "" {
+			return nil, fmt.Errorf("local embedding mode only supports BM25 sparse vectors; custom sparse model %q is not supported in local mode", sparseModel)
+		}
 		embedClient, err := e.embeddingClient(denseModel)
 		if err != nil {
 			return nil, err
@@ -301,10 +321,12 @@ func insertPointIDAndPayload(pointID any, values map[string]any) (any, map[strin
 	maps.Copy(payload, values)
 	rawID := pointID
 	if rawID == nil {
-		var ok bool
-		rawID, ok = payload["id"]
-		if ok {
-			delete(payload, "id")
+		for key, value := range payload {
+			if strings.ToLower(key) == "id" {
+				rawID = value
+				delete(payload, key)
+				break
+			}
 		}
 	}
 	if rawID == nil {
@@ -317,6 +339,9 @@ func insertPointIDAndPayload(pointID any, values map[string]any) (any, map[strin
 		}
 		return value, payload, nil
 	case string:
+		if num, err := parseUint64(value); err == nil {
+			return num, payload, nil
+		}
 		if _, err := uuid.Parse(value); err != nil {
 			return nil, nil, fmt.Errorf("INSERT id must be an unsigned integer or UUID string when provided")
 		}

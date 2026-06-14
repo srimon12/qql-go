@@ -24,16 +24,27 @@ func buildDocumentOptionsFromMap(opts map[string]string) map[string]*qdrant.Valu
 	return out
 }
 
-func newPointID(value any) *qdrant.PointId {
+func newPointID(value any) (*qdrant.PointId, error) {
 	switch id := value.(type) {
 	case int:
-		return qdrant.NewIDNum(uint64(id))
+		if id < 0 {
+			return nil, fmt.Errorf("invalid point ID: negative integer")
+		}
+		return qdrant.NewIDNum(uint64(id)), nil
+	case int64:
+		if id < 0 {
+			return nil, fmt.Errorf("invalid point ID: negative integer")
+		}
+		return qdrant.NewIDNum(uint64(id)), nil
 	case uint64:
-		return qdrant.NewIDNum(id)
+		return qdrant.NewIDNum(id), nil
 	case string:
-		return qdrant.NewIDUUID(id)
+		if num, err := parseUint64(id); err == nil {
+			return qdrant.NewIDNum(num), nil
+		}
+		return qdrant.NewIDUUID(id), nil
 	default:
-		return qdrant.NewIDUUID(fmt.Sprintf("%v", value))
+		return qdrant.NewIDUUID(fmt.Sprintf("%v", value)), nil
 	}
 }
 
@@ -82,14 +93,13 @@ func groupIDString(id *qdrant.GroupId) string {
 	if id == nil {
 		return ""
 	}
-	if value := id.GetStringValue(); value != "" {
-		return value
-	}
-	if value := id.GetUnsignedValue(); value != 0 {
-		return strconv.FormatUint(value, 10)
-	}
-	if value := id.GetIntegerValue(); value != 0 {
-		return strconv.FormatInt(value, 10)
+	switch k := id.GetKind().(type) {
+	case *qdrant.GroupId_StringValue:
+		return k.StringValue
+	case *qdrant.GroupId_UnsignedValue:
+		return strconv.FormatUint(k.UnsignedValue, 10)
+	case *qdrant.GroupId_IntegerValue:
+		return strconv.FormatInt(k.IntegerValue, 10)
 	}
 	return ""
 }

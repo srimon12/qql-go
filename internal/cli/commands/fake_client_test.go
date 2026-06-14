@@ -56,10 +56,14 @@ func newFakeQdrantClient() *fakeQdrantClient { return &fakeQdrantClient{} }
 func (f *fakeQdrantClient) ListCollections(context.Context) ([]string, error) { return nil, nil }
 
 func (f *fakeQdrantClient) CollectionExists(context.Context, string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return f.exists, nil
 }
 
 func (f *fakeQdrantClient) GetCollectionInfo(context.Context, string) (*qdrant.CollectionInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.info == nil {
 		return nil, errors.New("missing collection")
 	}
@@ -90,7 +94,13 @@ func (f *fakeQdrantClient) UpdateCollection(_ context.Context, req *qdrant.Updat
 	return nil
 }
 
-func (f *fakeQdrantClient) DeleteCollection(context.Context, string) error { return nil }
+func (f *fakeQdrantClient) DeleteCollection(context.Context, string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.exists = false
+	f.info = nil
+	return nil
+}
 
 func (f *fakeQdrantClient) Upsert(_ context.Context, req *qdrant.UpsertPoints) (*qdrant.UpdateResult, error) {
 	f.mu.Lock()
@@ -141,9 +151,13 @@ func (f *fakeQdrantClient) CreateFieldIndex(_ context.Context, req *qdrant.Creat
 func (f *fakeQdrantClient) Count(context.Context, *qdrant.CountPoints) (uint64, error) { return 0, nil }
 
 func (f *fakeQdrantClient) ScrollAndOffset(context.Context, *qdrant.ScrollPoints) ([]*qdrant.RetrievedPoint, *qdrant.PointId, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return f.scrollRecords, f.scrollOffset, nil
 }
 
 func (f *fakeQdrantClient) Get(context.Context, *qdrant.GetPoints) ([]*qdrant.RetrievedPoint, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return f.getRecords, nil
 }

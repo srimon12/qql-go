@@ -11,7 +11,8 @@ import (
 )
 
 func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
-	ctx := context.Background()
+	ctx, cancel := e.defaultContext()
+	defer cancel()
 
 	// 1. Resolve embedding options
 	denseVectorName := ""
@@ -21,16 +22,10 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 		sparseVectorName = *stmt.Using
 	}
 
-	denseModel := ""
-	if stmt.Model != nil {
-		denseModel = *stmt.Model
-	}
+	denseModel := e.resolveDenseModel(stmt.Model)
 	var sparseModel *string
 	if stmt.Type == ast.QueryTypeHybrid {
-		sparseModelStr := denseModel + "-sparse"
-		if denseModel == "" {
-			sparseModelStr = ""
-		}
+		sparseModelStr := e.resolveSparseModel(stmt.Model)
 		sparseModel = &sparseModelStr
 	}
 
@@ -51,6 +46,7 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 		Params:            searchParamsFromWithClause(stmt.WithClause),
 		HasMMR:            hasMMR(stmt.WithClause),
 		CloudModelOptions: e.cloudModelOptions(),
+		DenseModel:        denseModel,
 		CollectionName:    stmt.Collection,
 		Limit:             uint64(stmt.Limit),
 		Offset:            uint64(stmt.Offset),
@@ -105,14 +101,10 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 					Limit:      uint64(stmt.Limit) * 10,
 					AsPrefetch: true,
 				})
-				fusionMode := "rrf"
-				if stmt.Fusion != nil {
-					fusionMode = *stmt.Fusion
-				}
-				execPipeline.Add(&pipeline.FusionNode{Mode: fusionMode})
+				execPipeline.Add(&pipeline.FusionNode{Mode: "rrf"})
 			case ast.QueryTypeSparse:
 				execPipeline.Add(&pipeline.SparseEmbedNode{
-					Model:      denseModel,
+					Model:      e.resolveSparseModel(stmt.Model),
 					VectorName: sparseVectorName,
 					Limit:      uint64(stmt.Limit),
 				})

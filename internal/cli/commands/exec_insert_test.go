@@ -119,7 +119,7 @@ func TestBuildInsertVectorsLocalModeGeneratesExplicitVectors(t *testing.T) {
 		EmbeddingDimension: 3,
 	})
 
-	vectors, err := exec.buildInsertVectors(context.Background(), "hello world", "dense-model", "sparse-model", true, false, "test_local", "dense", "sparse")
+	vectors, err := exec.buildInsertVectors(context.Background(), "hello world", "dense-model", "", true, false, "test_local", "dense", "sparse")
 	require.NoError(t, err)
 
 	dense := vectors[denseVectorName]
@@ -129,6 +129,22 @@ func TestBuildInsertVectorsLocalModeGeneratesExplicitVectors(t *testing.T) {
 	require.NotNil(t, sparseVec)
 
 	require.NotContains(t, vectors, rerankVectorName)
+}
+
+func TestBuildInsertVectorsLocalModeRejectsCustomSparseModel(t *testing.T) {
+	server := newEmbeddingServer(t, []float32{1, 2, 3})
+	defer server.Close()
+
+	exec := NewExecutor(nil, &config.Config{
+		InferenceMode:      "local",
+		EmbeddingEndpoint:  server.URL + "/v1/embeddings",
+		EmbeddingModel:     "test-model",
+		EmbeddingDimension: 3,
+	})
+
+	_, err := exec.buildInsertVectors(context.Background(), "hello", "dense-model", "sparse-model", true, false, "test_local", "dense", "sparse")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "local embedding mode only supports BM25 sparse vectors")
 }
 
 func TestBuildInsertVectorsLocalModeRejectsRerank(t *testing.T) {
@@ -142,7 +158,7 @@ func TestBuildInsertVectorsLocalModeRejectsRerank(t *testing.T) {
 		EmbeddingDimension: 3,
 	})
 
-	_, err := exec.buildInsertVectors(context.Background(), "hello", "dense-model", "sparse-model", true, true, "test_local", "dense", "sparse")
+	_, err := exec.buildInsertVectors(context.Background(), "hello", "dense-model", "", true, true, "test_local", "dense", "sparse")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "rerank vectors are not implemented yet")
 }

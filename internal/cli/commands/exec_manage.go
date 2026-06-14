@@ -11,7 +11,8 @@ import (
 )
 
 func (e *Executor) doCreateIndex(n *ast.CreateIndexStmt) (*ExecResponse, error) {
-	ctx := context.Background()
+	ctx, cancel := e.defaultContext()
+	defer cancel()
 
 	fieldType := qdrant.FieldType_FieldTypeKeyword
 	if n.FieldType == "integer" {
@@ -58,7 +59,8 @@ func (e *Executor) doCreateIndex(n *ast.CreateIndexStmt) (*ExecResponse, error) 
 }
 
 func (e *Executor) doShowCollections() (*ExecResponse, error) {
-	ctx := context.Background()
+	ctx, cancel := e.defaultContext()
+	defer cancel()
 	names, err := e.client.ListCollections(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get collections: %w", err)
@@ -498,8 +500,10 @@ func waitForCollectionReady(
 			return nil
 		}
 
+		timer := time.NewTimer(interval)
 		select {
 		case <-waitCtx.Done():
+			timer.Stop()
 			if err != nil {
 				return fmt.Errorf("collection '%s' did not become ready within %s: %w", collection, timeout, err)
 			}
@@ -507,7 +511,7 @@ func waitForCollectionReady(
 				return fmt.Errorf("collection '%s' exists but is not ready yet after %s", collection, timeout)
 			}
 			return fmt.Errorf("collection '%s' did not become visible within %s", collection, timeout)
-		case <-time.After(interval):
+		case <-timer.C:
 		}
 	}
 }
