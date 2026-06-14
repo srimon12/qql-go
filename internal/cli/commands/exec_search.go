@@ -8,7 +8,7 @@ import (
 	"github.com/qdrant/go-client/qdrant"
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/filters"
-	"github.com/srimon12/qql-go/internal/sparse"
+	"github.com/srimon12/qql-go/internal/pipeline"
 )
 
 func (e *Executor) doSearch(n *ast.SearchStmt) (*ExecResponse, error) {
@@ -144,7 +144,7 @@ func (e *Executor) doRecommend(n *ast.RecommendStmt) (*ExecResponse, error) {
 	if n.Using != nil {
 		denseName = *n.Using
 	}
-	req, err := buildRecommendRequest(n, denseName)
+	req, err := e.buildRecommendRequest(ctx, n, denseName)
 	if err != nil {
 		return nil, err
 	}
@@ -168,144 +168,140 @@ func (e *Executor) doRecommend(n *ast.RecommendStmt) (*ExecResponse, error) {
 }
 
 func (e *Executor) buildSearchRequest(ctx context.Context, n *ast.SearchStmt, denseModel, sparseModel string, hasRerankVector bool, limit uint64, denseName, sparseName string) (*qdrant.QueryPoints, error) {
-	params := searchParamsFromWithClause(n.WithClause)
-
-	if n.SparseOnly {
-		if n.Rerank {
-			if e.usesLocalEmbeddings() {
-				return nil, fmt.Errorf("RERANK is currently only available in cloud inference mode")
-			}
-			if !hasRerankVector {
-				return nil, fmt.Errorf("collection '%s' does not support rerank; create it with HYBRID RERANK", n.Collection)
-			}
-			rerankModel := rerankModelDefault
-			if n.RerankModel != nil && *n.RerankModel != "" {
-				rerankModel = *n.RerankModel
-			}
-			sparsePrefetch := &qdrant.PrefetchQuery{
-				Query:  qdrant.NewQueryDocument(&qdrant.Document{Text: n.QueryText, Model: sparseModel}),
-				Using:  qdrant.PtrOf(sparseName),
-				Limit:  qdrant.PtrOf(limit * rerankPrefetchFactor),
-				Params: params,
-			}
-			if e.usesLocalEmbeddings() {
-				sv := sparse.BuildQuery(n.QueryText)
-				sparsePrefetch.Query = qdrant.NewQuerySparse(sv.Indices, sv.Values)
-			}
-			return buildRerankSearchRequest(n.Collection, n.QueryText, rerankModel, limit, []*qdrant.PrefetchQuery{sparsePrefetch}, params), nil
-		}
-		query := qdrant.NewQueryDocument(&qdrant.Document{
-			Text:  n.QueryText,
-			Model: sparseModel,
-		})
-		if e.usesLocalEmbeddings() {
-			sv := sparse.BuildQuery(n.QueryText)
-			query = qdrant.NewQuerySparse(sv.Indices, sv.Values)
-		}
-		return &qdrant.QueryPoints{
-			CollectionName: n.Collection,
-			Query:          query,
-			Using:          qdrant.PtrOf(sparseName),
-			Limit:          qdrant.PtrOf(limit),
-			Params:         params,
-		}, nil
+	state := &pipeline.QueryState{
+		QueryText:  n.QueryText,
+		Params:     searchParamsFromWithClause(n.WithClause),
+		LocalEmbed: e.usesLocalEmbeddings(),
+		Embedder:   e,
 	}
 
-	if n.Rerank {
-		if e.usesLocalEmbeddings() {
-			return nil, fmt.Errorf("RERANK is currently only available in cloud inference mode")
+	if hasMMR(n.WithClause) {
+		state.HasMMR = true
+		if n.WithClause.MmrDiversity != nil {
+			state.MmrDiversity = float32(*n.WithClause.MmrDiversity)
 		}
-		if !hasRerankVector {
+		if n.WithClause.MmrCandidates != nil {
+			state.MmrCandidates = uint32(*n.WithClause.MmrCandidates)
+		}
+	}
+
+	p := pipeline.NewQueryPipeline()
+
+	// 1. Core Embedding Node (Dense or Sparse)
+	if n.SparseOnly {
+		if n.Rerank && !hasRerankVector {
 			return nil, fmt.Errorf("collection '%s' does not support rerank; create it with HYBRID RERANK", n.Collection)
+		}
+		p.Add(&pipeline.SparseEmbedNode{
+			Model:      sparseModel,
+			VectorName: sparseName,
+			Limit:      limit * func() uint64 { if n.Rerank { return rerankPrefetchFactor }; return 1 }(),
+			AsPrefetch: n.Rerank,
+		})
+	} else if n.Hybrid || n.Rerank {
+		if n.Rerank && !hasRerankVector {
+			return nil, fmt.Errorf("collection '%s' does not support rerank; create it with HYBRID RERANK", n.Collection)
+		}
+		// Hybrid needs both dense and sparse as prefetches for fusion
+		p.Add(&pipeline.SparseEmbedNode{
+			Model:      sparseModel,
+			VectorName: sparseName,
+			Limit:      limit * func() uint64 { if n.Rerank { return rerankPrefetchFactor }; return 1 }(),
+			AsPrefetch: true,
+		})
+		p.Add(&pipeline.DenseEmbedNode{
+			Model:      denseModel,
+			VectorName: denseName,
+			Limit:      limit * func() uint64 { if n.Rerank { return rerankPrefetchFactor }; return 1 }(),
+			AsPrefetch: true,
+		})
+		// 2. Fusion
+		fusionMode := "rrf"
+		if n.Fusion != nil {
+			fusionMode = *n.Fusion
+		}
+		p.Add(&pipeline.FusionNode{Mode: fusionMode})
+	} else {
+		// Standard dense search
+		p.Add(&pipeline.DenseEmbedNode{
+			Model:      denseModel,
+			VectorName: denseName,
+			Limit:      limit,
+			AsPrefetch: false,
+		})
+	}
+
+	// 3. Optional Rerank
+	if n.Rerank {
+		rerankVecName := "colbert"
+		if hasRerankVector {
+			rerankVecName = "" // Let Qdrant infer if collection only has 1 multivector
 		}
 		rerankModel := rerankModelDefault
 		if n.RerankModel != nil && *n.RerankModel != "" {
 			rerankModel = *n.RerankModel
 		}
-		prefetch, err := e.buildSearchPrefetches(ctx, n.QueryText, denseModel, sparseModel, limit, params, nil, denseName, sparseName)
-		if err != nil {
-			return nil, err
-		}
-		return buildRerankSearchRequest(n.Collection, n.QueryText, rerankModel, limit, prefetch, params), nil
-	}
-
-	if n.Hybrid {
-		prefetch, err := e.buildSearchPrefetches(ctx, n.QueryText, denseModel, sparseModel, limit, params, n.WithClause, denseName, sparseName)
-		if err != nil {
-			return nil, err
-		}
-		fusionMode := qdrant.Fusion_RRF
-		if n.Fusion != nil && *n.Fusion == "dbsf" {
-			fusionMode = qdrant.Fusion_DBSF
-		}
-		return &qdrant.QueryPoints{
-			CollectionName: n.Collection,
-			Prefetch:       prefetch,
-			Query:          qdrant.NewQueryFusion(fusionMode),
-			Limit:          qdrant.PtrOf(limit),
-			Params:         params,
-		}, nil
-	}
-
-	query := qdrant.NewQueryDocument(&qdrant.Document{
-		Text:  n.QueryText,
-		Model: denseModel,
-	})
-	var mmrNearest *qdrant.VectorInput
-	if e.usesLocalEmbeddings() {
-		embedClient, err := e.embeddingClient(denseModel)
-		if err != nil {
-			return nil, err
-		}
-		denseVector, err := embedClient.Embed(ctx, n.QueryText)
-		if err != nil {
-			return nil, fmt.Errorf("failed to embed search query: %w", err)
-		}
-		query = qdrant.NewQueryDense(denseVector)
-		if hasMMR(n.WithClause) {
-			mmrNearest = qdrant.NewVectorInputDense(denseVector)
-		}
-	} else if hasMMR(n.WithClause) {
-		mmrNearest = qdrant.NewVectorInputDocument(&qdrant.Document{
-			Text:  n.QueryText,
-			Model: denseModel,
+		p.Add(&pipeline.RerankNode{
+			Model:      rerankModel,
+			VectorName: rerankVecName,
+			Limit:      limit,
 		})
 	}
 
-	if hasMMR(n.WithClause) {
-		query = qdrant.NewQueryMMR(mmrNearest, &qdrant.Mmr{
-			Diversity:       float32PtrFromFloat64(n.WithClause.MmrDiversity),
-			CandidatesLimit: uint32PtrFromInt(n.WithClause.MmrCandidates),
-		})
+	// Execute DAG
+	if err := p.Execute(ctx, state); err != nil {
+		return nil, err
 	}
 
-	return &qdrant.QueryPoints{
-		CollectionName: n.Collection,
-		Query:          query,
-		Using:          qdrant.PtrOf(denseName),
-		Limit:          qdrant.PtrOf(limit),
-		Params:         params,
-	}, nil
+	usingName := ""
+	if n.SparseOnly {
+		if n.Rerank {
+			usingName = rerankVectorName
+		} else {
+			usingName = sparseName
+		}
+	} else if n.Rerank {
+		usingName = rerankVectorName
+	} else if n.Hybrid {
+		usingName = ""
+	} else {
+		usingName = denseName
+	}
+
+	return buildQueryPointsFromState(n, state, limit, usingName), nil
 }
 
-func buildRecommendRequest(n *ast.RecommendStmt, usingName string) (*qdrant.QueryPoints, error) {
-	if hasMMR(n.WithClause) {
-		return nil, fmt.Errorf("MMR is supported only for SEARCH statements")
+func buildQueryPointsFromState(n *ast.SearchStmt, state *pipeline.QueryState, limit uint64, usingName string) *qdrant.QueryPoints {
+	req := &qdrant.QueryPoints{
+		CollectionName: n.Collection,
+		Query:          state.TargetQuery,
+		Prefetch:       state.Prefetches,
+		Limit:          qdrant.PtrOf(limit),
+		Params:         state.Params,
 	}
-	query := qdrant.NewQueryRecommend(&qdrant.RecommendInput{
-		Positive: buildRecommendVectorInputs(n.PositiveIDs),
-		Negative: buildRecommendVectorInputs(n.NegativeIDs),
+	if usingName != "" {
+		req.Using = qdrant.PtrOf(usingName)
+	}
+	return req
+}
+
+func (e *Executor) buildRecommendRequest(ctx context.Context, n *ast.RecommendStmt, usingName string) (*qdrant.QueryPoints, error) {
+	state := &pipeline.QueryState{
+		Params:     searchParamsFromWithClause(n.WithClause),
+		HasMMR:     hasMMR(n.WithClause),
+		LocalEmbed: e.usesLocalEmbeddings(),
+		Embedder:   e,
+	}
+
+	p := pipeline.NewQueryPipeline()
+	p.Add(&pipeline.RecommendNode{
+		PositiveIDs: n.PositiveIDs,
+		NegativeIDs: n.NegativeIDs,
+		Strategy:    n.Strategy,
 	})
-	if n.Strategy != nil && *n.Strategy != "" {
-		strategy, ok := recommendStrategy(*n.Strategy)
-		if !ok {
-			return nil, fmt.Errorf("unknown recommend strategy '%s'", *n.Strategy)
-		}
-		query = qdrant.NewQueryRecommend(&qdrant.RecommendInput{
-			Positive: buildRecommendVectorInputs(n.PositiveIDs),
-			Negative: buildRecommendVectorInputs(n.NegativeIDs),
-			Strategy: strategy.Enum(),
-		})
+
+	if err := p.Execute(ctx, state); err != nil {
+		return nil, err
 	}
 
 	using := usingName
@@ -315,7 +311,7 @@ func buildRecommendRequest(n *ast.RecommendStmt, usingName string) (*qdrant.Quer
 
 	req := &qdrant.QueryPoints{
 		CollectionName: n.Collection,
-		Query:          query,
+		Query:          state.TargetQuery,
 		Limit:          qdrant.PtrOf(uint64(n.Limit)),
 		Using:          qdrant.PtrOf(using),
 		Params:         searchParamsFromWithClause(n.WithClause),
@@ -345,60 +341,6 @@ func buildRecommendRequest(n *ast.RecommendStmt, usingName string) (*qdrant.Quer
 	}
 
 	return req, nil
-}
-
-func (e *Executor) buildSearchPrefetches(ctx context.Context, queryText, denseModel, sparseModel string, limit uint64, params *qdrant.SearchParams, withClause *ast.SearchWith, denseName, sparseName string) ([]*qdrant.PrefetchQuery, error) {
-	denseQuery := qdrant.NewQueryDocument(&qdrant.Document{
-		Text:  queryText,
-		Model: denseModel,
-	})
-	var mmrNearest *qdrant.VectorInput
-	sparseQuery := qdrant.NewQueryDocument(&qdrant.Document{
-		Text:  queryText,
-		Model: sparseModel,
-	})
-	if e.usesLocalEmbeddings() {
-		embedClient, err := e.embeddingClient(denseModel)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create embedding client for search: %w", err)
-		}
-		denseVector, sv, err := embedConcurrentQuery(ctx, embedClient, queryText)
-		if err != nil {
-			return nil, fmt.Errorf("failed to embed search query: %w", err)
-		}
-		denseQuery = qdrant.NewQueryDense(denseVector)
-		if hasMMR(withClause) {
-			mmrNearest = qdrant.NewVectorInputDense(denseVector)
-		}
-		sparseQuery = qdrant.NewQuerySparse(sv.Indices, sv.Values)
-	} else if hasMMR(withClause) {
-		mmrNearest = qdrant.NewVectorInputDocument(&qdrant.Document{
-			Text:  queryText,
-			Model: denseModel,
-		})
-	}
-
-	if hasMMR(withClause) {
-		denseQuery = qdrant.NewQueryMMR(mmrNearest, &qdrant.Mmr{
-			Diversity:       float32PtrFromFloat64(withClause.MmrDiversity),
-			CandidatesLimit: uint32PtrFromInt(withClause.MmrCandidates),
-		})
-	}
-
-	return []*qdrant.PrefetchQuery{
-		{
-			Query:  sparseQuery,
-			Using:  qdrant.PtrOf(sparseName),
-			Limit:  qdrant.PtrOf(limit),
-			Params: params,
-		},
-		{
-			Query:  denseQuery,
-			Using:  qdrant.PtrOf(denseName),
-			Limit:  qdrant.PtrOf(limit),
-			Params: params,
-		},
-	}, nil
 }
 
 func buildGroupSearchRequest(n *ast.SearchStmt, req *qdrant.QueryPoints, filter *qdrant.Filter) *qdrant.QueryPointGroups {
@@ -448,18 +390,7 @@ func buildRecommendVectorInputs(ids []any) []*qdrant.VectorInput {
 	return inputs
 }
 
-func recommendStrategy(value string) (qdrant.RecommendStrategy, bool) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "average_vector":
-		return qdrant.RecommendStrategy_AverageVector, true
-	case "best_score":
-		return qdrant.RecommendStrategy_BestScore, true
-	case "sum_scores":
-		return qdrant.RecommendStrategy_SumScores, true
-	default:
-		return 0, false
-	}
-}
+
 
 func (e *Executor) formatSearchResults(results []*qdrant.ScoredPoint) (string, []SearchHit) {
 	if len(results) == 0 {

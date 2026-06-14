@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/qdrant/go-client/qdrant"
@@ -69,6 +70,8 @@ func (e *Executor) ExecuteResult(query string) (*ExecResponse, error) {
 		return e.doSearch(n)
 	case *ast.RecommendStmt:
 		return e.doRecommend(n)
+	case *ast.QueryStmt:
+		return e.doQuery(n)
 	case *ast.DeleteStmt:
 		return e.doDelete(n)
 	case *ast.UpdateVectorStmt:
@@ -308,22 +311,46 @@ func embedConcurrent(ctx context.Context, client *embedding.Client, text string,
 }
 
 func embedConcurrentQuery(ctx context.Context, client *embedding.Client, text string) ([]float32, sparse.Vector, error) {
-	type denseOut struct {
-		vec []float32
-		err error
-	}
-	dc := make(chan denseOut, 1)
-	go func() {
-		v, e := client.Embed(ctx, text)
-		dc <- denseOut{v, e}
-	}()
+	var denseVector []float32
+	var sparseVector sparse.Vector
+	var errDense, errSparse error
+	var wg sync.WaitGroup
 
-	sv := sparse.BuildQuery(text)
-	dr := <-dc
-	if dr.err != nil {
-		return nil, sparse.Vector{}, dr.err
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		denseVector, errDense = client.Embed(ctx, text)
+	}()
+	go func() {
+		defer wg.Done()
+		sparseVector = sparse.BuildQuery(text)
+	}()
+	wg.Wait()
+
+	if errDense != nil {
+		return nil, sparse.Vector{}, fmt.Errorf("dense embedding failed: %w", errDense)
 	}
-	return dr.vec, sv, nil
+	if errSparse != nil {
+		return nil, sparse.Vector{}, fmt.Errorf("sparse embedding failed: %w", errSparse)
+	}
+
+	return denseVector, sparseVector, nil
+}
+
+// EmbedDense satisfies the pipeline.Embedder interface
+func (e *Executor) EmbedDense(ctx context.Context, text string, model string) ([]float32, error) {
+	embedClient, err := e.embeddingClient(model)
+	if err != nil {
+		return nil, err
+	}
+	dense, _, err := embedConcurrentQuery(ctx, embedClient, text)
+	return dense, err
+}
+
+// EmbedSparse satisfies the pipeline.Embedder interface
+func (e *Executor) EmbedSparse(ctx context.Context, text string) ([]uint32, []float32, error) {
+	sv := sparse.BuildQuery(text)
+	return sv.Indices, sv.Values, nil
 }
 
 func (e *Executor) resolveDenseVectorSize(ctx context.Context, model *string) (int, error) {
@@ -1159,14 +1186,38 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 		}, nil
 	}
 
-	denseSize, err := e.resolveDenseVectorSize(ctx, n.Model)
-	if err != nil {
-		return nil, err
+	var vectorsConfig *qdrant.VectorsConfig
+	if len(n.Vectors) > 0 {
+		paramsMap := make(map[string]*qdrant.VectorParams)
+		for _, v := range n.Vectors {
+			var qDist qdrant.Distance
+			switch v.Distance {
+			case ast.DistanceCosine:
+				qDist = qdrant.Distance_Cosine
+			case ast.DistanceDot:
+				qDist = qdrant.Distance_Dot
+			case ast.DistanceEuclid:
+				qDist = qdrant.Distance_Euclid
+			case ast.DistanceManhattan:
+				qDist = qdrant.Distance_Manhattan
+			}
+			paramsMap[v.Name] = &qdrant.VectorParams{
+				Size:     v.Size,
+				Distance: qDist,
+			}
+		}
+		vectorsConfig = qdrant.NewVectorsConfigMap(paramsMap)
+	} else {
+		denseSize, err := e.resolveDenseVectorSize(ctx, n.Model)
+		if err != nil {
+			return nil, err
+		}
+		vectorsConfig = qdrant.NewVectorsConfigMap(collectionVectorParams(denseSize, n.Rerank))
 	}
 
 	collection := &qdrant.CreateCollection{
 		CollectionName: n.Collection,
-		VectorsConfig:  qdrant.NewVectorsConfigMap(collectionVectorParams(denseSize, n.Rerank)),
+		VectorsConfig:  vectorsConfig,
 	}
 	if n.Config != nil {
 		if n.Config.Vectors != nil && n.Config.Vectors.OnDisk != nil {
@@ -1190,7 +1241,15 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 			return nil, err
 		}
 	}
-	if n.Hybrid || n.Rerank {
+	if len(n.SparseVectors) > 0 {
+		sparseMap := make(map[string]*qdrant.SparseVectorParams)
+		for _, sv := range n.SparseVectors {
+			sparseMap[sv.Name] = &qdrant.SparseVectorParams{
+				Modifier: qdrant.Modifier_Idf.Enum(),
+			}
+		}
+		collection.SparseVectorsConfig = qdrant.NewSparseVectorsConfig(sparseMap)
+	} else if n.Hybrid || n.Rerank {
 		collection.SparseVectorsConfig = qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
 			sparseVectorName: {
 				Modifier: qdrant.Modifier_Idf.Enum(),
@@ -1204,14 +1263,20 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 	if err := e.waitForCollectionReady(ctx, n.Collection); err != nil {
 		return nil, err
 	}
-	message := fmt.Sprintf("Collection '%s' created (dense)", n.Collection)
-	if n.Hybrid || n.Rerank {
-		if n.Rerank {
-			message = fmt.Sprintf("Collection '%s' created (hybrid: dense + sparse + ColBERT)", n.Collection)
-		} else {
-			message = fmt.Sprintf("Collection '%s' created (hybrid: dense + sparse)", n.Collection)
+	message := fmt.Sprintf("Collection '%s' created", n.Collection)
+	if len(n.Vectors) == 0 {
+		message += " (dense)"
+		if n.Hybrid || n.Rerank {
+			if n.Rerank {
+				message = fmt.Sprintf("Collection '%s' created (hybrid: dense + sparse + ColBERT)", n.Collection)
+			} else {
+				message = fmt.Sprintf("Collection '%s' created (hybrid: dense + sparse)", n.Collection)
+			}
 		}
+	} else {
+		message += " (multi-vector schema)"
 	}
+	
 	if n.Quantization != nil {
 		message = strings.TrimSuffix(message, ")") + fmt.Sprintf(", %s quantization)", n.Quantization.Type)
 	}
@@ -1224,7 +1289,6 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 			"exists":     false,
 			"hybrid":     n.Hybrid,
 			"rerank":     n.Rerank,
-			"dense_size": denseSize,
 		},
 	}, nil
 }

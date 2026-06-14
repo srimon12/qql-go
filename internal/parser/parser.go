@@ -44,6 +44,8 @@ func (p *Parser) Parse(tokens []lexer.Token) (ast.ASTNode, error) {
 		node, err = p.parseScroll()
 	case lexer.TokenKindRecommend:
 		node, err = p.parseRecommend()
+	case lexer.TokenKindQuery:
+		node, err = p.parseQuery()
 	case lexer.TokenKindDelete:
 		node, err = p.parseDelete()
 	case lexer.TokenKindUpdate:

@@ -405,3 +405,37 @@ func TestParseCreateCollectionWithTurboQuantization(t *testing.T) {
 		require.Contains(t, err.Error(), "BITS must be one of 1, 1.5, 2, or 4")
 	})
 }
+
+func TestParseCreateMultiVector(t *testing.T) {
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(`CREATE COLLECTION knowledge_graph (
+		dense_text VECTOR(384, COSINE),
+		clip_img VECTOR(512, DOT),
+		bm25_text SPARSE
+	) WITH HNSW { m: 32 }`)
+	require.NoError(t, err)
+
+	p := NewParser()
+	stmt, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	create, ok := stmt.(*ast.CreateCollectionStmt)
+	require.True(t, ok)
+	require.Equal(t, "knowledge_graph", create.Collection)
+	require.Len(t, create.Vectors, 2)
+	require.Len(t, create.SparseVectors, 1)
+
+	require.Equal(t, "dense_text", create.Vectors[0].Name)
+	require.Equal(t, uint64(384), create.Vectors[0].Size)
+	require.Equal(t, ast.DistanceCosine, create.Vectors[0].Distance)
+
+	require.Equal(t, "clip_img", create.Vectors[1].Name)
+	require.Equal(t, uint64(512), create.Vectors[1].Size)
+	require.Equal(t, ast.DistanceDot, create.Vectors[1].Distance)
+
+	require.Equal(t, "bm25_text", create.SparseVectors[0].Name)
+
+	require.NotNil(t, create.Config)
+	require.NotNil(t, create.Config.Hnsw)
+	require.Equal(t, uint64(32), *create.Config.Hnsw.M)
+}

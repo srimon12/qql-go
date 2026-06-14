@@ -67,6 +67,25 @@ type QuantizationUpdate struct {
 	Config   *QuantizationConfig
 }
 
+type VectorDistance string
+
+const (
+	DistanceCosine    VectorDistance = "COSINE"
+	DistanceDot       VectorDistance = "DOT"
+	DistanceEuclid    VectorDistance = "EUCLID"
+	DistanceManhattan VectorDistance = "MANHATTAN"
+)
+
+type VectorDef struct {
+	Name     string
+	Size     uint64
+	Distance VectorDistance
+}
+
+type SparseVectorDef struct {
+	Name string
+}
+
 type CreateCollectionStmt struct {
 	Collection   string
 	Hybrid       bool
@@ -74,6 +93,10 @@ type CreateCollectionStmt struct {
 	Model        *string
 	DenseVector  *string
 	SparseVector *string
+	
+	Vectors       []VectorDef
+	SparseVectors []SparseVectorDef
+
 	Quantization *QuantizationConfig
 	Config       *CollectionConfig
 }
@@ -167,6 +190,56 @@ type RecommendStmt struct {
 	Using          *string
 }
 
+type QueryMode string
+
+const (
+	QueryModeNearest   QueryMode = "NEAREST"
+	QueryModeRecommend QueryMode = "RECOMMEND"
+	QueryModeDiscover  QueryMode = "DISCOVER"
+	QueryModeContext   QueryMode = "CONTEXT"
+)
+
+type ContextPair struct {
+	Positive any
+	Negative any
+}
+
+type QueryStmt struct {
+	Collection string
+	Mode       QueryMode
+	
+	// For NEAREST
+	QueryText *string
+	QueryID   any
+	
+	// For RECOMMEND
+	PositiveIDs []any
+	NegativeIDs []any
+	
+	// For CONTEXT
+	ContextPairs []ContextPair
+	
+	// For DISCOVER
+	Target any // ID or string
+	
+	Limit          int
+	Strategy       *string
+	QueryFilter    FilterExpr
+	Offset         int
+	ScoreThreshold *float64
+	WithClause     *SearchWith
+	LookupFrom     string
+	LookupVector   *string
+	Using          *string
+
+	// Legacy flags mapped to pipeline logic
+	SparseOnly  bool
+	Hybrid      bool
+	Rerank      bool
+	RerankModel *string
+	Fusion      *string
+}
+
 type DeleteStmt struct {
 	Collection string
 	PointID    any
@@ -210,6 +283,7 @@ func (SelectStmt) isASTNode()           {}
 func (ScrollStmt) isASTNode()           {}
 func (SearchStmt) isASTNode()           {}
 func (RecommendStmt) isASTNode()        {}
+func (QueryStmt) isASTNode()            {}
 func (DeleteStmt) isASTNode()           {}
 func (UpdateVectorStmt) isASTNode()     {}
 func (UpdatePayloadStmt) isASTNode()    {}

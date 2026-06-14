@@ -80,6 +80,16 @@ const (
 	TokenKindScore
 	TokenKindThreshold
 	TokenKindLookup
+	TokenKindCosine
+	TokenKindDot
+	TokenKindEuclid
+	TokenKindManhattan
+	TokenKindQuery
+	TokenKindNearest
+	TokenKindContext
+	TokenKindDiscover
+	TokenKindPairs
+	TokenKindTarget
 	TokenKindIdentifier
 	TokenKindString
 	TokenKindInteger
@@ -179,6 +189,16 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindScore:       "SCORE",
 	TokenKindThreshold:   "THRESHOLD",
 	TokenKindLookup:      "LOOKUP",
+	TokenKindCosine:      "COSINE",
+	TokenKindDot:         "DOT",
+	TokenKindEuclid:      "EUCLID",
+	TokenKindManhattan:   "MANHATTAN",
+	TokenKindQuery:       "QUERY",
+	TokenKindNearest:     "NEAREST",
+	TokenKindContext:     "CONTEXT",
+	TokenKindDiscover:    "DISCOVER",
+	TokenKindPairs:       "PAIRS",
+	TokenKindTarget:      "TARGET",
 	TokenKindIdentifier:  "IDENTIFIER",
 	TokenKindString:      "STRING",
 	TokenKindInteger:     "INTEGER",

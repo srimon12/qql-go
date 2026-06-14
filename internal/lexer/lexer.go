@@ -44,6 +44,12 @@ var keywords = map[string]TokenKind{
 	"FUSION":      TokenKindFusion,
 	"AFTER":       TokenKindAfter,
 	"RECOMMEND":   TokenKindRecommend,
+	"QUERY":       TokenKindQuery,
+	"NEAREST":     TokenKindNearest,
+	"CONTEXT":     TokenKindContext,
+	"DISCOVER":    TokenKindDiscover,
+	"PAIRS":       TokenKindPairs,
+	"TARGET":      TokenKindTarget,
 	"SIMILAR":     TokenKindSimilar,
 	"TO":          TokenKindTo,
 	"LIMIT":       TokenKindLimit,
@@ -81,6 +87,10 @@ var keywords = map[string]TokenKind{
 	"SCORE":       TokenKindScore,
 	"THRESHOLD":   TokenKindThreshold,
 	"LOOKUP":      TokenKindLookup,
+	"COSINE":      TokenKindCosine,
+	"DOT":         TokenKindDot,
+	"EUCLID":      TokenKindEuclid,
+	"MANHATTAN":   TokenKindManhattan,
 }
 
 type Lexer struct{}

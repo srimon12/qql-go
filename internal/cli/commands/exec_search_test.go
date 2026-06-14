@@ -322,53 +322,15 @@ func TestDoSearchRejectsMMRWithSparse(t *testing.T) {
 }
 
 func TestBuildRecommendRequestRejectsMMR(t *testing.T) {
-	_, err := buildRecommendRequest(&ast.RecommendStmt{
+	exec := NewExecutor(nil, &config.Config{InferenceMode: "local"})
+	_, err := exec.buildRecommendRequest(context.Background(), &ast.RecommendStmt{
 		Collection:  "docs",
 		PositiveIDs: []any{"a"},
 		Limit:       5,
 		WithClause:  &ast.SearchWith{MmrDiversity: float64Ptr(0.5)},
 	}, "dense")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "MMR is supported only for SEARCH statements")
-}
-
-func TestBuildSearchPrefetchesLocalModeReturnsExplicitQueries(t *testing.T) {
-	server := newEmbeddingServer(t, []float32{1, 2, 3})
-	defer server.Close()
-
-	exec := NewExecutor(nil, &config.Config{
-		InferenceMode:      "local",
-		EmbeddingEndpoint:  server.URL + "/v1/embeddings",
-		EmbeddingModel:     "test-model",
-		EmbeddingDimension: 3,
-	})
-
-	prefetch, err := exec.buildSearchPrefetches(context.Background(), "hello world", "dense-model", "sparse-model", 5, nil, nil, "dense", "sparse")
-	require.NoError(t, err)
-	require.Len(t, prefetch, 2)
-
-	// Sparse prefetch
-	sparse := prefetch[0]
-	require.Equal(t, sparseVectorName, sparse.GetUsing())
-	require.NotNil(t, sparse.GetQuery().GetNearest().GetSparse())
-
-	// Dense prefetch
-	dense := prefetch[1]
-	require.Equal(t, denseVectorName, dense.GetUsing())
-	require.NotNil(t, dense.GetQuery().GetNearest().GetDense())
-}
-
-func TestBuildSearchPrefetchesLocalModePropagatesEmbeddingError(t *testing.T) {
-	exec := NewExecutor(nil, &config.Config{
-		InferenceMode:      "local",
-		EmbeddingEndpoint:  "http://localhost:1", // will fail
-		EmbeddingModel:     "test-model",
-		EmbeddingDimension: 3,
-	})
-
-	_, err := exec.buildSearchPrefetches(context.Background(), "hello world", "dense-model", "sparse-model", 5, nil, nil, "dense", "sparse")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "failed to embed search query")
+	require.Contains(t, err.Error(), "MMR is supported only for standard NEAREST queries")
 }
 
 func TestBuildSearchRequestSparseOnlyLocalMode(t *testing.T) {
@@ -450,11 +412,12 @@ func TestBuildSearchRequestHybridLocalModePropagatesError(t *testing.T) {
 		Hybrid:     true,
 	}, "dense-model", "sparse-model", false, 5, "dense", "sparse")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "failed to embed search query")
+	require.Contains(t, err.Error(), "failed to embed dense search query")
 }
 
 func TestBuildRecommendRequestDefaults(t *testing.T) {
-	req, err := buildRecommendRequest(&ast.RecommendStmt{
+	exec := NewExecutor(nil, &config.Config{InferenceMode: "local"})
+	req, err := exec.buildRecommendRequest(context.Background(), &ast.RecommendStmt{
 		Collection:  "docs",
 		PositiveIDs: []any{"a"},
 		Limit:       5,
@@ -471,7 +434,8 @@ func TestBuildRecommendRequestDefaults(t *testing.T) {
 }
 
 func TestBuildRecommendRequestWithAllNewFields(t *testing.T) {
-	req, err := buildRecommendRequest(&ast.RecommendStmt{
+	exec := NewExecutor(nil, &config.Config{InferenceMode: "local"})
+	req, err := exec.buildRecommendRequest(context.Background(), &ast.RecommendStmt{
 		Collection:     "docs",
 		PositiveIDs:    []any{"a", "b"},
 		NegativeIDs:    []any{"c"},
@@ -504,7 +468,8 @@ func TestBuildRecommendRequestWithAllNewFields(t *testing.T) {
 }
 
 func TestBuildRecommendRequestWithLookupFromNoVector(t *testing.T) {
-	req, err := buildRecommendRequest(&ast.RecommendStmt{
+	exec := NewExecutor(nil, &config.Config{InferenceMode: "local"})
+	req, err := exec.buildRecommendRequest(context.Background(), &ast.RecommendStmt{
 		Collection:  "docs",
 		PositiveIDs: []any{"a"},
 		Limit:       5,
@@ -517,7 +482,8 @@ func TestBuildRecommendRequestWithLookupFromNoVector(t *testing.T) {
 }
 
 func TestBuildRecommendRequestUnknownStrategy(t *testing.T) {
-	_, err := buildRecommendRequest(&ast.RecommendStmt{
+	exec := NewExecutor(nil, &config.Config{InferenceMode: "local"})
+	_, err := exec.buildRecommendRequest(context.Background(), &ast.RecommendStmt{
 		Collection:  "docs",
 		PositiveIDs: []any{"a"},
 		Limit:       5,
@@ -528,7 +494,8 @@ func TestBuildRecommendRequestUnknownStrategy(t *testing.T) {
 }
 
 func TestBuildRecommendRequestFilterExcludesIDs(t *testing.T) {
-	req, err := buildRecommendRequest(&ast.RecommendStmt{
+	exec := NewExecutor(nil, &config.Config{InferenceMode: "local"})
+	req, err := exec.buildRecommendRequest(context.Background(), &ast.RecommendStmt{
 		Collection:  "docs",
 		PositiveIDs: []any{"a"},
 		NegativeIDs: []any{"b"},

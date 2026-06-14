@@ -26,6 +26,75 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 	var model *string
 	var denseVector *string
 	var sparseVector *string
+	var explicitVectors []ast.VectorDef
+	var explicitSparseVectors []ast.SparseVectorDef
+
+	if p.peek().Kind == lexer.TokenKindLparen {
+		p.advance()
+		for p.peek().Kind != lexer.TokenKindRparen && p.peek().Kind != lexer.TokenKindEof {
+			nameTok, err := p.expect(lexer.TokenKindIdentifier)
+			if err != nil {
+				return nil, err
+			}
+			if p.peek().Kind == lexer.TokenKindVector {
+				p.advance()
+				if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+					return nil, err
+				}
+				sizeTok := p.peek()
+				size, err := p.parseNumericLiteral()
+				if err != nil {
+					return nil, err
+				}
+				if size <= 0 || float64(uint64(size)) != size {
+					return nil, errors.NewQQLSyntaxError("Vector size must be a positive integer", sizeTok.Pos)
+				}
+				if _, err := p.expect(lexer.TokenKindComma); err != nil {
+					return nil, err
+				}
+				distTok := p.peek()
+				var distance ast.VectorDistance
+				switch distTok.Kind {
+				case lexer.TokenKindCosine:
+					distance = ast.DistanceCosine
+				case lexer.TokenKindDot:
+					distance = ast.DistanceDot
+				case lexer.TokenKindEuclid:
+					distance = ast.DistanceEuclid
+				case lexer.TokenKindManhattan:
+					distance = ast.DistanceManhattan
+				default:
+					return nil, errors.NewQQLSyntaxError("Expected distance metric (COSINE, DOT, EUCLID, MANHATTAN)", distTok.Pos)
+				}
+				p.advance()
+				if _, err := p.expect(lexer.TokenKindRparen); err != nil {
+					return nil, err
+				}
+				explicitVectors = append(explicitVectors, ast.VectorDef{
+					Name:     nameTok.Value,
+					Size:     uint64(size),
+					Distance: distance,
+				})
+			} else if p.peek().Kind == lexer.TokenKindSparse {
+				p.advance()
+				explicitSparseVectors = append(explicitSparseVectors, ast.SparseVectorDef{
+					Name: nameTok.Value,
+				})
+			} else {
+				return nil, errors.NewQQLSyntaxError("Expected VECTOR or SPARSE after vector name", p.peek().Pos)
+			}
+
+			if p.peek().Kind == lexer.TokenKindComma {
+				p.advance()
+			} else if p.peek().Kind != lexer.TokenKindRparen {
+				return nil, errors.NewQQLSyntaxError("Expected comma or )", p.peek().Pos)
+			}
+		}
+		if _, err := p.expect(lexer.TokenKindRparen); err != nil {
+			return nil, err
+		}
+	}
+
 	if p.peek().Kind == lexer.TokenKindHybrid {
 		p.advance()
 		hybrid = true
@@ -87,14 +156,16 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 	}
 
 	return &ast.CreateCollectionStmt{
-		Collection:   collection,
-		Hybrid:       hybrid,
-		Rerank:       rerank,
-		Model:        model,
-		Quantization: quantization,
-		Config:       config,
-		DenseVector:  denseVector,
-		SparseVector: sparseVector,
+		Collection:    collection,
+		Hybrid:        hybrid,
+		Rerank:        rerank,
+		Model:         model,
+		Quantization:  quantization,
+		Config:        config,
+		DenseVector:   denseVector,
+		SparseVector:  sparseVector,
+		Vectors:       explicitVectors,
+		SparseVectors: explicitSparseVectors,
 	}, nil
 }
 
