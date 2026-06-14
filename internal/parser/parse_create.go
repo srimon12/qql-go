@@ -5,8 +5,8 @@ import (
 
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
-	"github.com/srimon12/qql-go/internal/utils"
 	"github.com/srimon12/qql-go/internal/lexer"
+	"github.com/srimon12/qql-go/internal/utils"
 )
 
 func (p *Parser) parseCreate() (ast.ASTNode, error) {
@@ -103,14 +103,13 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 			p.advance()
 			rerank = true
 		} else {
-			var err error
 			for p.peek().Kind == lexer.TokenKindDense || p.peek().Kind == lexer.TokenKindSparse {
 				mode := p.advance().Kind
 				if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && utils.ToUpper(p.peek().Value) == "VECTOR") {
 					p.advance()
-					v, err2 := p.parseStringPtr()
-					if err2 != nil {
-						return nil, err2
+					v, err := p.parseStringPtr()
+					if err != nil {
+						return nil, err
 					}
 					if mode == lexer.TokenKindDense {
 						denseVector = v
@@ -121,8 +120,6 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 					return nil, errors.NewQQLSyntaxError("Expected VECTOR after DENSE/SPARSE", p.peek().Pos)
 				}
 			}
-			err = nil // suppress unused
-			_ = err
 		}
 	} else if p.peek().Kind == lexer.TokenKindUsing {
 		// Old qql-go specific path
@@ -497,9 +494,17 @@ func collectionPositiveUint64(config map[string]any, key string, pos int) (*uint
 	if !ok {
 		return nil, nil
 	}
-	if num, ok := v.(int); ok && num > 0 {
-		val := uint64(num)
-		return &val, nil
+	switch num := v.(type) {
+	case int:
+		if num > 0 {
+			val := uint64(num)
+			return &val, nil
+		}
+	case float64:
+		if num > 0 && num == float64(int(num)) {
+			val := uint64(num)
+			return &val, nil
+		}
 	}
 	return nil, errors.NewQQLSyntaxError(key+" must be a positive integer", pos)
 }
@@ -509,9 +514,17 @@ func collectionNonNegativeUint64(config map[string]any, key string, pos int) (*u
 	if !ok {
 		return nil, nil
 	}
-	if num, ok := v.(int); ok && num >= 0 {
-		val := uint64(num)
-		return &val, nil
+	switch num := v.(type) {
+	case int:
+		if num >= 0 {
+			val := uint64(num)
+			return &val, nil
+		}
+	case float64:
+		if num >= 0 && num == float64(int(num)) {
+			val := uint64(num)
+			return &val, nil
+		}
 	}
 	return nil, errors.NewQQLSyntaxError(key+" must be a non-negative integer", pos)
 }

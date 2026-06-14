@@ -11,8 +11,6 @@ import (
 	"github.com/qdrant/go-client/qdrant"
 )
 
-
-
 type Client interface {
 	CollectionExists(ctx context.Context, collectionName string) (bool, error)
 	GetCollectionInfo(ctx context.Context, collectionName string) (*qdrant.CollectionInfo, error)
@@ -133,14 +131,22 @@ func getVectorTopology(ctx context.Context, client Client, collection string) (h
 		return false, "", "", fmt.Errorf("failed to inspect collection: %w", err)
 	}
 	config := info.GetConfig()
-	if config == nil { return false, "", "", nil }
+	if config == nil {
+		return false, "", "", nil
+	}
 	params := config.GetParams()
-	if params == nil { return false, "", "", nil }
+	if params == nil {
+		return false, "", "", nil
+	}
 
 	if vcfg := params.GetVectorsConfig(); vcfg != nil {
 		if vmap := vcfg.GetParamsMap(); vmap != nil {
 			for k := range vmap.GetMap() {
-				if k == "dense" { denseName = "dense" } else if denseName == "" { denseName = k }
+				if k == "dense" {
+					denseName = "dense"
+				} else if denseName == "" {
+					denseName = k
+				}
 			}
 		} else {
 			denseName = ""
@@ -151,7 +157,11 @@ func getVectorTopology(ctx context.Context, client Client, collection string) (h
 	if scfg := params.GetSparseVectorsConfig(); scfg != nil {
 		hybrid = true
 		for k := range scfg.GetMap() {
-			if k == "sparse" { sparseName = "sparse" } else if sparseName == "" { sparseName = k }
+			if k == "sparse" {
+				sparseName = "sparse"
+			} else if sparseName == "" {
+				sparseName = k
+			}
 		}
 	}
 	return hybrid, denseName, sparseName, nil
@@ -260,6 +270,10 @@ func serializeValue(value any) string {
 func escapeString(value string) string {
 	value = strings.ReplaceAll(value, "\\", "\\\\")
 	value = strings.ReplaceAll(value, "'", "\\'")
+	value = strings.ReplaceAll(value, "\n", "\\n")
+	value = strings.ReplaceAll(value, "\r", "\\r")
+	value = strings.ReplaceAll(value, "\t", "\\t")
+	value = strings.ReplaceAll(value, "\x00", "\\0")
 	return value
 }
 

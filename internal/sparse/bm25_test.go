@@ -42,7 +42,6 @@ func TestTokenizeHandlesUnderscore(t *testing.T) {
 	require.Equal(t, []string{"test_fn", "main_loop"}, got)
 }
 
-
 func TestHashTokenDeterministic(t *testing.T) {
 	t.Parallel()
 

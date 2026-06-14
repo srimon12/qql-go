@@ -3,8 +3,8 @@ package parser
 import (
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
-	"github.com/srimon12/qql-go/internal/utils"
 	"github.com/srimon12/qql-go/internal/lexer"
+	"github.com/srimon12/qql-go/internal/utils"
 )
 
 func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
@@ -30,7 +30,9 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 				return nil, err
 			}
 			ids, err := p.parsePointIDList()
-			if err != nil { return nil, err }
+			if err != nil {
+				return nil, err
+			}
 			stmt.PositiveIDs = ids
 		} else {
 			return nil, errors.NewQQLSyntaxError("Expected POSITIVE IDS after QUERY RECOMMEND", tok2.Pos)
@@ -41,7 +43,9 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 				return nil, err
 			}
 			ids, err := p.parsePointIDList()
-			if err != nil { return nil, err }
+			if err != nil {
+				return nil, err
+			}
 			stmt.NegativeIDs = ids
 		}
 	case lexer.TokenKindContext:
@@ -51,16 +55,26 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 			return nil, err
 		}
 		for {
-			if _, err := p.expect(lexer.TokenKindLparen); err != nil { return nil, err }
+			if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+				return nil, err
+			}
 			posId, err := p.parsePointIDValue("CONTEXT POSITIVE")
-			if err != nil { return nil, err }
-			if _, err := p.expect(lexer.TokenKindComma); err != nil { return nil, err }
+			if err != nil {
+				return nil, err
+			}
+			if _, err := p.expect(lexer.TokenKindComma); err != nil {
+				return nil, err
+			}
 			negId, err := p.parsePointIDValue("CONTEXT NEGATIVE")
-			if err != nil { return nil, err }
-			if _, err := p.expect(lexer.TokenKindRparen); err != nil { return nil, err }
-			
+			if err != nil {
+				return nil, err
+			}
+			if _, err := p.expect(lexer.TokenKindRparen); err != nil {
+				return nil, err
+			}
+
 			stmt.ContextPairs = append(stmt.ContextPairs, ast.ContextPair{Positive: posId, Negative: negId})
-			
+
 			if p.peek().Kind == lexer.TokenKindComma {
 				p.advance()
 			} else {
@@ -74,7 +88,9 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 			return nil, err
 		}
 		targetId, err := p.parsePointIDValue("DISCOVER TARGET")
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 		stmt.Target = targetId
 		if tok2 := p.peek(); tok2.Kind == lexer.TokenKindContext {
 			p.advance()
@@ -82,16 +98,26 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 				return nil, err
 			}
 			for {
-				if _, err := p.expect(lexer.TokenKindLparen); err != nil { return nil, err }
+				if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+					return nil, err
+				}
 				posId, err := p.parsePointIDValue("DISCOVER CONTEXT")
-				if err != nil { return nil, err }
-				if _, err := p.expect(lexer.TokenKindComma); err != nil { return nil, err }
+				if err != nil {
+					return nil, err
+				}
+				if _, err := p.expect(lexer.TokenKindComma); err != nil {
+					return nil, err
+				}
 				negId, err := p.parsePointIDValue("DISCOVER CONTEXT")
-				if err != nil { return nil, err }
-				if _, err := p.expect(lexer.TokenKindRparen); err != nil { return nil, err }
-				
+				if err != nil {
+					return nil, err
+				}
+				if _, err := p.expect(lexer.TokenKindRparen); err != nil {
+					return nil, err
+				}
+
 				stmt.ContextPairs = append(stmt.ContextPairs, ast.ContextPair{Positive: posId, Negative: negId})
-				
+
 				if p.peek().Kind == lexer.TokenKindComma {
 					p.advance()
 				} else {
@@ -225,8 +251,10 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 		stmt.Type = ast.QueryTypeDense
 	}
 
+	seenWith := false
 	if p.peek().Kind == lexer.TokenKindWith {
 		// Lookahead to check if it's WITH MODEL
+		seenWith = true
 		p.advance() // Consume WITH
 		if p.peek().Kind == lexer.TokenKindIdentifier && utils.ToUpper(p.peek().Value) == "MODEL" {
 			p.advance() // Consume MODEL
@@ -248,7 +276,6 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 	// For now, let's keep it simple.
 	seenWhere := false
 	seenRerank := false
-	seenWith := false
 	seenGroup := false
 
 	for {

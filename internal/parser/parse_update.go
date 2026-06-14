@@ -110,20 +110,9 @@ func (p *Parser) parseDelete() (*ast.DeleteStmt, error) {
 		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
 			return nil, err
 		}
-		tok := p.peek()
-		var pointID any
-		if tok.Kind == lexer.TokenKindString {
-			p.advance()
-			pointID = tok.Value
-		} else if tok.Kind == lexer.TokenKindInteger {
-			p.advance()
-			v, err := parseIntToken(tok)
-			if err != nil {
-				return nil, err
-			}
-			pointID = v
-		} else {
-			return nil, errors.NewQQLSyntaxError("Expected string or integer for point id, got '"+tok.Value+"'", tok.Pos)
+		pointID, err := p.parsePointIDValue("DELETE")
+		if err != nil {
+			return nil, err
 		}
 		return &ast.DeleteStmt{Collection: collection, PointID: pointID}, nil
 	}

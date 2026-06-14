@@ -3,27 +3,28 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 )
 
 type Config struct {
-	URL                string `json:"url"`
-	Secret             string `json:"secret"`
-	ActiveProfile      string `json:"active_profile"`
+	URL                string            `json:"url"`
+	Secret             string            `json:"secret"`
+	ActiveProfile      string            `json:"active_profile"`
 	InferenceModel     string            `json:"inference_model"`
 	InferenceMode      string            `json:"inference_mode"`
 	CloudModelOptions  map[string]string `json:"cloud_model_options,omitempty"` // e.g. {"openai-api-key": "sk-...", "openrouter-api-key": "..."}
 	EmbeddingEndpoint  string            `json:"embedding_endpoint"`
-	EmbeddingAPIKey    string `json:"embedding_api_key"`
-	EmbeddingModel     string `json:"embedding_model"`
-	EmbeddingDimension int    `json:"embedding_dimension"`
-	NoVerify           bool   `json:"no_verify"`
-	CACert             string `json:"ca_cert"`
+	EmbeddingAPIKey    string            `json:"embedding_api_key"`
+	EmbeddingModel     string            `json:"embedding_model"`
+	EmbeddingDimension int               `json:"embedding_dimension"`
+	NoVerify           bool              `json:"no_verify"`
+	CACert             string            `json:"ca_cert"`
 }
 
 type Profile struct {
-	Name   string `json:"name"`
+	Name     string `json:"name"`
 	URL      string `json:"url"`
 	Secret   string `json:"secret"`
 	NoVerify bool   `json:"no_verify"`
@@ -202,6 +203,10 @@ func cloneConfig(c *Config) *Config {
 		return nil
 	}
 	clone := *c
+	if c.CloudModelOptions != nil {
+		clone.CloudModelOptions = make(map[string]string, len(c.CloudModelOptions))
+		maps.Copy(clone.CloudModelOptions, c.CloudModelOptions)
+	}
 	return &clone
 }
 
@@ -239,5 +244,5 @@ func writeJSONFile(path string, value any) error {
 		return err
 	}
 	data = append(data, '\n')
-	return os.WriteFile(path, data, 0o644)
+	return os.WriteFile(path, data, 0o600)
 }

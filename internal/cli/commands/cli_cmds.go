@@ -372,11 +372,10 @@ func NewDumpCmd(out *output.Outputter) *cobra.Command {
 			if batchSize <= 0 {
 				return commandError(out, mode, "dump", strings.Join(args, " "), fmt.Errorf("--batch-size must be greater than 0"))
 			}
-			cfg, client, err := loadSavedConfigAndClient()
+			_, client, err := loadSavedConfigAndClient()
 			if err != nil {
 				return commandError(out, mode, "dump", strings.Join(args, " "), err)
 			}
-			_ = cfg
 			written, skipped, err := dump.Collection(context.Background(), client, args[0], args[1], batchSize)
 			if err != nil {
 				return commandError(out, mode, "dump", strings.Join(args, " "), err)

@@ -108,18 +108,19 @@ type FusionNode struct {
 }
 
 func (n *FusionNode) Execute(ctx context.Context, state *QueryState) error {
-	fusionMode := qdrant.Fusion_RRF
-	if n.Mode == "dbsf" {
-		fusionMode = qdrant.Fusion_DBSF
+	switch n.Mode {
+	case "rrf":
+		state.TargetQuery = qdrant.NewQueryFusion(qdrant.Fusion_RRF)
+	case "dbsf":
+		state.TargetQuery = qdrant.NewQueryFusion(qdrant.Fusion_DBSF)
+	default:
+		return fmt.Errorf("unknown fusion mode '%s'; expected 'rrf' or 'dbsf'", n.Mode)
 	}
-	state.TargetQuery = qdrant.NewQueryFusion(fusionMode)
 	return nil
 }
 
 type RerankNode struct {
-	Model      string
-	VectorName string
-	Limit      uint64
+	Model string
 }
 
 func (n *RerankNode) Execute(ctx context.Context, state *QueryState) error {
@@ -162,9 +163,17 @@ func buildRecommendVectorInputs(ids []any) []*qdrant.VectorInput {
 		case string:
 			inputs = append(inputs, qdrant.NewVectorInputID(qdrant.NewID(v)))
 		case int:
+			if v < 0 {
+				return nil
+			}
 			inputs = append(inputs, qdrant.NewVectorInputID(qdrant.NewIDNum(uint64(v))))
 		case float64:
+			if v < 0 || v != float64(uint64(v)) {
+				return nil
+			}
 			inputs = append(inputs, qdrant.NewVectorInputID(qdrant.NewIDNum(uint64(v))))
+		default:
+			return nil
 		}
 	}
 	return inputs
@@ -175,23 +184,18 @@ func (n *RecommendNode) Execute(ctx context.Context, state *QueryState) error {
 		return fmt.Errorf("MMR is supported only for standard NEAREST queries")
 	}
 
-	query := qdrant.NewQueryRecommend(&qdrant.RecommendInput{
+	rec := &qdrant.RecommendInput{
 		Positive: buildRecommendVectorInputs(n.PositiveIDs),
 		Negative: buildRecommendVectorInputs(n.NegativeIDs),
-	})
-	
+	}
 	if n.Strategy != nil && *n.Strategy != "" {
 		strategy, ok := RecommendStrategy(*n.Strategy)
 		if !ok {
 			return fmt.Errorf("unknown recommend strategy '%s'", *n.Strategy)
 		}
-		query = qdrant.NewQueryRecommend(&qdrant.RecommendInput{
-			Positive: buildRecommendVectorInputs(n.PositiveIDs),
-			Negative: buildRecommendVectorInputs(n.NegativeIDs),
-			Strategy: strategy.Enum(),
-		})
+		rec.Strategy = strategy.Enum()
 	}
-	state.TargetQuery = query
+	state.TargetQuery = qdrant.NewQueryRecommend(rec)
 	return nil
 }
 
@@ -268,7 +272,7 @@ func (n *DiscoverNode) Execute(ctx context.Context, state *QueryState) error {
 	if err != nil {
 		return err
 	}
-	
+
 	state.TargetQuery = qdrant.NewQueryDiscover(&qdrant.DiscoverInput{
 		Target:  target,
 		Context: &qdrant.ContextInput{Pairs: pairs},

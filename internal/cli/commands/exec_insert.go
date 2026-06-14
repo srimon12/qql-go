@@ -36,10 +36,10 @@ func (e *Executor) doInsert(n *ast.InsertStmt) (*ExecResponse, error) {
 		return nil, err
 	}
 	topo, err := e.resolveVectorTopology(ctx, n.Collection)
-	includeRerank := topo != nil && topo.RerankVector != nil
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect collection: %w", err)
 	}
+	includeRerank := topo != nil && topo.RerankVector != nil
 
 	pointID, payload, err := insertPointIDAndPayload(n.PointID, n.Values)
 	if err != nil {
@@ -133,10 +133,10 @@ func (e *Executor) doInsertBulk(n *ast.InsertBulkStmt) (*ExecResponse, error) {
 		return nil, err
 	}
 	topo, err := e.resolveVectorTopology(ctx, n.Collection)
-	includeRerank := topo != nil && topo.RerankVector != nil
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect collection: %w", err)
 	}
+	includeRerank := topo != nil && topo.RerankVector != nil
 
 	denseName, sparseName := denseVectorName, sparseVectorName
 	if topo != nil && topo.DenseVector != nil && *topo.DenseVector != "" {
@@ -274,7 +274,7 @@ func (e *Executor) buildInsertVectorsBatch(ctx context.Context, texts []string, 
 			}
 			if includeSparse {
 				sv := sparseVectors[idx]
-				vectors[sparseVectorName] = qdrant.NewVectorSparse(sv.Indices, sv.Values)
+				vectors[sparseName] = qdrant.NewVectorSparse(sv.Indices, sv.Values)
 			}
 			batch[idx] = vectors
 		}

@@ -5,8 +5,8 @@ import (
 
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
-	"github.com/srimon12/qql-go/internal/utils"
 	"github.com/srimon12/qql-go/internal/lexer"
+	"github.com/srimon12/qql-go/internal/utils"
 )
 
 func (p *Parser) parseScroll() (*ast.ScrollStmt, error) {

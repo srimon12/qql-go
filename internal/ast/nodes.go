@@ -1,23 +1,23 @@
 package ast
 
 type InsertStmt struct {
-	Collection  string
-	PointID     any
-	Values      map[string]any
-	Model       *string
-	Hybrid      bool
-	DenseVector *string
-	SparseModel *string
+	Collection   string
+	PointID      any
+	Values       map[string]any
+	Model        *string
+	Hybrid       bool
+	DenseVector  *string
+	SparseModel  *string
 	SparseVector *string
 }
 
 type InsertBulkStmt struct {
-	Collection  string
-	ValuesList  []map[string]any
-	Model       *string
-	Hybrid      bool
-	DenseVector *string
-	SparseModel *string
+	Collection   string
+	ValuesList   []map[string]any
+	Model        *string
+	Hybrid       bool
+	DenseVector  *string
+	SparseModel  *string
 	SparseVector *string
 }
 
@@ -98,7 +98,7 @@ type CreateCollectionStmt struct {
 	Model        *string
 	DenseVector  *string
 	SparseVector *string
-	
+
 	Vectors       []VectorDef
 	SparseVectors []SparseVectorDef
 
@@ -183,21 +183,21 @@ type QueryStmt struct {
 	Collection string
 	Mode       QueryMode
 	Type       QueryType
-	
+
 	// For NEAREST
 	QueryText *string
 	QueryID   any
-	
+
 	// For RECOMMEND
 	PositiveIDs []any
 	NegativeIDs []any
-	
+
 	// For CONTEXT
 	ContextPairs []ContextPair
-	
+
 	// For DISCOVER
 	Target any // ID or string
-	
+
 	Limit          int
 	Strategy       *string
 	QueryFilter    FilterExpr
@@ -260,9 +260,10 @@ func (ShowCollectionsStmt) isASTNode()  {}
 func (ShowCollectionStmt) isASTNode()   {}
 func (SelectStmt) isASTNode()           {}
 func (ScrollStmt) isASTNode()           {}
+
 // Removed SearchStmt and RecommendStmt methods
-func (QueryStmt) isASTNode()            {}
-func (DeleteStmt) isASTNode()           {}
-func (UpdateVectorStmt) isASTNode()     {}
-func (UpdatePayloadStmt) isASTNode()    {}
-func (CreateIndexStmt) isASTNode()      {}
+func (QueryStmt) isASTNode()         {}
+func (DeleteStmt) isASTNode()        {}
+func (UpdateVectorStmt) isASTNode()  {}
+func (UpdatePayloadStmt) isASTNode() {}
+func (CreateIndexStmt) isASTNode()   {}

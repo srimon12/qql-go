@@ -95,12 +95,19 @@ func groupIDString(id *qdrant.GroupId) string {
 }
 
 func parseUint64(s string) (uint64, error) {
+	if s == "" {
+		return 0, fmt.Errorf("invalid number: empty string")
+	}
 	var n uint64
 	for _, c := range s {
 		if c < '0' || c > '9' {
-			return 0, fmt.Errorf("invalid number")
+			return 0, fmt.Errorf("invalid number: %q", s)
 		}
-		n = n*10 + uint64(c-'0')
+		digit := uint64(c - '0')
+		if n > (1<<64-1-digit)/10 {
+			return 0, fmt.Errorf("number overflows uint64: %q", s)
+		}
+		n = n*10 + digit
 	}
 	return n, nil
 }
@@ -144,35 +151,6 @@ func displayVersion() string {
 
 func versionMessage() string {
 	return fmt.Sprintf("qql-go %s", displayVersion())
-}
-
-func (e *Executor) formatSearchResults(results []*qdrant.ScoredPoint) (string, []SearchHit) {
-	if len(results) == 0 {
-		return "No results found", []SearchHit{}
-	}
-
-	var resultLines []string
-	hits := make([]SearchHit, 0, len(results))
-	for _, r := range results {
-		id := fmt.Sprintf("%v", r.GetId())
-		jsonID := pointIDString(r.GetId())
-		score := r.GetScore()
-		payload := r.GetPayload()
-		text := ""
-		if p, ok := payload["text"]; ok {
-			if sv, ok := p.GetKind().(*qdrant.Value_StringValue); ok {
-				text = sv.StringValue
-			}
-		}
-		resultLines = append(resultLines, fmt.Sprintf("id:%s score:%.4f payload:%s", id, score, text))
-		hits = append(hits, SearchHit{
-			ID:    jsonID,
-			Score: score,
-			Text:  text,
-		})
-	}
-
-	return fmt.Sprintf("Found %d result(s):\n%s", len(results), strings.Join(resultLines, "\n")), hits
 }
 
 func hasMMR(withClause *ast.SearchWith) bool {

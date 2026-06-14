@@ -99,8 +99,6 @@ func TestParseQueryContext(t *testing.T) {
 	assert.Equal(t, "uuid-2", stmt.ContextPairs[0].Negative)
 }
 
-
-
 func TestParseQueryErrors(t *testing.T) {
 	tests := []struct {
 		name  string

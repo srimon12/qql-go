@@ -117,7 +117,7 @@ func convertValue(val *qdrant.Value) any {
 	case *qdrant.Value_StringValue:
 		return v.StringValue
 	case *qdrant.Value_IntegerValue:
-		return int(v.IntegerValue)
+		return v.IntegerValue
 	case *qdrant.Value_DoubleValue:
 		return v.DoubleValue
 	case *qdrant.Value_BoolValue:

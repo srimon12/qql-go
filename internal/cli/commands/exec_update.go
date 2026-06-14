@@ -21,6 +21,9 @@ func (e *Executor) doUpdateVector(n *ast.UpdateVectorStmt) (*ExecResponse, error
 	}
 
 	topo, err := e.resolveVectorTopology(ctx, n.Collection)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect collection: %w", err)
+	}
 	denseName := denseVectorName
 	if topo != nil && topo.DenseVector != nil && *topo.DenseVector != "" {
 		denseName = *topo.DenseVector
@@ -210,5 +213,3 @@ func buildDeleteRequest(n *ast.DeleteStmt) (*qdrant.DeletePoints, error) {
 		Wait:           &wait,
 	}, nil
 }
-
-

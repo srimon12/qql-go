@@ -15,10 +15,11 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 
 	// 1. Resolve embedding options
 	denseVectorName := ""
+	sparseVectorName := ""
 	if stmt.Using != nil {
 		denseVectorName = *stmt.Using
+		sparseVectorName = *stmt.Using
 	}
-	sparseVectorName := denseVectorName
 
 	denseModel := ""
 	if stmt.Model != nil {
@@ -27,6 +28,9 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 	var sparseModel *string
 	if stmt.Type == ast.QueryTypeHybrid {
 		sparseModelStr := denseModel + "-sparse"
+		if denseModel == "" {
+			sparseModelStr = ""
+		}
 		sparseModel = &sparseModelStr
 	}
 
@@ -148,7 +152,7 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 		if stmt.RerankModel != nil {
 			rerankModel = *stmt.RerankModel
 		}
-		execPipeline.Add(&pipeline.RerankNode{Model: rerankModel, Limit: uint64(stmt.Limit)})
+		execPipeline.Add(&pipeline.RerankNode{Model: rerankModel})
 	}
 
 	if err := execPipeline.Execute(ctx, state); err != nil {

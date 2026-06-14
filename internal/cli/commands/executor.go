@@ -131,19 +131,6 @@ func (e *Executor) ensureCollectionForInsert(ctx context.Context, collection str
 	return true, nil
 }
 
-func (e *Executor) collectionHasRerankVector(ctx context.Context, collection string) (bool, error) {
-	info, err := e.client.GetCollectionInfo(ctx, collection)
-	if err != nil {
-		return false, err
-	}
-	vectors := info.GetConfig().GetParams().GetVectorsConfig().GetParamsMap()
-	if vectors == nil {
-		return false, nil
-	}
-	_, ok := vectors.GetMap()[rerankVectorName]
-	return ok, nil
-}
-
 func (e *Executor) collectionHasSparseVector(ctx context.Context, collection string) (bool, error) {
 	exists, err := e.client.CollectionExists(ctx, collection)
 	if err != nil {
@@ -1184,7 +1171,7 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 	} else {
 		message += " (multi-vector schema)"
 	}
-	
+
 	if n.Quantization != nil {
 		message = strings.TrimSuffix(message, ")") + fmt.Sprintf(", %s quantization)", n.Quantization.Type)
 	}

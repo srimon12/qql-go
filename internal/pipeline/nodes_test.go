@@ -10,10 +10,10 @@ import (
 )
 
 type mockEmbedder struct {
-	dense  []float32
+	dense         []float32
 	sparseIndices []uint32
 	sparseValues  []float32
-	err    error
+	err           error
 }
 
 func (m *mockEmbedder) EmbedDense(ctx context.Context, text string, model string) ([]float32, error) {

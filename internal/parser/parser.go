@@ -70,6 +70,9 @@ func (p *Parser) peek() lexer.Token {
 }
 
 func (p *Parser) advance() lexer.Token {
+	if p.pos >= len(p.tokens) {
+		return lexer.Token{Kind: lexer.TokenKindEof, Value: "", Pos: -1}
+	}
 	tok := p.tokens[p.pos]
 	if tok.Kind != lexer.TokenKindEof {
 		p.pos++
@@ -244,10 +247,6 @@ func tokenKindToOp(kind lexer.TokenKind) string {
 	return ""
 }
 
-
-
-
-
 func (p *Parser) parseEmbeddingOptions() (*string, bool, *string, *string, *string, error) {
 	if p.peek().Kind != lexer.TokenKindUsing {
 		return nil, false, nil, nil, nil, nil
@@ -309,8 +308,6 @@ func (p *Parser) parseEmbeddingOptions() (*string, bool, *string, *string, *stri
 	}
 	return model, true, sparseModel, denseVector, sparseVector, nil
 }
-
-
 
 func (p *Parser) parseRequiredModelString() (*string, error) {
 	if _, err := p.expect(lexer.TokenKindModel); err != nil {
