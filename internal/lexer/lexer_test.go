@@ -225,22 +225,6 @@ func TestTokenizeKeywords(t *testing.T) {
 			},
 		},
 		{
-			name:  "SIMILAR",
-			input: "SIMILAR",
-			expected: []Token{
-				{Kind: TokenKindSimilar, Value: "SIMILAR", Pos: 0},
-				{Kind: TokenKindEof, Value: "", Pos: 7},
-			},
-		},
-		{
-			name:  "TO",
-			input: "TO",
-			expected: []Token{
-				{Kind: TokenKindTo, Value: "TO", Pos: 0},
-				{Kind: TokenKindEof, Value: "", Pos: 2},
-			},
-		},
-		{
 			name:  "LIMIT",
 			input: "LIMIT",
 			expected: []Token{
@@ -905,8 +889,10 @@ func TestTokenizeSearchQuery(t *testing.T) {
 
 	assert.Equal(t, TokenKindIdentifier, tokens[1].Kind)
 	assert.Equal(t, "mycol", tokens[1].Value)
-	assert.Equal(t, TokenKindSimilar, tokens[2].Kind)
-	assert.Equal(t, TokenKindTo, tokens[3].Kind)
+	assert.Equal(t, TokenKindIdentifier, tokens[2].Kind)
+	assert.Equal(t, "SIMILAR", tokens[2].Value)
+	assert.Equal(t, TokenKindIdentifier, tokens[3].Kind)
+	assert.Equal(t, "TO", tokens[3].Value)
 	assert.Equal(t, TokenKindString, tokens[4].Kind)
 	assert.Equal(t, "query text", tokens[4].Value)
 	assert.Equal(t, TokenKindLimit, tokens[5].Kind)

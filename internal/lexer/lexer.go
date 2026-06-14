@@ -1,8 +1,9 @@
 package lexer
 
 import (
+	"strings"
+
 	"github.com/srimon12/qql-go/internal/errors"
-	"github.com/srimon12/qql-go/internal/utils"
 )
 
 var keywords = map[string]TokenKind{
@@ -41,7 +42,6 @@ var keywords = map[string]TokenKind{
 	"COLLECTIONS": TokenKindCollections,
 	"SELECT":      TokenKindSelect,
 	"SCROLL":      TokenKindScroll,
-	"FUSION":      TokenKindFusion,
 	"AFTER":       TokenKindAfter,
 	"RECOMMEND":   TokenKindRecommend,
 	"QUERY":       TokenKindQuery,
@@ -50,8 +50,6 @@ var keywords = map[string]TokenKind{
 	"DISCOVER":    TokenKindDiscover,
 	"PAIRS":       TokenKindPairs,
 	"TARGET":      TokenKindTarget,
-	"SIMILAR":     TokenKindSimilar,
-	"TO":          TokenKindTo,
 	"LIMIT":       TokenKindLimit,
 	"GROUP":       TokenKindGroup,
 	"BY":          TokenKindBy,
@@ -177,8 +175,14 @@ func (l *Lexer) Tokenize(query string) ([]Token, error) {
 				token := l.readNumber(query, i)
 				tokens = append(tokens, token)
 				i = token.Pos + len(token.Value)
+			} else if i+1 < n && (isAlpha(query[i+1]) || query[i+1] == '_') {
+				token := l.readIdentifier(query, i+1)
+				token.Value = "-" + token.Value
+				token.Pos = i
+				tokens = append(tokens, token)
+				i = token.Pos + len(token.Value)
 			} else {
-				return nil, errors.NewQQLSyntaxError("Unexpected character '-'", i)
+				return nil, errors.NewQQLSyntaxError("Unexpected character '-' (use quotes for UUIDs: '123e4567-e89b-...')", i)
 			}
 		default:
 			if isDigit(ch) {
@@ -281,7 +285,7 @@ func (l *Lexer) readIdentifier(query string, start int) Token {
 	word := query[start:i]
 	firstSegment := word[:findDot(word)]
 	if len(firstSegment) > 0 {
-		upperFirst := utils.ToUpper(firstSegment)
+		upperFirst := strings.ToUpper(firstSegment)
 		if kind, ok := keywords[upperFirst]; ok && !containsDot(word) {
 			return Token{Kind: kind, Value: word, Pos: start}
 		}

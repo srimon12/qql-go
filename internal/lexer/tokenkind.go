@@ -40,10 +40,7 @@ const (
 	TokenKindScroll
 	TokenKindStar
 	TokenKindAfter
-	TokenKindFusion
 	TokenKindRecommend
-	TokenKindSimilar
-	TokenKindTo
 	TokenKindLimit
 	TokenKindGroup
 	TokenKindBy
@@ -148,10 +145,7 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindScroll:      "SCROLL",
 	TokenKindStar:        "STAR",
 	TokenKindAfter:       "AFTER",
-	TokenKindFusion:      "FUSION",
 	TokenKindRecommend:   "RECOMMEND",
-	TokenKindSimilar:     "SIMILAR",
-	TokenKindTo:          "TO",
 	TokenKindLimit:       "LIMIT",
 	TokenKindGroup:       "GROUP",
 	TokenKindBy:          "BY",
