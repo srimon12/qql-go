@@ -2033,16 +2033,17 @@ func (e *Executor) buildInsertVectors(ctx context.Context, text, denseModel, spa
 		if err != nil {
 			return nil, err
 		}
-		denseVector, err := embedClient.Embed(ctx, text)
+
+		denseVector, sparseVec, err := embedConcurrent(ctx, embedClient, text, includeSparse)
 		if err != nil {
-			return nil, fmt.Errorf("failed to embed insert text: %w", err)
+			return nil, err
 		}
+
 		vectors := map[string]*qdrant.Vector{
 			denseVectorName: qdrant.NewVectorDense(denseVector),
 		}
 		if includeSparse {
-			sv := sparse.BuildDocument(text)
-			vectors[sparseVectorName] = qdrant.NewVectorSparse(sv.Indices, sv.Values)
+			vectors[sparseVectorName] = qdrant.NewVectorSparse(sparseVec.Indices, sparseVec.Values)
 		}
 		if includeRerank {
 			return nil, fmt.Errorf("local/external rerank vectors are not implemented yet")
@@ -2246,7 +2247,7 @@ func (e *Executor) buildSearchPrefetches(ctx context.Context, queryText, denseMo
 		if err != nil {
 			return nil, fmt.Errorf("failed to create embedding client for search: %w", err)
 		}
-		denseVector, err := embedClient.Embed(ctx, queryText)
+		denseVector, sv, err := embedConcurrentQuery(ctx, embedClient, queryText)
 		if err != nil {
 			return nil, fmt.Errorf("failed to embed search query: %w", err)
 		}
@@ -2254,7 +2255,6 @@ func (e *Executor) buildSearchPrefetches(ctx context.Context, queryText, denseMo
 		if hasMMR(withClause) {
 			mmrNearest = qdrant.NewVectorInputDense(denseVector)
 		}
-		sv := sparse.BuildQuery(queryText)
 		sparseQuery = qdrant.NewQuerySparse(sv.Indices, sv.Values)
 	} else if hasMMR(withClause) {
 		mmrNearest = qdrant.NewVectorInputDocument(&qdrant.Document{
@@ -2630,6 +2630,57 @@ func (e *Executor) embeddingClient(model string) (*embedding.Client, error) {
 		APIKey:    e.config.EmbeddingAPIKey,
 		Dimension: e.config.EmbeddingDimension,
 	})
+}
+
+// embedConcurrent runs dense embedding (HTTP I/O) and sparse document build (CPU)
+// concurrently. When skipSparse is true, the dense vector is returned with a zero
+// sparse vector.
+func embedConcurrent(ctx context.Context, client *embedding.Client, text string, includeSparse bool) (denseVec []float32, sparseVec sparse.Vector, err error) {
+	if !includeSparse {
+		denseVec, err = client.Embed(ctx, text)
+		if err != nil {
+			return nil, sparse.Vector{}, fmt.Errorf("failed to embed insert text: %w", err)
+		}
+		return denseVec, sparse.Vector{}, nil
+	}
+
+	type denseOut struct {
+		vec []float32
+		err error
+	}
+	dc := make(chan denseOut, 1)
+	go func() {
+		v, e := client.Embed(ctx, text)
+		dc <- denseOut{v, e}
+	}()
+
+	sparseVec = sparse.BuildDocument(text)
+	dr := <-dc
+	if dr.err != nil {
+		return nil, sparse.Vector{}, fmt.Errorf("failed to embed insert text: %w", dr.err)
+	}
+	return dr.vec, sparseVec, nil
+}
+
+// embedConcurrentQuery is like embedConcurrent but uses BuildQuery for search
+// queries (log-TF weighting instead of normalized-TF).
+func embedConcurrentQuery(ctx context.Context, client *embedding.Client, text string) ([]float32, sparse.Vector, error) {
+	type denseOut struct {
+		vec []float32
+		err error
+	}
+	dc := make(chan denseOut, 1)
+	go func() {
+		v, e := client.Embed(ctx, text)
+		dc <- denseOut{v, e}
+	}()
+
+	sv := sparse.BuildQuery(text)
+	dr := <-dc
+	if dr.err != nil {
+		return nil, sparse.Vector{}, dr.err
+	}
+	return dr.vec, sv, nil
 }
 
 func (e *Executor) resolveDenseVectorSize(ctx context.Context, model *string) (int, error) {

@@ -42,6 +42,13 @@ func TestTokenizeHandlesUnderscore(t *testing.T) {
 	require.Equal(t, []string{"test_fn", "main_loop"}, got)
 }
 
+func TestTokenizeFiltersStopwords(t *testing.T) {
+	t.Parallel()
+
+	got := Tokenize("the quick brown fox and the lazy dog")
+	require.Equal(t, []string{"quick", "brown", "fox", "lazy", "dog"}, got)
+}
+
 func TestHashTokenDeterministic(t *testing.T) {
 	t.Parallel()
 
@@ -90,7 +97,7 @@ func TestBuildQueryUsesLogTF(t *testing.T) {
 	require.InDelta(t, float32(1.0), worldValue, 0.0001)
 }
 
-func TestBuildDocumentUsesNormalizedTF(t *testing.T) {
+func TestBuildDocumentUsesBM25SaturatedTF(t *testing.T) {
 	t.Parallel()
 
 	v := BuildDocument("hello hello world")
@@ -109,8 +116,15 @@ func TestBuildDocumentUsesNormalizedTF(t *testing.T) {
 		}
 	}
 
-	require.InDelta(t, float32(2.0/3.0), helloValue, 0.0001)
-	require.InDelta(t, float32(1.0/3.0), worldValue, 0.0001)
+	// BM25 saturation: tf * (k1+1) / (tf + k1 * (1 - b + b * docLen / avgdl))
+	// docLen=3, k1=1.2, b=0.75, avgdl=256
+	// hello (tf=2): 2*2.2 / (2 + 1.2*(0.25 + 0.75*3/256)) = 4.4 / (2 + 1.2*0.2588) = 4.4/2.3105 ≈ 1.9043
+	// world (tf=1): 1*2.2 / (1 + 1.2*0.2588) = 2.2/1.3105 ≈ 1.6787
+	expectedHello := float32(4.4 / (2.0 + 1.2*(0.25+0.75*3.0/256.0)))
+	expectedWorld := float32(2.2 / (1.0 + 1.2*(0.25+0.75*3.0/256.0)))
+
+	require.InDelta(t, expectedHello, helloValue, 0.0001)
+	require.InDelta(t, expectedWorld, worldValue, 0.0001)
 }
 
 func TestBuildReturnsEmptyForEmptyText(t *testing.T) {

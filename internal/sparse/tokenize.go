@@ -52,14 +52,16 @@ func maybeToken(s string) string {
 }
 
 func appendTokens(tokens []string, raw string) []string {
-	if tok := maybeToken(raw); tok != "" {
+	if tok := maybeToken(raw); tok != "" && !isStopword(tok) {
 		tokens = append(tokens, tok)
 	}
 	if !containsHyphen(raw) {
 		return tokens
 	}
 	for _, part := range splitHyphenatedToken(raw) {
-		tokens = append(tokens, part)
+		if !isStopword(part) {
+			tokens = append(tokens, part)
+		}
 	}
 	return tokens
 }

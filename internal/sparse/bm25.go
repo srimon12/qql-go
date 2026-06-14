@@ -5,6 +5,13 @@ import (
 	"sort"
 )
 
+// BM25 parameters matching Qdrant FastEmbed defaults.
+const (
+	bm25K1    = 1.2
+	bm25B     = 0.75
+	bm25AvgDL = 256.0
+)
+
 // Vector is a sparse vector with sorted indices and parallel values.
 type Vector struct {
 	Indices []uint32
@@ -38,8 +45,9 @@ func BuildQuery(text string) Vector {
 	return Vector{Indices: indices, Values: values}
 }
 
-// BuildDocument creates a sparse document vector using normalized TF weights.
+// BuildDocument creates a sparse document vector using BM25-saturated TF weights.
 // Qdrant's sparse IDF modifier supplies the collection-wide rarity signal.
+// Uses k1=1.2, b=0.75, avgdl=256 matching Qdrant FastEmbed defaults.
 func BuildDocument(text string) Vector {
 	tokens := Tokenize(text)
 	if len(tokens) == 0 {
@@ -51,7 +59,7 @@ func BuildDocument(text string) Vector {
 		counts[hashToken(token)]++
 	}
 
-	docLength := float32(len(tokens))
+	docLen := float64(len(tokens))
 	indices := make([]uint32, 0, len(counts))
 	for idx := range counts {
 		indices = append(indices, idx)
@@ -60,8 +68,17 @@ func BuildDocument(text string) Vector {
 
 	values := make([]float32, len(indices))
 	for i, idx := range indices {
-		values[i] = counts[idx] / docLength
+		values[i] = bm25TF(float64(counts[idx]), docLen)
 	}
 
 	return Vector{Indices: indices, Values: values}
+}
+
+// bm25TF computes the BM25-saturated term frequency component for a document.
+// Formula: tf * (k1 + 1) / (tf + k1 * (1 - b + b * docLen / avgdl))
+// This is the per-term value stored in the sparse vector when Qdrant
+// applies IDF on the server side.
+func bm25TF(tfCount, docLen float64) float32 {
+	denom := tfCount + bm25K1*(1.0-bm25B+bm25B*docLen/bm25AvgDL)
+	return float32(tfCount * (bm25K1 + 1) / denom)
 }
