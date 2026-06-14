@@ -12,7 +12,7 @@
     {
       "id": "03-explain-refund",
       "command": "explain",
-      "statement": "SEARCH release_validation_docs SIMILAR TO 'refund policy' LIMIT 3 USING HYBRID",
+      "statement": "QUERY 'refund policy' FROM release_validation_docs LIMIT 3 USING HYBRID",
       "expect": {
         "plan_contains": [
           "Search: HYBRID"
@@ -22,7 +22,7 @@
     {
       "id": "03b-explain-refund-window",
       "command": "explain",
-      "statement": "SEARCH release_validation_docs SIMILAR TO 'refund policy' LIMIT 3 OFFSET 1 SCORE THRESHOLD 0.7 LOOKUP FROM profile_vectors VECTOR 'preferences' USING HYBRID",
+      "statement": "QUERY 'refund policy' FROM release_validation_docs LIMIT 3 OFFSET 1 SCORE THRESHOLD 0.7 LOOKUP FROM profile_vectors VECTOR 'preferences' USING HYBRID",
       "expect": {
         "plan_contains": [
           "Offset: 1",
@@ -35,7 +35,7 @@
     {
       "id": "04-hybrid-refund",
       "command": "exec",
-      "statement": "SEARCH release_validation_docs SIMILAR TO 'refund policy for annual plan' LIMIT 3 USING HYBRID",
+      "statement": "QUERY 'refund policy for annual plan' FROM release_validation_docs LIMIT 3 USING HYBRID",
       "expect": {
         "min_results": 3,
         "hybrid": true,
@@ -47,7 +47,7 @@
     {
       "id": "05-exact-refund",
       "command": "exec",
-      "statement": "SEARCH release_validation_docs SIMILAR TO 'refund policy for annual plan' LIMIT 3 EXACT",
+      "statement": "QUERY 'refund policy for annual plan' FROM release_validation_docs LIMIT 3 EXACT",
       "expect": {
         "min_results": 3,
         "hybrid": false,
@@ -59,7 +59,7 @@
     {
       "id": "06-sparse-invoice",
       "command": "exec",
-      "statement": "SEARCH release_validation_docs SIMILAR TO 'billing portal invoice download' LIMIT 3 USING SPARSE",
+      "statement": "QUERY 'billing portal invoice download' FROM release_validation_docs LIMIT 3 USING SPARSE",
       "expect": {
         "min_results": 3,
         "hybrid": false,
@@ -69,9 +69,18 @@
       }
     },
     {
+      "id": "06b-hybrid-rrf-params",
+      "command": "exec",
+      "statement": "QUERY 'refund policy for annual plan' FROM release_validation_docs LIMIT 3 USING HYBRID WITH { rrf_k: 30, rrf_weights: [0.7, 0.3] }",
+      "expect": {
+        "min_results": 3,
+        "hybrid": true
+      }
+    },
+    {
       "id": "07-filtered-sso",
       "command": "exec",
-      "statement": "SEARCH release_validation_docs SIMILAR TO 'single sign on setup checklist' LIMIT 3 USING HYBRID WHERE plan = 'enterprise'",
+      "statement": "QUERY 'single sign on setup checklist' FROM release_validation_docs LIMIT 3 USING HYBRID WHERE plan = 'enterprise'",
       "expect": {
         "min_results": 3,
         "hybrid": true,
@@ -83,7 +92,7 @@
     {
       "id": "08-grouped-security",
       "command": "exec",
-      "statement": "SEARCH release_validation_docs SIMILAR TO 'security compliance and audit logs' LIMIT 3 USING HYBRID GROUP BY team GROUP_SIZE 2",
+      "statement": "QUERY 'security compliance and audit logs' FROM release_validation_docs LIMIT 3 USING HYBRID GROUP BY 'team' GROUP_SIZE 2",
       "expect": {
         "group_by": "team",
         "first_group": "security"
