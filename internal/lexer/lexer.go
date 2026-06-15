@@ -8,7 +8,6 @@ import (
 
 var keywords = map[string]TokenKind{
 	"INSERT":      TokenKindInsert,
-	"BULK":        TokenKindBulk,
 	"INTO":        TokenKindInto,
 	"COLLECTION":  TokenKindCollection,
 	"VALUES":      TokenKindValues,
@@ -20,6 +19,7 @@ var keywords = map[string]TokenKind{
 	"RERANK":      TokenKindRerank,
 	"EXACT":       TokenKindExact,
 	"WITH":        TokenKindWith,
+	"AS":          TokenKindAs,
 	"ACORN":       TokenKindAcorn,
 	"QUANTIZE":    TokenKindQuantize,
 	"SCALAR":      TokenKindScalar,
@@ -54,9 +54,6 @@ var keywords = map[string]TokenKind{
 	"GROUP":       TokenKindGroup,
 	"BY":          TokenKindBy,
 	"GROUP_SIZE":  TokenKindGroupSize,
-	"POSITIVE":    TokenKindPositive,
-	"NEGATIVE":    TokenKindNegative,
-	"IDS":         TokenKindIds,
 	"STRATEGY":    TokenKindStrategy,
 	"DELETE":      TokenKindDelete,
 	"UPDATE":      TokenKindUpdate,

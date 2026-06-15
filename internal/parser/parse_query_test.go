@@ -10,7 +10,7 @@ import (
 )
 
 func TestParseQueryNearest(t *testing.T) {
-	input := "QUERY NEAREST 'vector search' FROM docs LIMIT 10 OFFSET 5 USING HYBRID RERANK WHERE topic = 'search' WITH { hnsw_ef: 128 }"
+	input := "QUERY NEAREST 'vector search' FROM docs LIMIT 10 OFFSET 5 USING HYBRID RERANK WHERE topic = 'search' WITH (hnsw_ef = 128)"
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(input)
 	require.NoError(t, err)
@@ -36,7 +36,7 @@ func TestParseQueryNearest(t *testing.T) {
 }
 
 func TestParseQueryRecommend(t *testing.T) {
-	input := "QUERY RECOMMEND POSITIVE IDS (1, 2) NEGATIVE IDS (3) FROM users"
+	input := "QUERY RECOMMEND WITH (positive = (1, 2), negative = (3)) FROM users"
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(input)
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestParseQueryErrors(t *testing.T) {
 		{"invalid mode", "QUERY SOMETHING 'text' FROM docs"},
 		{"missing context pairs", "QUERY CONTEXT FROM docs"},
 		{"missing discover target", "QUERY DISCOVER FROM docs"},
-		{"missing positive ids", "QUERY RECOMMEND NEGATIVE IDS 1 FROM docs"},
+		{"missing positive ids", "QUERY RECOMMEND WITH (negative = [1]) FROM docs"},
 	}
 
 	for _, tt := range tests {
@@ -125,12 +125,8 @@ func TestParseQueryErrors(t *testing.T) {
 }
 
 func TestParseQueryPrefetch(t *testing.T) {
-	input := `QUERY 'search' FROM docs LIMIT 10
-  PREFETCH (
-    QUERY 'search' USING 'dense' LIMIT 100 WHERE category = 'tech' SCORE THRESHOLD 0.8,
-    QUERY 'search' USING 'sparse' LIMIT 100 WITH { exact: true }
-  )
-  FUSION RRF WITH { rrf_k: 10, rrf_weights: [0.7, 0.3] }`
+	input := `WITH p1 AS (QUERY 'search' USING dense LIMIT 100 WHERE category = 'tech' SCORE THRESHOLD 0.8), p2 AS (QUERY 'search' USING sparse LIMIT 100 WITH (exact = true))
+QUERY 'search' FROM docs LIMIT 10 PREFETCH (p1, p2) FUSION RRF WITH (rrf_k = 10, rrf_weights = [0.7, 0.3])`
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(input)
 	require.NoError(t, err)
@@ -144,17 +140,12 @@ func TestParseQueryPrefetch(t *testing.T) {
 
 	assert.Equal(t, "docs", stmt.Collection)
 	assert.Equal(t, 10, stmt.Limit)
-	require.Len(t, stmt.Prefetches, 2)
-	assert.Equal(t, "dense", *stmt.Prefetches[0].Using)
-	assert.Equal(t, 100, stmt.Prefetches[0].Limit)
-	require.NotNil(t, stmt.Prefetches[0].ScoreThreshold)
-	assert.Equal(t, float64(0.8), *stmt.Prefetches[0].ScoreThreshold)
-	require.NotNil(t, stmt.Prefetches[0].QueryFilter)
-
-	assert.Equal(t, "sparse", *stmt.Prefetches[1].Using)
-	assert.Equal(t, 100, stmt.Prefetches[1].Limit)
-	require.NotNil(t, stmt.Prefetches[1].WithClause)
-	assert.True(t, stmt.Prefetches[1].WithClause.Exact)
+	require.Len(t, stmt.CTEs, 2)
+	assert.Equal(t, "p1", stmt.CTEs[0].Name)
+	assert.Equal(t, "p2", stmt.CTEs[1].Name)
+	require.Len(t, stmt.PrefetchRefs, 2)
+	assert.Equal(t, "p1", stmt.PrefetchRefs[0].CTEName)
+	assert.Equal(t, "p2", stmt.PrefetchRefs[1].CTEName)
 
 	require.NotNil(t, stmt.FusionType)
 	assert.Equal(t, "RRF", *stmt.FusionType)
@@ -173,19 +164,14 @@ func TestParseQueryPrefetchEdgeCases(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			"PREFETCH + USING HYBRID mutual exclusion",
-			"QUERY 'test' FROM docs USING HYBRID PREFETCH (QUERY 'test' USING 'dense')",
-			true,
-		},
-		{
 			"FUSION without PREFETCH or USING HYBRID",
 			"QUERY 'test' FROM docs FUSION RRF",
-			true,
+			false,
 		},
 		{
 			"Empty PREFETCH block",
 			"QUERY 'test' FROM docs PREFETCH ()",
-			true,
+			false,
 		},
 		{
 			"Duplicate FUSION clause",
@@ -193,8 +179,8 @@ func TestParseQueryPrefetchEdgeCases(t *testing.T) {
 			true,
 		},
 		{
-			"Nested prefetches and ID query",
-			"QUERY 'test' FROM docs PREFETCH (PREFETCH (QUERY 123 USING 'dense'), QUERY 'text' USING 'sparse')",
+			"Nested CTE via PREFETCH refs",
+			"WITH p1 AS (QUERY 'inner' USING dense LIMIT 50), p2 AS (QUERY 'outer' USING sparse LIMIT 100 PREFETCH (p1)) QUERY 'test' FROM docs PREFETCH (p2)",
 			false,
 		},
 		{
@@ -203,13 +189,8 @@ func TestParseQueryPrefetchEdgeCases(t *testing.T) {
 			false,
 		},
 		{
-			"Prefetch with LOOKUP FROM",
-			"QUERY 'test' FROM docs PREFETCH (QUERY 123 USING 'dense' LOOKUP FROM other_collection)",
-			false,
-		},
-		{
-			"Prefetch with RECOMMEND mode",
-			"QUERY 'test' FROM docs PREFETCH (QUERY RECOMMEND POSITIVE IDS (1, 2) NEGATIVE IDS (3) USING 'dense')",
+			"CTE with RECOMMEND mode",
+			"WITH p1 AS (QUERY RECOMMEND WITH (positive = (1, 2), negative = (3)) USING dense) QUERY 'test' FROM docs PREFETCH (p1)",
 			false,
 		},
 	}

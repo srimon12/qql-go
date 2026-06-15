@@ -360,8 +360,9 @@ func (p *Parser) parsePointIDValue(statement string) (any, error) {
 	return nil, errors.NewQQLSyntaxError(statement+" requires a string or integer point id, got '"+tok.Value+"'", tok.Pos)
 }
 
+// parseWithClause parses WITH (key = value, ...) — SQL-native syntax.
 func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
-	if _, err := p.expect(lexer.TokenKindLbrace); err != nil {
+	if _, err := p.expect(lexer.TokenKindLparen); err != nil {
 		return nil, err
 	}
 	hnswEf := 0
@@ -374,14 +375,14 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 	var rrfK *int
 	var rrfWeights []float32
 	var err error
-	for p.peek().Kind != lexer.TokenKindRbrace {
+	for p.peek().Kind != lexer.TokenKindRparen {
 		keyTok := p.peek()
 		if keyTok.Kind != lexer.TokenKindIdentifier && keyTok.Kind != lexer.TokenKindExact && keyTok.Kind != lexer.TokenKindAcorn {
 			return nil, errors.NewQQLSyntaxError("Expected a WITH parameter name, got '"+keyTok.Value+"'", keyTok.Pos)
 		}
 		p.advance()
 		key := strings.ToLower(keyTok.Value)
-		if _, err := p.expect(lexer.TokenKindColon); err != nil {
+		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
 			return nil, err
 		}
 		switch key {
@@ -487,19 +488,26 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 			if _, err := p.expect(lexer.TokenKindRbracket); err != nil {
 				return nil, err
 			}
+		case "model":
+			tok, err := p.expect(lexer.TokenKindString)
+			if err != nil {
+				return nil, err
+			}
+			// model is handled elsewhere; skip for WITH params
+			_ = tok
 		default:
 			return nil, errors.NewQQLSyntaxError("Unknown WITH parameter '"+key+"'. Expected: hnsw_ef, exact, acorn, indexed_only, quantization, mmr_diversity, mmr_candidates, rrf_k, rrf_weights", keyTok.Pos)
 		}
 		if p.peek().Kind == lexer.TokenKindComma {
 			p.advance()
-			if p.peek().Kind == lexer.TokenKindRbrace {
+			if p.peek().Kind == lexer.TokenKindRparen {
 				break
 			}
 		} else {
 			break
 		}
 	}
-	if _, err := p.expect(lexer.TokenKindRbrace); err != nil {
+	if _, err := p.expect(lexer.TokenKindRparen); err != nil {
 		return nil, err
 	}
 	return &ast.SearchWith{
@@ -516,7 +524,7 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 }
 
 func (p *Parser) parseQuantizationSearchWith() (*ast.QuantizationSearchWith, error) {
-	if _, err := p.expect(lexer.TokenKindLbrace); err != nil {
+	if _, err := p.expect(lexer.TokenKindLparen); err != nil {
 		return nil, err
 	}
 
@@ -524,14 +532,14 @@ func (p *Parser) parseQuantizationSearchWith() (*ast.QuantizationSearchWith, err
 	var rescore *bool
 	var oversampling *float64
 
-	for p.peek().Kind != lexer.TokenKindRbrace {
+	for p.peek().Kind != lexer.TokenKindRparen {
 		keyTok := p.peek()
 		if keyTok.Kind != lexer.TokenKindIdentifier {
 			return nil, errors.NewQQLSyntaxError("Expected a quantization parameter name, got '"+keyTok.Value+"'", keyTok.Pos)
 		}
 		p.advance()
 		key := strings.ToLower(keyTok.Value)
-		if _, err := p.expect(lexer.TokenKindColon); err != nil {
+		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
 			return nil, err
 		}
 
@@ -569,7 +577,7 @@ func (p *Parser) parseQuantizationSearchWith() (*ast.QuantizationSearchWith, err
 
 		if p.peek().Kind == lexer.TokenKindComma {
 			p.advance()
-			if p.peek().Kind == lexer.TokenKindRbrace {
+			if p.peek().Kind == lexer.TokenKindRparen {
 				break
 			}
 		} else {
@@ -577,7 +585,7 @@ func (p *Parser) parseQuantizationSearchWith() (*ast.QuantizationSearchWith, err
 		}
 	}
 
-	if _, err := p.expect(lexer.TokenKindRbrace); err != nil {
+	if _, err := p.expect(lexer.TokenKindRparen); err != nil {
 		return nil, err
 	}
 

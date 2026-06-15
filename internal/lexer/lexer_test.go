@@ -24,14 +24,6 @@ func TestTokenizeKeywords(t *testing.T) {
 			},
 		},
 		{
-			name:  "BULK",
-			input: "BULK",
-			expected: []Token{
-				{Kind: TokenKindBulk, Value: "BULK", Pos: 0},
-				{Kind: TokenKindEof, Value: "", Pos: 4},
-			},
-		},
-		{
 			name:  "INTO",
 			input: "INTO",
 			expected: []Token{
@@ -246,30 +238,6 @@ func TestTokenizeKeywords(t *testing.T) {
 			expected: []Token{
 				{Kind: TokenKindGroupSize, Value: "GROUP_SIZE", Pos: 0},
 				{Kind: TokenKindEof, Value: "", Pos: 10},
-			},
-		},
-		{
-			name:  "POSITIVE",
-			input: "POSITIVE",
-			expected: []Token{
-				{Kind: TokenKindPositive, Value: "POSITIVE", Pos: 0},
-				{Kind: TokenKindEof, Value: "", Pos: 8},
-			},
-		},
-		{
-			name:  "NEGATIVE",
-			input: "NEGATIVE",
-			expected: []Token{
-				{Kind: TokenKindNegative, Value: "NEGATIVE", Pos: 0},
-				{Kind: TokenKindEof, Value: "", Pos: 8},
-			},
-		},
-		{
-			name:  "IDS",
-			input: "IDS",
-			expected: []Token{
-				{Kind: TokenKindIds, Value: "IDS", Pos: 0},
-				{Kind: TokenKindEof, Value: "", Pos: 3},
 			},
 		},
 		{
@@ -883,18 +851,17 @@ func TestTokenizeFullQuery(t *testing.T) {
 
 func TestTokenizeSearchQuery(t *testing.T) {
 	lexer := &Lexer{}
-	input := `SEARCH mycol SIMILAR TO 'query text' LIMIT 10`
+	input := `QUERY NEAREST 'query text' FROM mycol LIMIT 10`
 	tokens, err := lexer.Tokenize(input)
 	require.NoError(t, err)
 
-	assert.Equal(t, TokenKindIdentifier, tokens[1].Kind)
-	assert.Equal(t, "mycol", tokens[1].Value)
-	assert.Equal(t, TokenKindIdentifier, tokens[2].Kind)
-	assert.Equal(t, "SIMILAR", tokens[2].Value)
-	assert.Equal(t, TokenKindIdentifier, tokens[3].Kind)
-	assert.Equal(t, "TO", tokens[3].Value)
-	assert.Equal(t, TokenKindString, tokens[4].Kind)
-	assert.Equal(t, "query text", tokens[4].Value)
+	assert.Equal(t, TokenKindQuery, tokens[0].Kind)
+	assert.Equal(t, TokenKindNearest, tokens[1].Kind)
+	assert.Equal(t, TokenKindString, tokens[2].Kind)
+	assert.Equal(t, "query text", tokens[2].Value)
+	assert.Equal(t, TokenKindFrom, tokens[3].Kind)
+	assert.Equal(t, TokenKindIdentifier, tokens[4].Kind)
+	assert.Equal(t, "mycol", tokens[4].Value)
 	assert.Equal(t, TokenKindLimit, tokens[5].Kind)
 	assert.Equal(t, TokenKindInteger, tokens[6].Kind)
 	assert.Equal(t, "10", tokens[6].Value)

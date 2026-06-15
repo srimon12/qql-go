@@ -8,7 +8,6 @@ import (
 
 	"github.com/qdrant/go-client/qdrant"
 	"github.com/srimon12/qql-go/internal/ast"
-	"github.com/srimon12/qql-go/internal/filters"
 )
 
 type DenseEmbedNode struct {
@@ -371,118 +370,6 @@ func buildVectorInput(ctx context.Context, state *QueryState, val any) (*qdrant.
 		return nil, err
 	}
 	return qdrant.NewVectorInputID(pid), nil
-}
-
-type PrefetchNode struct {
-	ASTPrefetches []*ast.Prefetch
-}
-
-func (n *PrefetchNode) Execute(ctx context.Context, state *QueryState) error {
-	manual, err := n.buildPrefetches(ctx, state, n.ASTPrefetches)
-	if err != nil {
-		return err
-	}
-	state.ManualPrefetches = manual
-	return nil
-}
-
-func (n *PrefetchNode) buildPrefetches(ctx context.Context, state *QueryState, astPrefs []*ast.Prefetch) ([]*qdrant.PrefetchQuery, error) {
-	if len(astPrefs) == 0 {
-		return nil, nil
-	}
-
-	var results []*qdrant.PrefetchQuery
-	fc := filters.NewFilterConverter()
-
-	for _, ap := range astPrefs {
-		pq := &qdrant.PrefetchQuery{}
-
-		if ap.Using != nil {
-			pq.Using = qdrant.PtrOf(*ap.Using)
-		}
-		if ap.Limit > 0 {
-			pq.Limit = qdrant.PtrOf(uint64(ap.Limit))
-		}
-		if ap.ScoreThreshold != nil {
-			pq.ScoreThreshold = qdrant.PtrOf(float32(*ap.ScoreThreshold))
-		}
-		if ap.LookupFrom != "" {
-			loc := &qdrant.LookupLocation{
-				CollectionName: ap.LookupFrom,
-			}
-			if ap.LookupVector != nil {
-				loc.VectorName = qdrant.PtrOf(*ap.LookupVector)
-			}
-			pq.LookupFrom = loc
-		}
-		if ap.QueryFilter != nil {
-			filter, err := fc.BuildFilter(ap.QueryFilter)
-			if err != nil {
-				return nil, fmt.Errorf("failed to build filter for prefetch: %w", err)
-			}
-			pq.Filter = filter
-		}
-
-		if ap.QueryText != nil {
-			// Determine if it's dense or sparse based on Type or Using name
-			isSparse := ap.Type == ast.QueryTypeSparse || (ap.Using != nil && *ap.Using == "sparse")
-			if isSparse {
-				if state.LocalEmbed {
-					indices, values, err := state.Embedder.EmbedSparse(ctx, *ap.QueryText)
-					if err != nil {
-						return nil, fmt.Errorf("failed to embed sparse prefetch: %w", err)
-					}
-					pq.Query = qdrant.NewQuerySparse(indices, values)
-				} else {
-					doc := &qdrant.Document{
-						Text:    *ap.QueryText,
-						Options: buildDocumentOptions(state.CloudModelOptions),
-					}
-					pq.Query = qdrant.NewQueryDocument(doc)
-				}
-			} else {
-				if state.LocalEmbed {
-					denseVector, err := state.Embedder.EmbedDense(ctx, *ap.QueryText, state.DenseModel)
-					if err != nil {
-						return nil, fmt.Errorf("failed to embed dense prefetch: %w", err)
-					}
-					pq.Query = qdrant.NewQueryDense(denseVector)
-				} else {
-					doc := &qdrant.Document{
-						Text:    *ap.QueryText,
-						Options: buildDocumentOptions(state.CloudModelOptions),
-					}
-					pq.Query = qdrant.NewQueryDocument(doc)
-				}
-			}
-		} else if ap.QueryID != nil {
-			pid, err := buildPointID(ap.QueryID)
-			if err != nil {
-				return nil, fmt.Errorf("invalid prefetch query id: %w", err)
-			}
-			pq.Query = qdrant.NewQueryID(pid)
-		}
-
-		if ap.WithClause != nil {
-			pq.Params = BuildSearchParams(ap.WithClause)
-		} else if state.Params != nil {
-			// Inherit top level params if not overridden
-			pq.Params = state.Params
-		}
-
-		// Recursion
-		if len(ap.Prefetches) > 0 {
-			nested, err := n.buildPrefetches(ctx, state, ap.Prefetches)
-			if err != nil {
-				return nil, err
-			}
-			pq.Prefetch = nested
-		}
-
-		results = append(results, pq)
-	}
-
-	return results, nil
 }
 
 func BuildSearchParams(withClause *ast.SearchWith) *qdrant.SearchParams {

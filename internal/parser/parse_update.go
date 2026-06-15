@@ -19,6 +19,21 @@ func (p *Parser) parseUpdate() (ast.ASTNode, error) {
 	switch p.peek().Kind {
 	case lexer.TokenKindVector:
 		p.advance()
+		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
+			return nil, err
+		}
+		vectorValue, err := p.parseValue()
+		if err != nil {
+			return nil, err
+		}
+		rawVector, ok := vectorValue.([]any)
+		if !ok {
+			return nil, errors.NewQQLSyntaxError("Expected a vector list [...] after SET VECTOR =", p.peek().Pos)
+		}
+		vector, err := coerceVectorValues(rawVector)
+		if err != nil {
+			return nil, err
+		}
 		if _, err := p.expect(lexer.TokenKindWhere); err != nil {
 			return nil, err
 		}
@@ -32,18 +47,6 @@ func (p *Parser) parseUpdate() (ast.ASTNode, error) {
 		if err != nil {
 			return nil, err
 		}
-		vectorValue, err := p.parseValue()
-		if err != nil {
-			return nil, err
-		}
-		rawVector, ok := vectorValue.([]any)
-		if !ok {
-			return nil, errors.NewQQLSyntaxError("Expected a vector list [...] after point ID in UPDATE SET VECTOR", p.peek().Pos)
-		}
-		vector, err := coerceVectorValues(rawVector)
-		if err != nil {
-			return nil, err
-		}
 		return &ast.UpdateVectorStmt{
 			Collection: collection,
 			PointID:    pointID,
@@ -51,6 +54,13 @@ func (p *Parser) parseUpdate() (ast.ASTNode, error) {
 		}, nil
 	case lexer.TokenKindPayload:
 		p.advance()
+		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
+			return nil, err
+		}
+		payload, err := p.parseDict()
+		if err != nil {
+			return nil, err
+		}
 		if _, err := p.expect(lexer.TokenKindWhere); err != nil {
 			return nil, err
 		}
@@ -63,10 +73,6 @@ func (p *Parser) parseUpdate() (ast.ASTNode, error) {
 			if err != nil {
 				return nil, err
 			}
-			payload, err := p.parseDict()
-			if err != nil {
-				return nil, err
-			}
 			return &ast.UpdatePayloadStmt{
 				Collection: collection,
 				PointID:    pointID,
@@ -74,10 +80,6 @@ func (p *Parser) parseUpdate() (ast.ASTNode, error) {
 			}, nil
 		}
 		queryFilter, err := p.parseFilterExpr()
-		if err != nil {
-			return nil, err
-		}
-		payload, err := p.parseDict()
 		if err != nil {
 			return nil, err
 		}

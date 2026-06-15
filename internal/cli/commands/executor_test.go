@@ -82,7 +82,7 @@ func TestExecutorExplainDocumentedQueries(t *testing.T) {
 		},
 		{
 			name:  "search with with clause",
-			query: "QUERY NEAREST 'vector database' FROM docs LIMIT 5 WITH { hnsw_ef: 128, exact: true }",
+			query: "QUERY NEAREST 'vector database' FROM docs LIMIT 5 WITH (hnsw_ef = 128, exact = true)",
 			wants: []string{
 				"Statement: QUERY NEAREST docs LIMIT 5",
 				"Query: 'vector database'",
