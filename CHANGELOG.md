@@ -10,7 +10,7 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 - **Unified QUERY statement** — `QUERY` replaces `SEARCH` and `RECOMMEND` as a single statement with 4 modes: `NEAREST` (default), `RECOMMEND`, `CONTEXT`, and `DISCOVER`. All modes share the same clause surface: `LIMIT`, `OFFSET`, `SCORE THRESHOLD`, `LOOKUP FROM`, `USING`, `WITH`, `WHERE`, `RERANK`, `GROUP BY`, `GROUP_SIZE`, `STRATEGY`, `EXACT`.
 - **Manual prefetch DAGs** — `PREFETCH (...)` block syntax for explicit multi-stage retrieval with per-prefetch filters, limits, score thresholds, lookup, and nested prefetches.
-- **Parameterized RRF** — `WITH { rrf_k: <n>, rrf_weights: [<float>, ...] }` exposes Qdrant's parameterized Reciprocal Rank Fusion with configurable K and per-source weights.
+- **Parameterized RRF** — `WITH (rrf_k = <n>, rrf_weights: [<float>, ...])` exposes Qdrant's parameterized Reciprocal Rank Fusion with configurable K and per-source weights.
 - **FUSION keyword** — `FUSION RRF` / `FUSION DBSF` for explicit fusion mode selection with manual prefetch DAGs.
 - **CONTEXT and DISCOVER query modes** — `QUERY CONTEXT PAIRS ((pos, neg), ...)` and `QUERY DISCOVER TARGET <id> CONTEXT PAIRS (...)` for context-aware and exploration search.
 - **Configurable BM25 parameters** — BM25 `k1`, `b`, and `avgdl` are now configurable from `~/.qql/config.json`.
@@ -21,7 +21,7 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 ### Changed
 
 - **BREAKING:** `SEARCH <collection> SIMILAR TO '<text>'` is removed. Use `QUERY '<text>' FROM <collection>` instead.
-- **BREAKING:** `RECOMMEND FROM <collection> POSITIVE IDS (...)` is removed. Use `QUERY RECOMMEND POSITIVE IDS (...) FROM <collection>` instead.
+- **BREAKING:** `RECOMMEND FROM <collection> POSITIVE IDS (...)` is removed. Use `QUERY RECOMMEND WITH (positive = (...), negative = (...)) FROM <collection>` instead.
 - **BREAKING:** `internal/utils` package deleted. All callers migrated to `strings.ToUpper` / `strings.ToLower`.
 - Parser and executor broken into focused submodules: `exec_query.go`, `exec_insert.go`, `exec_manage.go`, `exec_select.go`, `exec_update.go`, `cli_cmds.go`, `client.go`, `utils.go` (from `commands.go`); `parse_query.go`, `parse_create.go`, `parse_insert.go`, `parse_update.go`, `parse_manage.go`, `parse_search.go` (from `parser.go`).
 - Execution pipeline now uses a proper DAG (`DenseEmbedNode`, `SparseEmbedNode`, `FusionNode`, `RerankNode`, `RecommendNode`, `ContextNode`, `DiscoverNode`, `PrefetchNode`) with request assembly delegated to `BuildFlatRequest` / `BuildGroupedRequest`.

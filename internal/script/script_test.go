@@ -21,20 +21,20 @@ func (s *stubExecutor) Execute(query string) (string, error) {
 }
 
 func TestStripComments(t *testing.T) {
-	input := "SHOW COLLECTIONS -- comment\nINSERT INTO COLLECTION docs VALUES {'text': 'hello'}"
+	input := "SHOW COLLECTIONS -- comment\nINSERT INTO docs VALUES {'text': 'hello'}"
 	got := StripComments(input)
 	require.NotContains(t, got, "comment")
 	require.Contains(t, got, "SHOW COLLECTIONS")
 }
 
 func TestSplitStatements(t *testing.T) {
-	input := "SHOW COLLECTIONS\nINSERT INTO COLLECTION docs VALUES {'text': 'hello'}\nQUERY RECOMMEND FROM docs POSITIVE IDS ('1') LIMIT 5"
+	input := "SHOW COLLECTIONS\nINSERT INTO docs VALUES {'text': 'hello'}\nQUERY RECOMMEND WITH (positive = ('1')) FROM docs LIMIT 5"
 	statements, err := SplitStatements(input)
 	require.NoError(t, err)
 	require.Len(t, statements, 3)
 	require.Equal(t, "SHOW COLLECTIONS", statements[0])
-	require.Contains(t, statements[1], "INSERT INTO COLLECTION docs")
-	require.Contains(t, statements[2], "QUERY RECOMMEND FROM docs")
+	require.Contains(t, statements[1], "INSERT INTO docs")
+	require.Contains(t, statements[2], "QUERY RECOMMEND WITH")
 }
 
 func TestSplitStatementsSelectAndScroll(t *testing.T) {
@@ -48,12 +48,12 @@ func TestSplitStatementsSelectAndScroll(t *testing.T) {
 }
 
 func TestSplitStatementsUpdate(t *testing.T) {
-	input := "SHOW COLLECTION docs\nUPDATE docs SET PAYLOAD WHERE id = 1 {'status': 'reviewed'}\nDROP COLLECTION docs"
+	input := "SHOW COLLECTION docs\nUPDATE docs SET PAYLOAD = {'status': 'reviewed'} WHERE id = 1\nDROP COLLECTION docs"
 	statements, err := SplitStatements(input)
 	require.NoError(t, err)
 	require.Len(t, statements, 3)
 	require.Equal(t, "SHOW COLLECTION docs", statements[0])
-	require.Equal(t, "UPDATE docs SET PAYLOAD WHERE id = 1 {'status': 'reviewed'}", statements[1])
+	require.Equal(t, "UPDATE docs SET PAYLOAD = {'status': 'reviewed'} WHERE id = 1", statements[1])
 	require.Equal(t, "DROP COLLECTION docs", statements[2])
 }
 

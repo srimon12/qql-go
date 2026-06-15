@@ -13,11 +13,11 @@ Run these commands in order and inspect the JSON after each step:
 ```bash
 qql-go doctor --quiet --json
 qql-go exec --quiet --json "SHOW COLLECTION retrieval_debug_runbook"
-qql-go explain --quiet --json "SEARCH retrieval_debug_runbook SIMILAR TO 'billing policy search regression after index removal' LIMIT 3 USING HYBRID"
-qql-go exec --quiet --json "SEARCH retrieval_debug_runbook SIMILAR TO 'billing policy search regression after index removal' LIMIT 3 USING HYBRID"
-qql-go exec --quiet --json "SEARCH retrieval_debug_runbook SIMILAR TO 'billing policy search regression after index removal' LIMIT 3 EXACT"
-qql-go exec --quiet --json "SEARCH retrieval_debug_runbook SIMILAR TO 'billing policy search regression after index removal' LIMIT 3 USING SPARSE"
-qql-go exec --quiet --json "SEARCH retrieval_debug_runbook SIMILAR TO 'billing policy search regression after index removal' LIMIT 3 USING HYBRID WHERE team = 'billing'"
+qql-go explain --quiet --json "QUERY 'billing policy search regression after index removal' FROM retrieval_debug_runbook LIMIT 3 USING HYBRID"
+qql-go exec --quiet --json "QUERY 'billing policy search regression after index removal' FROM retrieval_debug_runbook LIMIT 3 USING HYBRID"
+qql-go exec --quiet --json "QUERY 'billing policy search regression after index removal' FROM retrieval_debug_runbook LIMIT 3 EXACT"
+qql-go exec --quiet --json "QUERY 'billing policy search regression after index removal' FROM retrieval_debug_runbook LIMIT 3 USING SPARSE"
+qql-go exec --quiet --json "QUERY 'billing policy search regression after index removal' FROM retrieval_debug_runbook LIMIT 3 USING HYBRID WHERE team = 'billing'"
 qql-go exec --quiet --json "SELECT * FROM retrieval_debug_runbook WHERE id = 4104"
 qql-go exec --quiet --json "SCROLL FROM retrieval_debug_runbook WHERE doc_type = 'runbook' LIMIT 10"
 ```

@@ -45,7 +45,7 @@ run_step "05-search-hybrid" "exec" "QUERY 'billing policy search regression afte
 run_step "06-search-exact" "exec" "QUERY 'billing policy search regression after index removal' FROM $COLLECTION LIMIT 3 EXACT"
 run_step "07-search-sparse" "exec" "QUERY 'billing policy search regression after index removal' FROM $COLLECTION LIMIT 3 USING SPARSE"
 run_step "08-search-filtered" "exec" "QUERY 'billing policy search regression after index removal' FROM $COLLECTION LIMIT 3 USING HYBRID WHERE team = 'billing'"
-run_step "08b-search-prefetch" "exec" "QUERY 'billing policy search regression' FROM $COLLECTION LIMIT 3 PREFETCH (QUERY 'billing policy search regression' USING 'dense' LIMIT 10, QUERY 'billing policy search regression' USING 'sparse' LIMIT 10) FUSION RRF"
+run_step "08b-search-prefetch" "exec" "WITH a AS (QUERY 'billing policy search regression' USING dense LIMIT 10), b AS (QUERY 'billing policy search regression' USING sparse LIMIT 10) QUERY 'billing policy search regression' FROM $COLLECTION LIMIT 3 PREFETCH (a, b) FUSION RRF"
 run_step "09-select-doc" "exec" "SELECT * FROM $COLLECTION WHERE id = 4104"
 run_step "10-scroll-runbooks" "exec" "SCROLL FROM $COLLECTION WHERE doc_type = 'runbook' LIMIT 10"
 

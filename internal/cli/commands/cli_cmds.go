@@ -396,7 +396,7 @@ func NewDumpCmd(out *output.Outputter) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().Int("batch-size", 50, "Number of points per INSERT BULK batch in dump output")
+	cmd.Flags().Int("batch-size", 50, "Number of points per INSERT batch in dump output")
 	addOutputFlags(cmd)
 	return cmd
 }

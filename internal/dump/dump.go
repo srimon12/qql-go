@@ -84,7 +84,7 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 		}
 
 		if len(batch) > 0 {
-			builder.WriteString(fmt.Sprintf("INSERT BULK INTO COLLECTION %s VALUES [\n", collection))
+			builder.WriteString(fmt.Sprintf("INSERT INTO %s VALUES\n", collection))
 			for idx, record := range batch {
 				builder.WriteString(indent(serializeMap(record), "  "))
 				if idx+1 < len(batch) {
@@ -93,7 +93,6 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 				builder.WriteString("\n")
 				written++
 			}
-			builder.WriteString("]")
 			if hybrid {
 				if denseName != "dense" || sparseName != "sparse" {
 					builder.WriteString(fmt.Sprintf(" USING HYBRID DENSE VECTOR '%s' SPARSE VECTOR '%s'", escapeString(denseName), escapeString(sparseName)))

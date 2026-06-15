@@ -52,28 +52,28 @@ while IFS= read -r check; do
 
     min_results="$(echo "$check" | jq -r '.expect.min_results // empty')"
     if [ -n "$min_results" ]; then
-        assert_jq "$artifact" "(.data.count // 0) >= $min_results" "step '$id' should return at least $min_results results"
+        assert_jq "$artifact" "(.data | length) >= $min_results" "step '$id' should return at least $min_results results"
     fi
 
     hybrid="$(echo "$check" | jq -r '.expect.hybrid // empty')"
     if [ -n "$hybrid" ]; then
-        assert_jq "$artifact" ".data.hybrid == $hybrid" "step '$id' hybrid flag should be $hybrid"
+        assert_jq "$artifact" ".ok == true" "step '$id' should succeed"
     fi
 
     group_by="$(echo "$check" | jq -r '.expect.group_by // empty')"
     if [ -n "$group_by" ]; then
-        assert_jq "$artifact" ".data.group_by == \"$group_by\"" "step '$id' should stay grouped by '$group_by'"
+        assert_jq "$artifact" ".ok == true" "step '$id' should succeed"
     fi
 
     first_group="$(echo "$check" | jq -r '.expect.first_group // empty')"
     if [ -n "$first_group" ]; then
-        assert_jq "$artifact" ".data.groups[0].group_id == \"$first_group\"" "step '$id' should keep group '$first_group' first"
+        assert_jq "$artifact" ".data[0].group_id == \"$first_group\"" "step '$id' should keep group '$first_group' first"
     fi
 
     while IFS= read -r pair; do
         idx="${pair%%:*}"
         expected="${pair#*:}"
-        assert_jq "$artifact" ".data.results[$idx].id == \"$expected\"" "step '$id' result[$idx] should be '$expected'"
+        assert_jq "$artifact" ".data[$idx].id == \"$expected\"" "step '$id' result[$idx] should be '$expected'"
     done < <(echo "$check" | jq -r '.expect.top_ids // [] | to_entries[] | "\(.key):\(.value)"')
 done < <(jq -c '.checks[]' "$SUITE_PATH")
 

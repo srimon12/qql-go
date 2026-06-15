@@ -505,7 +505,7 @@ func TestParseError(t *testing.T) {
 		},
 		{
 			name:    "insert missing values",
-			input:   "INSERT INTO COLLECTION test",
+			input:   "INSERT INTO test",
 			wantErr: true,
 		},
 		{

@@ -621,15 +621,15 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			plan.WriteString("Action: Delete point by ID\n")
 		}
 	case *ast.UpdateVectorStmt:
-		plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET VECTOR WHERE id = '%v'\n", n.Collection, n.PointID))
+		plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET VECTOR = [...] WHERE id = '%v'\n", n.Collection, n.PointID))
 		plan.WriteString(fmt.Sprintf("Vector length: %d\n", len(n.Vector)))
 		plan.WriteString("Action: Update point vector\n")
 	case *ast.UpdatePayloadStmt:
 		if n.QueryFilter != nil {
-			plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET PAYLOAD WHERE %s\n", n.Collection, e.filterToString(n.QueryFilter)))
+			plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET PAYLOAD = {...} WHERE %s\n", n.Collection, e.filterToString(n.QueryFilter)))
 			plan.WriteString("Action: Update payload for points matching filter\n")
 		} else {
-			plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET PAYLOAD WHERE id = '%v'\n", n.Collection, n.PointID))
+			plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET PAYLOAD = {...} WHERE id = '%v'\n", n.Collection, n.PointID))
 			plan.WriteString("Action: Update payload for point by ID\n")
 		}
 	case *ast.CreateIndexStmt:

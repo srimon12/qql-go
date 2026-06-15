@@ -3,7 +3,7 @@
 Medical Retrieval Showcase — minimal E2E demo of qql-go capabilities.
 
 Demonstrates: collection creation, indexing, hybrid insert, dense/sparse/hybrid
-search, filters, grouped retrieval, recommend, context, discover, prefetch DAGs,
+search, filters, grouped retrieval, recommend, context, discover, CTE prefetch DAGs,
 parameterized RRF, updates, select, scroll, dump, and explain.
 
 Usage:
@@ -78,7 +78,7 @@ def run(label: str, stmt: str, *, execute: bool, keep: bool = False, explain: bo
         print(f"    ERROR: {e}")
 
 
-# ── 12 medical records ───────────────────────────────────────────────
+# -- 12 medical records --
 RECORDS = [
     (1, "Acute ischemic stroke with sudden right-sided weakness and slurred speech. CT confirms left MCA infarct. Thrombolysis initiated.", "neurology", "high", "admitted", 2026),
     (2, "STEMI with crushing chest pain radiating to left arm. ECG shows ST elevation V1-V4. Emergency catheterization planned.", "cardiology", "high", "admitted", 2025),
@@ -104,16 +104,16 @@ def main():
     print("Medical Retrieval Showcase")
     print("=" * 50)
 
-    # ── Schema ───────────────────────────────────────────────────────
+    # -- Schema --
     print("\n[1] Schema")
     run("Create HYBRID collection with TURBO quantization",
         f"CREATE COLLECTION {COL} HYBRID WITH HNSW {{ payload_m: 16 }} QUANTIZE TURBO BITS 2 ALWAYS RAM", execute=args.execute)
-    for f, t in [("specialty","keyword"),("priority","keyword"),("status","keyword"),("year","integer"),
+    for f, ftype in [("specialty","keyword"),("priority","keyword"),("status","keyword"),("year","integer"),
                  ("patient_id","keyword"),("diagnosis","text WITH { tokenizer: 'word', min_token_len: 2, lowercase: true, phrase_matching: true }")]:
         run(f"Index {f}",
-            f"CREATE INDEX ON COLLECTION {COL} FOR {f} TYPE {t}", execute=args.execute)
+            f"CREATE INDEX ON COLLECTION {COL} FOR {f} TYPE {ftype}", execute=args.execute)
 
-    # ── Insert ───────────────────────────────────────────────────────
+    # -- Insert --
     print("\n[2] Insert (12 records, HYBRID)")
     if args.execute:
         try:
@@ -121,25 +121,25 @@ def main():
         except:
             pass
         qql(f"CREATE COLLECTION {COL} HYBRID WITH HNSW {{ payload_m: 16 }} QUANTIZE TURBO BITS 2 ALWAYS RAM")
-        for f, t in [("specialty","keyword"),("priority","keyword"),("status","keyword"),("year","integer"),
+        for f, ftype in [("specialty","keyword"),("priority","keyword"),("status","keyword"),("year","integer"),
                      ("patient_id","keyword"),("diagnosis","text WITH { tokenizer: 'word', min_token_len: 2, lowercase: true, phrase_matching: true }")]:
-            qql(f"CREATE INDEX ON COLLECTION {COL} FOR {f} TYPE {t}")
+            qql(f"CREATE INDEX ON COLLECTION {COL} FOR {f} TYPE {ftype}")
     for pid, text, spec, pri, stat, year in RECORDS:
         run(f"Insert #{pid} ({spec})",
-            f"INSERT INTO COLLECTION {COL} VALUES {{'id': {pid}, 'text': '{text}', 'patient_id': 'PT-{pid:04d}', 'specialty': '{spec}', 'priority': '{pri}', 'status': '{stat}', 'year': {year}}} USING HYBRID",
+            f"INSERT INTO {COL} VALUES {{'id': {pid}, 'text': '{text}', 'patient_id': 'PT-{pid:04d}', 'specialty': '{spec}', 'priority': '{pri}', 'status': '{stat}', 'year': {year}}} USING HYBRID",
             execute=args.execute)
 
-    # ── Search modes ─────────────────────────────────────────────────
+    # -- Search modes --
     print("\n[3] Search Modes")
     run("Dense (semantic)", f"QUERY 'acute stroke weakness' FROM {COL} LIMIT 3", execute=args.execute)
     run("Dense EXACT baseline", f"QUERY 'chest pain troponin' FROM {COL} LIMIT 3 EXACT", execute=args.execute)
     run("Hybrid RRF", f"QUERY 'emergency neurological' FROM {COL} LIMIT 3 USING HYBRID", execute=args.execute)
     run("Hybrid DBSF", f"QUERY 'emergency neurological' FROM {COL} LIMIT 3 USING HYBRID FUSION DBSF", execute=args.execute)
-    run("Parameterized RRF (k=30, weights)", f"QUERY 'emergency critical' FROM {COL} LIMIT 3 USING HYBRID WITH {{ rrf_k: 30, rrf_weights: [0.7, 0.3] }}", execute=args.execute)
+    run("Parameterized RRF (k=30, weights)", f"QUERY 'emergency critical' FROM {COL} LIMIT 3 USING HYBRID WITH (rrf_k = 30, rrf_weights = [0.7, 0.3])", execute=args.execute)
     run("Sparse BM25", f"QUERY 'fever cough antibiotics' FROM {COL} LIMIT 3 USING SPARSE", execute=args.execute)
-    run("MMR diversity", f"QUERY 'neurological emergency' FROM {COL} LIMIT 5 USING HYBRID WITH {{ mmr_diversity: 0.5, mmr_candidates: 20 }}", execute=args.execute)
+    run("MMR diversity", f"QUERY 'neurological emergency' FROM {COL} LIMIT 5 USING HYBRID WITH (mmr_diversity = 0.5, mmr_candidates = 20)", execute=args.execute)
 
-    # ── Filters ──────────────────────────────────────────────────────
+    # -- Filters --
     print("\n[4] Filters")
     run("WHERE specialty = 'neurology'", f"QUERY 'headache' FROM {COL} LIMIT 3 USING HYBRID WHERE specialty = 'neurology'", execute=args.execute)
     run("WHERE priority IN ('high','medium')", f"QUERY 'chest pain' FROM {COL} LIMIT 3 USING HYBRID WHERE priority IN ('high', 'medium')", execute=args.execute)
@@ -147,58 +147,58 @@ def main():
     run("Compound AND + IN", f"QUERY 'emergency' FROM {COL} LIMIT 3 USING HYBRID WHERE priority = 'high' AND status = 'admitted'", execute=args.execute)
     run("MATCH PHRASE", f"QUERY 'chest pain' FROM {COL} LIMIT 3 WHERE diagnosis MATCH PHRASE 'chest pain'", execute=args.execute)
 
-    # ── Query params ─────────────────────────────────────────────────
+    # -- Query params --
     print("\n[5] Query-Time Params")
-    run("HNSW ef=256", f"QUERY 'stroke' FROM {COL} LIMIT 3 WITH {{ hnsw_ef: 256 }}", execute=args.execute)
-    run("ACORN (filtered recall)", f"QUERY 'emergency' FROM {COL} LIMIT 3 WHERE specialty = 'neurology' WITH {{ acorn: true }}", execute=args.execute)
+    run("HNSW ef=256", f"QUERY 'stroke' FROM {COL} LIMIT 3 WITH (hnsw_ef = 256)", execute=args.execute)
+    run("ACORN (filtered recall)", f"QUERY 'emergency' FROM {COL} LIMIT 3 WHERE specialty = 'neurology' WITH (acorn = true)", execute=args.execute)
     run("Score threshold", f"QUERY 'patient treatment' FROM {COL} LIMIT 10 SCORE THRESHOLD 0.3", execute=args.execute)
     run("Offset pagination", f"QUERY 'patient diagnosis' FROM {COL} LIMIT 3 OFFSET 3", execute=args.execute)
 
-    # ── Grouped ──────────────────────────────────────────────────────
+    # -- Grouped --
     print("\n[6] Grouped Retrieval")
     run("GROUP BY specialty", f"QUERY 'emergency acute' FROM {COL} LIMIT 4 GROUP BY 'specialty' GROUP_SIZE 2", execute=args.execute)
     run("GROUP BY priority", f"QUERY 'patient' FROM {COL} LIMIT 4 USING HYBRID GROUP BY 'priority' GROUP_SIZE 2", execute=args.execute)
 
-    # ── Recommend ────────────────────────────────────────────────────
+    # -- Recommend --
     print("\n[7] Recommend")
-    run("Single positive", f"QUERY RECOMMEND POSITIVE IDS (1) FROM {COL} LIMIT 3", execute=args.execute)
-    run("Multi + negative", f"QUERY RECOMMEND POSITIVE IDS (1, 12) NEGATIVE IDS (4) FROM {COL} LIMIT 3", execute=args.execute)
-    run("Strategy best_score", f"QUERY RECOMMEND POSITIVE IDS (2, 10) FROM {COL} STRATEGY 'best_score' LIMIT 3", execute=args.execute)
+    run("Single positive", f"QUERY RECOMMEND WITH (positive = (1)) FROM {COL} LIMIT 3", execute=args.execute)
+    run("Multi + negative", f"QUERY RECOMMEND WITH (positive = (1, 12), negative = (4)) FROM {COL} LIMIT 3", execute=args.execute)
+    run("Strategy best_score", f"QUERY RECOMMEND WITH (positive = (2, 10)) FROM {COL} STRATEGY 'best_score' LIMIT 3", execute=args.execute)
 
-    # ── Context / Discover ───────────────────────────────────────────
+    # -- Context / Discover --
     print("\n[8] Context & Discover")
     run("Context pairs", f"QUERY CONTEXT PAIRS (1, 4), (10, 3) FROM {COL} LIMIT 3", execute=args.execute)
     run("Discover", f"QUERY DISCOVER TARGET 1 CONTEXT PAIRS (12, 4) FROM {COL} LIMIT 3", execute=args.execute)
 
-    # ── Prefetch DAG ─────────────────────────────────────────────────
-    print("\n[9] Manual Prefetch DAGs")
+    # -- CTE Prefetch DAG --
+    print("\n[9] CTE-based Prefetch DAGs")
     run("Prefetch RRF",
-        f"QUERY 'emergency neurological' FROM {COL} LIMIT 3 PREFETCH (QUERY 'emergency neurological' USING 'dense' LIMIT 10, QUERY 'emergency neurological' USING 'sparse' LIMIT 10) FUSION RRF",
+        f"WITH a AS (QUERY 'emergency neurological' USING dense LIMIT 10), b AS (QUERY 'emergency neurological' USING sparse LIMIT 10) QUERY 'emergency neurological' FROM {COL} LIMIT 3 PREFETCH (a, b) FUSION RRF",
         execute=args.execute)
     run("Prefetch RRF + per-prefetch filter + params",
-        f"QUERY 'emergency neurological' FROM {COL} LIMIT 3 PREFETCH (QUERY 'emergency neurological' USING 'dense' LIMIT 10 WHERE priority = 'high', QUERY 'emergency neurological' USING 'sparse' LIMIT 10) FUSION RRF WITH {{ rrf_k: 10, rrf_weights: [0.7, 0.3] }}",
+        f"WITH a AS (QUERY 'emergency neurological' USING dense LIMIT 10 WHERE priority = 'high'), b AS (QUERY 'emergency neurological' USING sparse LIMIT 10) QUERY 'emergency neurological' FROM {COL} LIMIT 3 PREFETCH (a, b) FUSION RRF WITH (rrf_k = 10, rrf_weights = [0.7, 0.3])",
         execute=args.execute)
 
-    # ── Mutations ────────────────────────────────────────────────────
+    # -- Mutations --
     print("\n[10] Mutations")
-    run("Update payload by ID", f"UPDATE {COL} SET PAYLOAD WHERE id = 1 {{'status': 'reviewed', 'care_path': 'stroke-alert'}}", execute=args.execute)
-    run("Update payload by filter", f"UPDATE {COL} SET PAYLOAD WHERE status = 'discharged' {{'status': 'archived'}}", execute=args.execute)
+    run("Update payload by ID", f"UPDATE {COL} SET PAYLOAD = {{'status': 'reviewed', 'care_path': 'stroke-alert'}} WHERE id = 1", execute=args.execute)
+    run("Update payload by filter", f"UPDATE {COL} SET PAYLOAD = {{'status': 'archived'}} WHERE status = 'discharged'", execute=args.execute)
     run("Delete by filter", f"DELETE FROM {COL} WHERE status = 'archived'", execute=args.execute)
 
-    # ── Access ───────────────────────────────────────────────────────
+    # -- Access --
     print("\n[11] Point Access")
     run("Select by ID", f"SELECT * FROM {COL} WHERE id = 2", execute=args.execute)
     run("Scroll all", f"SCROLL FROM {COL} LIMIT 3", execute=args.execute)
     run("Scroll filtered", f"SCROLL FROM {COL} WHERE priority = 'high' LIMIT 3", execute=args.execute)
 
-    # ── Operations ───────────────────────────────────────────────────
+    # -- Operations --
     print("\n[12] Operations")
     run("SHOW COLLECTIONS", "SHOW COLLECTIONS", execute=args.execute)
     run("SHOW COLLECTION", f"SHOW COLLECTION {COL}", execute=args.execute)
     run("EXPLAIN", f"QUERY 'stroke' FROM {COL} LIMIT 3 USING HYBRID", execute=args.execute, explain=True)
     run("Dump", f"{COL} /tmp/{COL}.qql", execute=args.execute, dump=True)
 
-    # ── Cleanup ──────────────────────────────────────────────────────
+    # -- Cleanup --
     if args.execute and not args.keep:
         try:
             qql(f"DROP COLLECTION {COL}")

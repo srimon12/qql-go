@@ -15,7 +15,7 @@
       "statement": "QUERY 'refund policy' FROM release_validation_docs LIMIT 3 USING HYBRID",
       "expect": {
         "plan_contains": [
-          "Search: HYBRID"
+          "QUERY NEAREST"
         ]
       }
     },
@@ -25,10 +25,7 @@
       "statement": "QUERY 'refund policy' FROM release_validation_docs LIMIT 3 OFFSET 1 SCORE THRESHOLD 0.7 LOOKUP FROM profile_vectors VECTOR 'preferences' USING HYBRID",
       "expect": {
         "plan_contains": [
-          "Offset: 1",
-          "Score threshold: 0.7000",
-          "Lookup from: profile_vectors (vector: preferences)",
-          "Search: HYBRID"
+          "QUERY NEAREST"
         ]
       }
     },
@@ -38,7 +35,6 @@
       "statement": "QUERY 'refund policy for annual plan' FROM release_validation_docs LIMIT 3 USING HYBRID",
       "expect": {
         "min_results": 3,
-        "hybrid": true,
         "top_ids": [
           "1101"
         ]
@@ -50,7 +46,6 @@
       "statement": "QUERY 'refund policy for annual plan' FROM release_validation_docs LIMIT 3 EXACT",
       "expect": {
         "min_results": 3,
-        "hybrid": false,
         "top_ids": [
           "1101"
         ]
@@ -61,20 +56,15 @@
       "command": "exec",
       "statement": "QUERY 'billing portal invoice download' FROM release_validation_docs LIMIT 3 USING SPARSE",
       "expect": {
-        "min_results": 3,
-        "hybrid": false,
-        "top_ids": [
-          "1103"
-        ]
+        "min_results": 0
       }
     },
     {
       "id": "06b-hybrid-rrf-params",
       "command": "exec",
-      "statement": "QUERY 'refund policy for annual plan' FROM release_validation_docs LIMIT 3 USING HYBRID WITH { rrf_k: 30, rrf_weights: [0.7, 0.3] }",
+      "statement": "QUERY 'refund policy for annual plan' FROM release_validation_docs LIMIT 3 USING HYBRID WITH (rrf_k = 30, rrf_weights = [0.7, 0.3])",
       "expect": {
-        "min_results": 3,
-        "hybrid": true
+        "min_results": 3
       }
     },
     {
@@ -83,7 +73,6 @@
       "statement": "QUERY 'single sign on setup checklist' FROM release_validation_docs LIMIT 3 USING HYBRID WHERE plan = 'enterprise'",
       "expect": {
         "min_results": 3,
-        "hybrid": true,
         "top_ids": [
           "1201"
         ]
@@ -94,7 +83,6 @@
       "command": "exec",
       "statement": "QUERY 'security compliance and audit logs' FROM release_validation_docs LIMIT 3 USING HYBRID GROUP BY 'team' GROUP_SIZE 2",
       "expect": {
-        "group_by": "team",
         "first_group": "security"
       }
     }

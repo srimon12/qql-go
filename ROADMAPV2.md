@@ -153,7 +153,7 @@ Features that improve search relevance and enable advanced retrieval patterns.
 ```sql
 QUERY 'search' FROM docs LIMIT 10
   USING HYBRID
-  WITH { rrf_k: 30, rrf_weights: [0.7, 0.3] }
+  WITH (rrf_k = 30, rrf_weights: [0.7, 0.3])
 ```
 
 **Implementation:**

@@ -2,60 +2,51 @@
 
 Use these examples for complex, advanced retrieval patterns. For basic syntax, see the grammar in `SKILL.md`.
 
-## Manual Prefetch DAGs
+## Multi-Stage Retrieval with CTEs
 
-Multi-stage retrieval with per-prefetch filters, limits, and score thresholds:
-
-```sql
-QUERY 'search' FROM docs LIMIT 10
-  PREFETCH (
-    QUERY 'search' USING 'dense' LIMIT 100 WHERE category = 'tech' SCORE THRESHOLD 0.8,
-    QUERY 'search' USING 'sparse' LIMIT 100 WITH { exact: true }
-  )
-  FUSION RRF
-```
-
-With parameterized RRF tuning:
+Define named sub-queries and reference them in the main query:
 
 ```sql
-QUERY 'search' FROM docs LIMIT 10
-  PREFETCH (
-    QUERY 'search' USING 'dense' LIMIT 100,
-    QUERY 'search' USING 'sparse' LIMIT 100
-  )
-  FUSION RRF WITH { rrf_k: 10, rrf_weights: [0.7, 0.3] }
+WITH
+  dense_stage AS (QUERY 'search' USING dense LIMIT 100 WHERE category = 'tech' SCORE THRESHOLD 0.8),
+  sparse_stage AS (QUERY 'search' USING sparse LIMIT 100 WITH (exact = true))
+QUERY 'search' FROM docs LIMIT 10 PREFETCH (dense_stage, sparse_stage) FUSION RRF
 ```
 
-Nested prefetches:
+Nested CTE (one CTE references another):
 
 ```sql
-QUERY 'search' FROM docs LIMIT 10
-  PREFETCH (
-    PREFETCH (
-      QUERY 123 USING 'dense',
-      QUERY 'text' USING 'sparse'
-    ),
-    QUERY 'fallback' USING 'dense' LIMIT 50
-  )
-  FUSION RRF
+WITH
+  inner AS (QUERY 'deep search' USING dense LIMIT 50),
+  outer AS (QUERY 'fallback' USING sparse LIMIT 100 PREFETCH (inner))
+QUERY 'search' FROM docs LIMIT 10 PREFETCH (outer) FUSION RRF
 ```
 
-## Hybrid Search with Parameterized RRF
+With RRF tuning:
+
+```sql
+WITH
+  a AS (QUERY 'search' USING dense LIMIT 100),
+  b AS (QUERY 'search' USING sparse LIMIT 100)
+QUERY 'search' FROM docs LIMIT 10 PREFETCH (a, b) FUSION RRF WITH (rrf_k = 10, rrf_weights = [0.7, 0.3])
+```
+
+## Hybrid Search with Parametrized RRF
 
 ```sql
 QUERY 'vector search' FROM docs LIMIT 10
 USING HYBRID
-WITH { rrf_k: 30, rrf_weights: [0.7, 0.3] }
+WITH (rrf_k = 30, rrf_weights = [0.7, 0.3])
 ```
 
 ## MMR Diversity
 
 ```sql
 QUERY 'vector database performance tuning' FROM articles LIMIT 5
-WITH { mmr_diversity: 0.5, mmr_candidates: 25 }
+WITH (mmr_diversity = 0.5, mmr_candidates = 25)
 
 QUERY 'vector database performance tuning' FROM articles LIMIT 5
-USING HYBRID WITH { mmr_diversity: 0.5, mmr_candidates: 25 }
+USING HYBRID WITH (mmr_diversity = 0.5, mmr_candidates = 25)
 ```
 
 ## Context Search
@@ -73,18 +64,20 @@ QUERY DISCOVER TARGET 'uuid-1' CONTEXT PAIRS (('uuid-2', 'uuid-3')) FROM docs LI
 ## Cross-collection Recommend (Lookup)
 
 ```sql
-QUERY RECOMMEND POSITIVE IDS ('uuid-1') FROM target_collection
+QUERY RECOMMEND WITH (positive = ('uuid-1')) FROM target_collection
   LOOKUP FROM source_collection VECTOR 'dense'
-  USING 'sparse'
+  USING sparse
   LIMIT 5
 ```
 
-## Grouped Hybrid Search with Query-Time Params
+## Query-time Params
 
 ```sql
-QUERY 'hnsw recall regression' FROM incidents LIMIT 4
-USING HYBRID
-WITH { hnsw_ef: 128, acorn: true }
-GROUP BY team
-GROUP_SIZE 2
+QUERY 'search' FROM docs LIMIT 10 WITH (hnsw_ef = 128, exact = true, acorn = true)
+```
+
+## Grouped Retrieval
+
+```sql
+QUERY 'search' FROM docs LIMIT 10 USING HYBRID GROUP BY category GROUP_SIZE 3
 ```

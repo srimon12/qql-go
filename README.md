@@ -182,18 +182,18 @@ Use the CLI directly:
 ```bash
 qql-go exec "CREATE COLLECTION docs HYBRID"
 qql-go exec "CREATE COLLECTION docs HYBRID QUANTIZE TURBO BITS 2 ALWAYS RAM"
-qql-go exec "INSERT INTO COLLECTION docs VALUES {'text': 'Qdrant stores vectors', 'topic': 'search'} USING HYBRID"
+qql-go exec "INSERT INTO docs VALUES {'text': 'Qdrant stores vectors', 'topic': 'search'} USING HYBRID"
 qql-go exec "QUERY 'vector database' FROM docs LIMIT 5 USING HYBRID"
 qql-go exec "QUERY 'vector database' FROM docs LIMIT 5 USING HYBRID FUSION DBSF"
 qql-go exec "QUERY 'bm25 keyword' FROM docs LIMIT 5 USING SPARSE"
 qql-go exec "QUERY 'vector database' FROM docs LIMIT 5 USING HYBRID RERANK"
 qql-go exec "QUERY 'vector database' FROM docs LIMIT 5 USING HYBRID GROUP BY topic GROUP_SIZE 2"
-qql-go exec "QUERY RECOMMEND POSITIVE IDS ('uuid-1', 'uuid-2') FROM docs LIMIT 5"
-qql-go exec "QUERY 'search' FROM docs LIMIT 10 PREFETCH (QUERY 'search' USING 'dense' LIMIT 100, QUERY 'search' USING 'sparse' LIMIT 100) FUSION RRF"
+qql-go exec "QUERY RECOMMEND WITH (positive = ('uuid-1', 'uuid-2')) FROM docs LIMIT 5"
+qql-go exec "WITH a AS (QUERY 'search' USING dense LIMIT 100), b AS (QUERY 'search' USING sparse LIMIT 100) QUERY 'search' FROM docs LIMIT 10 PREFETCH (a, b) FUSION RRF"
 qql-go exec "SHOW COLLECTION docs"
 qql-go exec "SELECT * FROM docs WHERE id = 'pt-1'"
 qql-go exec "SCROLL FROM docs LIMIT 10"
-qql-go exec "UPDATE docs SET PAYLOAD WHERE id = 'pt-1' {'topic': 'retrieval'}"
+qql-go exec "UPDATE docs SET PAYLOAD = {'topic': 'retrieval'}"
 ```
 
 Start the interactive shell:
@@ -312,13 +312,11 @@ CREATE INDEX ON COLLECTION <name> FOR <field> TYPE uuid
 CREATE INDEX ON COLLECTION <name> FOR <field> TYPE keyword WITH { is_tenant: true, on_disk: true, enable_hnsw: false }
 CREATE INDEX ON COLLECTION <name> FOR <field> TYPE text WITH { tokenizer: 'word', min_token_len: 2, max_token_len: 20, lowercase: true }
 
-INSERT INTO COLLECTION <name> VALUES {...}
-INSERT INTO COLLECTION <name> VALUES {...} USING MODEL '<model>'
-INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID
-INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'
-INSERT INTO COLLECTION <name> VALUES {...} USING HYBRID SPARSE MODEL '<model>'
-INSERT BULK INTO COLLECTION <name> VALUES [{...}, {...}]
-INSERT BULK INTO COLLECTION <name> VALUES [{...}, {...}] USING HYBRID
+INSERT INTO <name> VALUES {...}
+INSERT INTO <name> VALUES {...}, {...}
+INSERT INTO <name> VALUES {...} USING MODEL '<model>'
+INSERT INTO <name> VALUES {...} USING HYBRID
+INSERT INTO <name> VALUES {...} USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'
 
 QUERY '<text>' FROM <name> LIMIT <n>
 QUERY '<text>' FROM <name> LIMIT <n> OFFSET <n>
@@ -327,37 +325,33 @@ QUERY '<text>' FROM <name> LIMIT <n> LOOKUP FROM <collection> [VECTOR '<name>']
 QUERY '<text>' FROM <name> LIMIT <n> USING MODEL '<model>'
 QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID
 QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID FUSION DBSF
-QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID WITH { rrf_k: <n>, rrf_weights: [...] }
+QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID WITH (rrf_k = <n>, rrf_weights = [...])
 QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'
 QUERY '<text>' FROM <name> LIMIT <n> USING SPARSE
+QUERY '<text>' FROM <name> LIMIT <n> USING DENSE
 QUERY '<text>' FROM <name> LIMIT <n> WHERE <filter>
 QUERY '<text>' FROM <name> LIMIT <n> EXACT
-QUERY '<text>' FROM <name> LIMIT <n> WITH { hnsw_ef: <n>, exact: true|false, acorn: true|false, indexed_only: true|false }
-QUERY '<text>' FROM <name> LIMIT <n> WITH { quantization: { ignore: true|false, rescore: true|false, oversampling: <n> } }
-QUERY '<text>' FROM <name> LIMIT <n> WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }
-QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }
+QUERY '<text>' FROM <name> LIMIT <n> WITH (hnsw_ef = <n>, exact = <bool>, acorn = <bool>, indexed_only = <bool>)
+QUERY '<text>' FROM <name> LIMIT <n> WITH (mmr_diversity = <0..1>, mmr_candidates = <n>)
+QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID WITH (mmr_diversity = <0..1>, mmr_candidates = <n>)
 QUERY '<text>' FROM <name> LIMIT <n> RERANK
 QUERY '<text>' FROM <name> LIMIT <n> RERANK MODEL '<model>'
 QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID RERANK
 QUERY '<text>' FROM <name> LIMIT <n> USING SPARSE RERANK
 QUERY '<text>' FROM <name> LIMIT <n> GROUP BY <field> [GROUP_SIZE <n>]
 
-QUERY RECOMMEND POSITIVE IDS (<id>, ...) FROM <name> LIMIT <n>
-QUERY RECOMMEND POSITIVE IDS (<id>, ...) NEGATIVE IDS (<id>, ...) FROM <name> LIMIT <n>
-QUERY RECOMMEND POSITIVE IDS (<id>, ...) STRATEGY '<strategy>' FROM <name> LIMIT <n>
-QUERY RECOMMEND POSITIVE IDS (<id>, ...) FROM <name> LIMIT <n> OFFSET <n>
-QUERY RECOMMEND POSITIVE IDS (<id>, ...) FROM <name> LIMIT <n> SCORE THRESHOLD <float|int>
-QUERY RECOMMEND POSITIVE IDS (<id>, ...) FROM <name> LOOKUP FROM <collection> [VECTOR '<name>'] LIMIT <n>
+QUERY RECOMMEND WITH (positive = (<id>, ...)) FROM <name> LIMIT <n>
+QUERY RECOMMEND WITH (positive = (<id>, ...), negative = (<id>, ...)) FROM <name> LIMIT <n>
+QUERY RECOMMEND WITH (positive = (<id>, ...)) STRATEGY '<strategy>' FROM <name> LIMIT <n>
+QUERY RECOMMEND WITH (positive = (<id>, ...)) FROM <name> LIMIT <n> OFFSET <n>
+QUERY RECOMMEND WITH (positive = (<id>, ...)) FROM <name> LIMIT <n> SCORE THRESHOLD <float|int>
+QUERY RECOMMEND WITH (positive = (<id>, ...)) FROM <name> LOOKUP FROM <collection> [VECTOR '<name>'] LIMIT <n>
 
 QUERY CONTEXT PAIRS ((<pos_id>, <neg_id>), ...) FROM <name> LIMIT <n>
 QUERY DISCOVER TARGET <id> CONTEXT PAIRS ((<pos_id>, <neg_id>), ...) FROM <name> LIMIT <n>
 
-QUERY '<text>' FROM <name> LIMIT 10
-  PREFETCH (
-    QUERY '<text>' USING 'dense' LIMIT 100 WHERE <filter>,
-    QUERY '<text>' USING 'sparse' LIMIT 100
-  )
-  FUSION RRF WITH { rrf_k: <n>, rrf_weights: [...] }
+WITH <name> AS (QUERY ...), <name> AS (QUERY ...)
+QUERY '<text>' FROM <name> LIMIT 10 PREFETCH (<name>, <name>) FUSION RRF WITH (rrf_k = <n>, rrf_weights = [...])
 
 SELECT * FROM <name> WHERE id = '<uuid>'
 SELECT * FROM <name> WHERE id = <integer>
@@ -403,7 +397,7 @@ Hybrid search:
 
 - use `USING HYBRID` when exact terms and semantic similarity both matter; this uses `RRF` by default
 - use `FUSION DBSF` when you want the DBSF hybrid fusion strategy instead of the default RRF
-- use `WITH { rrf_k: <n>, rrf_weights: [...] }` to tune parameterized RRF
+- use `WITH (rrf_k = <n>, rrf_weights: [...])` to tune parameterized RRF
 - use `WITH { mmr_diversity, mmr_candidates }` with hybrid search when you want diversity on the dense leg before fusion
 - combine `GROUP BY` with hybrid search when you need grouped top results; do not combine grouped search with `OFFSET`
 - default sparse model: `qdrant/bm25`
@@ -426,7 +420,7 @@ Point access:
 
 Recommendation:
 
-- use `QUERY RECOMMEND POSITIVE IDS (...)` to find similar items by example IDs
+- use `QUERY RECOMMEND WITH (positive = (...))` to find similar items by example IDs
 - use `STRATEGY 'average_vector|best_score|sum_scores'` to control recommendation strategy
 
 Context and Discover:
@@ -443,13 +437,13 @@ Rerank:
 Search-time tuning:
 
 - `EXACT`
-- `WITH { hnsw_ef: <n> }`
-- `WITH { exact: true|false }`
-- `WITH { acorn: true|false }`
-- `WITH { indexed_only: true|false }`
-- `WITH { quantization: { ignore, rescore, oversampling } }`
-- `WITH { mmr_diversity: <0..1>, mmr_candidates: <n> }` for dense search and the dense leg of hybrid search
-- `WITH { rrf_k: <n>, rrf_weights: [...] }` for parameterized RRF
+- `WITH (hnsw_ef = <n>)`
+- `WITH (exact = true|false)`
+- `WITH (acorn = true|false)`
+- `WITH (indexed_only = true|false)`
+- `WITH (quantization = { ignore, rescore, oversampling) }`
+- `WITH (mmr_diversity = <0..1>, mmr_candidates: <n>)` for dense search and the dense leg of hybrid search
+- `WITH (rrf_k = <n>, rrf_weights: [...])` for parameterized RRF
 
 ## Filter Syntax
 

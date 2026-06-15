@@ -45,7 +45,7 @@ EXAMPLES = [
         "when": "Use when you want to tune RRF parameters — K controls rank smoothing, weights control source influence.",
         "query": (
             "QUERY 'vector search performance' FROM articles "
-            "LIMIT 10 USING HYBRID WITH { rrf_k: 30, rrf_weights: [0.7, 0.3] }"
+            "LIMIT 10 USING HYBRID WITH (rrf_k = 30, rrf_weights: [0.7, 0.3])"
         ),
         "setup": [],
         "requires_index": [],
@@ -72,7 +72,7 @@ EXAMPLES = [
         "when": "Use when you want query-time recall tuning without changing collection config.",
         "query": (
             "QUERY 'transformer inference' FROM articles "
-            "LIMIT 10 WITH { hnsw_ef: 256 }"
+            "LIMIT 10 WITH (hnsw_ef = 256)"
         ),
         "setup": [],
         "requires_index": [],
@@ -102,7 +102,7 @@ EXAMPLES = [
         "when": "Use when hybrid search results are too redundant and you want semantic diversity on the dense leg before fusion.",
         "query": (
             "QUERY 'vector database performance tuning' FROM articles "
-            "LIMIT 10 USING HYBRID WITH { mmr_diversity: 0.5, mmr_candidates: 25 }"
+            "LIMIT 10 USING HYBRID WITH (mmr_diversity = 0.5, mmr_candidates: 25)"
         ),
         "setup": [],
         "requires_index": [],
@@ -124,7 +124,7 @@ EXAMPLES = [
         "when": "Use when filtered-query recall is the focus and ACORN should be tested.",
         "query": (
             "QUERY 'retrieval recall regression' FROM incidents "
-            "LIMIT 10 WHERE team = 'search' WITH { acorn: true }"
+            "LIMIT 10 WHERE team = 'search' WITH (acorn = true)"
         ),
         "setup": [
             "CREATE INDEX ON COLLECTION incidents FOR team TYPE keyword",
@@ -140,7 +140,7 @@ EXAMPLES = [
         ),
         "setup": [
             "CREATE COLLECTION tenant_docs HYBRID WITH HNSW { payload_m: 16 }",
-            "CREATE INDEX ON COLLECTION tenant_docs FOR tenant_id TYPE keyword WITH { is_tenant: true, on_disk: true }",
+            "CREATE INDEX ON COLLECTION tenant_docs FOR tenant_id TYPE keyword WITH (is_tenant = true, on_disk: true)",
         ],
         "requires_index": ["tenant_id"],
     },
@@ -149,7 +149,7 @@ EXAMPLES = [
         "when": "Use when a text payload field needs explicit tokenization controls before phrase or keyword-heavy filtering.",
         "query": (
             "CREATE INDEX ON COLLECTION tenant_docs FOR title TYPE text "
-            "WITH { tokenizer: 'word', min_token_len: 2, max_token_len: 20, lowercase: true, phrase_matching: true }"
+            "WITH (tokenizer = 'word', min_token_len: 2, max_token_len: 20, lowercase: true, phrase_matching: true)"
         ),
         "setup": [],
         "requires_index": [],
@@ -171,7 +171,7 @@ EXAMPLES = [
         "when": "Use when grouped results still need hybrid recall and query-time tuning.",
         "query": (
             "QUERY 'retrieval recall regression' FROM incidents "
-            "LIMIT 4 USING HYBRID WITH { hnsw_ef: 128 } "
+            "LIMIT 4 USING HYBRID WITH (hnsw_ef = 128) "
             "GROUP BY team GROUP_SIZE 2"
         ),
         "setup": [
@@ -183,7 +183,7 @@ EXAMPLES = [
         "mode": "recommend",
         "when": "Use when you have example point IDs and want to find similar items.",
         "query": (
-            "QUERY RECOMMEND POSITIVE IDS ('uuid-1', 'uuid-2') FROM articles LIMIT 5"
+            "QUERY RECOMMEND WITH (positive = ('uuid-1', 'uuid-2')) FROM articles LIMIT 5"
         ),
         "setup": [],
         "requires_index": [],
@@ -192,7 +192,7 @@ EXAMPLES = [
         "mode": "recommend-with-strategy",
         "when": "Use when you want to control how positive/negative examples are combined.",
         "query": (
-            "QUERY RECOMMEND POSITIVE IDS ('uuid-1') NEGATIVE IDS ('uuid-2') "
+            "QUERY RECOMMEND WITH (positive = ('uuid-1')), negative = ('uuid-2') "
             "STRATEGY 'best_score' FROM articles LIMIT 5"
         ),
         "setup": [],
@@ -237,9 +237,9 @@ EXAMPLES = [
             "QUERY 'search query' FROM docs LIMIT 10\n"
             "  PREFETCH (\n"
             "    QUERY 'search query' USING 'dense' LIMIT 100 WHERE category = 'tech' SCORE THRESHOLD 0.8,\n"
-            "    QUERY 'search query' USING 'sparse' LIMIT 100 WITH { exact: true }\n"
+            "    QUERY 'search query' USING 'sparse' LIMIT 100 WITH (exact = true)\n"
             "  )\n"
-            "  FUSION RRF WITH { rrf_k: 10, rrf_weights: [0.7, 0.3] }"
+            "  FUSION RRF WITH (rrf_k = 10, rrf_weights: [0.7, 0.3])"
         ),
         "setup": [],
         "requires_index": [],

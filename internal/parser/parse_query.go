@@ -350,6 +350,8 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 			} else if p.peek().Kind == lexer.TokenKindSparse {
 				p.advance()
 				stmt.Type = ast.QueryTypeSparse
+				sparse := "sparse"
+				stmt.Using = &sparse
 				if p.peek().Kind == lexer.TokenKindString {
 					vec := p.peek().Value
 					p.advance()
@@ -358,6 +360,8 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 			} else if p.peek().Kind == lexer.TokenKindDense {
 				p.advance()
 				stmt.Type = ast.QueryTypeDense
+				dense := "dense"
+				stmt.Using = &dense
 				if p.peek().Kind == lexer.TokenKindString {
 					vec := p.peek().Value
 					p.advance()
