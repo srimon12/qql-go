@@ -135,9 +135,9 @@ go run ./cmd/qql-go connect --url http://localhost:6334
 
 # Run operations
 go run ./cmd/qql-go exec "CREATE COLLECTION test HYBRID"
-go run ./cmd/qql-go exec "INSERT INTO COLLECTION test VALUES {'text': 'hello'} USING HYBRID"
-go run ./cmd/qql-go exec "SEARCH test SIMILAR TO 'hello' LIMIT 5 USING HYBRID"
-go run ./cmd/qql-go exec "RECOMMEND FROM test POSITIVE IDS ('...') LIMIT 5"
+go run ./cmd/qql-go exec "INSERT INTO test VALUES {'text': 'hello'} USING HYBRID"
+go run ./cmd/qql-go exec "QUERY 'hello' FROM test LIMIT 5 USING HYBRID"
+go run ./cmd/qql-go exec "QUERY RECOMMEND WITH (positive = ('...') LIMIT 5"
 ```
 
 ### What to Test
@@ -260,13 +260,13 @@ Keep skill docs small and point back to [README.md](../README.md) for the canoni
 ### Enable verbose output
 
 ```bash
-go run ./cmd/qql-go exec --json "SEARCH docs SIMILAR TO 'hello' LIMIT 5"
+go run ./cmd/qql-go exec --json "QUERY 'hello' FROM docs LIMIT 5"
 ```
 
 ### Explain without executing
 
 ```bash
-go run ./cmd/qql-go explain "SEARCH docs SIMILAR TO 'hello' LIMIT 5 USING HYBRID"
+go run ./cmd/qql-go explain "QUERY 'hello' FROM docs LIMIT 5 USING HYBRID"
 ```
 
 ### Test embedding endpoint directly

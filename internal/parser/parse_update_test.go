@@ -76,7 +76,7 @@ func TestParseUpdate(t *testing.T) {
 	}{
 		{
 			name:  "update vector by id",
-			input: "UPDATE articles SET VECTOR WHERE id = 42 [0.1, 0.2]",
+			input: "UPDATE articles SET VECTOR = [0.1, 0.2] WHERE id = 42",
 			check: func(t *testing.T, node ast.ASTNode) {
 				stmt, ok := node.(*ast.UpdateVectorStmt)
 				require.True(t, ok)
@@ -87,7 +87,7 @@ func TestParseUpdate(t *testing.T) {
 		},
 		{
 			name:  "update payload by filter",
-			input: "UPDATE articles SET PAYLOAD WHERE category = 'draft' {'status': 'published'}",
+			input: "UPDATE articles SET PAYLOAD = {'status': 'published'} WHERE category = 'draft'",
 			check: func(t *testing.T, node ast.ASTNode) {
 				stmt, ok := node.(*ast.UpdatePayloadStmt)
 				require.True(t, ok)
@@ -99,7 +99,7 @@ func TestParseUpdate(t *testing.T) {
 		},
 		{
 			name:  "update payload by id",
-			input: "UPDATE articles SET PAYLOAD WHERE id = 'abc-123' {'year': 2025}",
+			input: "UPDATE articles SET PAYLOAD = {'year': 2025} WHERE id = 'abc-123'",
 			check: func(t *testing.T, node ast.ASTNode) {
 				stmt, ok := node.(*ast.UpdatePayloadStmt)
 				require.True(t, ok)
@@ -109,12 +109,12 @@ func TestParseUpdate(t *testing.T) {
 		},
 		{
 			name:    "update vector rejects bools",
-			input:   "UPDATE articles SET VECTOR WHERE id = 1 [true, 0.2]",
+			input:   "UPDATE articles SET VECTOR = [true, 0.2] WHERE id = 1",
 			wantErr: true,
 		},
 		{
 			name:    "update rejects invalid target",
-			input:   "UPDATE articles SET NAME WHERE id = 1 {'x': 1}",
+			input:   "UPDATE articles SET NAME = {'x': 1} WHERE id = 1",
 			wantErr: true,
 		},
 	}

@@ -14,11 +14,11 @@ from pathlib import Path
 COLLECTION = os.environ.get("MEDICAL_RAG_COLLECTION", "medical_retrieval_ops")
 DEFAULT_PATH = Path(__file__).resolve().parent / "generated" / "benchmark-questions.json"
 MODES = {
-    "dense": lambda q, limit: f"SEARCH {COLLECTION} SIMILAR TO '{q}' LIMIT {limit}",
-    "sparse": lambda q, limit: f"SEARCH {COLLECTION} SIMILAR TO '{q}' LIMIT {limit} USING SPARSE",
-    "hybrid_rrf": lambda q, limit: f"SEARCH {COLLECTION} SIMILAR TO '{q}' LIMIT {limit} USING HYBRID",
-    "hybrid_dbsf": lambda q, limit: f"SEARCH {COLLECTION} SIMILAR TO '{q}' LIMIT {limit} USING HYBRID FUSION 'dbsf'",
-    "exact": lambda q, limit: f"SEARCH {COLLECTION} SIMILAR TO '{q}' LIMIT {limit} EXACT",
+    "dense": lambda q, limit: f"QUERY '{q}' FROM {COLLECTION} LIMIT {limit}",
+    "sparse": lambda q, limit: f"QUERY '{q}' FROM {COLLECTION} LIMIT {limit} USING SPARSE",
+    "hybrid_rrf": lambda q, limit: f"QUERY '{q}' FROM {COLLECTION} LIMIT {limit} USING HYBRID",
+    "hybrid_dbsf": lambda q, limit: f"QUERY '{q}' FROM {COLLECTION} LIMIT {limit} USING HYBRID FUSION dbsf",
+    "exact": lambda q, limit: f"QUERY '{q}' FROM {COLLECTION} LIMIT {limit} EXACT",
 }
 
 
@@ -44,7 +44,7 @@ def score_mode(items: list[dict[str, object]], mode_name: str) -> dict[str, obje
         limit = int(item.get("limit", 5))
         statement = MODES[mode_name](question, limit)
         payload = run_statement(statement)
-        result_ids = [entry["id"] for entry in payload.get("data", {}).get("results", [])]
+        result_ids = [entry["id"] for entry in payload.get("data", [])]
         expected_id = str(item["id"])
         top1 = bool(result_ids and result_ids[0] == expected_id)
         top5 = expected_id in result_ids

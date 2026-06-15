@@ -2,17 +2,6 @@ package ast
 
 type InsertStmt struct {
 	Collection   string
-	PointID      any
-	Values       map[string]any
-	Model        *string
-	Hybrid       bool
-	DenseVector  *string
-	SparseModel  *string
-	SparseVector *string
-}
-
-type InsertBulkStmt struct {
-	Collection   string
 	ValuesList   []map[string]any
 	Model        *string
 	Hybrid       bool
@@ -179,26 +168,15 @@ const (
 	QueryTypeHybrid
 )
 
-type Prefetch struct {
-	Prefetches     []*Prefetch
-	Type           QueryType
-	QueryText      *string
-	QueryID        any
-	Mode           QueryMode
-	PositiveIDs    []any
-	NegativeIDs    []any
-	ContextPairs   []ContextPair
-	Target         any
-	Limit          int
-	Strategy       *string
-	QueryFilter    FilterExpr
-	ScoreThreshold *float64
-	GroupBy        *string
-	GroupSize      *int
-	WithClause     *SearchWith
-	LookupFrom     string
-	LookupVector   *string
-	Using          *string
+// CTE represents a named sub-query defined in a WITH clause.
+type CTE struct {
+	Name string
+	Stmt *QueryStmt
+}
+
+// PrefetchRef is a reference to a CTE by name, used in PREFETCH clauses.
+type PrefetchRef struct {
+	CTEName string
 }
 
 type QueryStmt struct {
@@ -218,7 +196,7 @@ type QueryStmt struct {
 	ContextPairs []ContextPair
 
 	// For DISCOVER
-	Target any // ID or string
+	Target any
 
 	Limit          int
 	Strategy       *string
@@ -233,12 +211,13 @@ type QueryStmt struct {
 	Using          *string
 	Model          *string
 
-	// Prefetch DAG
-	Prefetches []*Prefetch
-	FusionType *string
+	// CTEs defined at the top level or within a CTE's body
+	CTEs []CTE
 
-	// Legacy flags mapped to pipeline logic
-	Hybrid      bool
+	// Prefetch DAG — references to CTE names or inline queries
+	PrefetchRefs []PrefetchRef
+	FusionType   *string
+
 	Rerank      bool
 	RerankModel *string
 }
@@ -276,7 +255,6 @@ type ASTNode interface {
 }
 
 func (InsertStmt) isASTNode()           {}
-func (InsertBulkStmt) isASTNode()       {}
 func (CreateCollectionStmt) isASTNode() {}
 func (AlterCollectionStmt) isASTNode()  {}
 func (DropCollectionStmt) isASTNode()   {}
@@ -284,10 +262,8 @@ func (ShowCollectionsStmt) isASTNode()  {}
 func (ShowCollectionStmt) isASTNode()   {}
 func (SelectStmt) isASTNode()           {}
 func (ScrollStmt) isASTNode()           {}
-
-// Removed SearchStmt and RecommendStmt methods
-func (QueryStmt) isASTNode()         {}
-func (DeleteStmt) isASTNode()        {}
-func (UpdateVectorStmt) isASTNode()  {}
-func (UpdatePayloadStmt) isASTNode() {}
-func (CreateIndexStmt) isASTNode()   {}
+func (QueryStmt) isASTNode()            {}
+func (DeleteStmt) isASTNode()           {}
+func (UpdateVectorStmt) isASTNode()     {}
+func (UpdatePayloadStmt) isASTNode()    {}
+func (CreateIndexStmt) isASTNode()      {}

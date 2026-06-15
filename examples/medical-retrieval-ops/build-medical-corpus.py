@@ -109,7 +109,7 @@ def write_seed(rows: list[dict[str, str | int]]) -> None:
     for idx in range(0, len(rows), CHUNK_SIZE):
         chunk = rows[idx : idx + CHUNK_SIZE]
         docs = ",\n".join(render_doc(row) for row in chunk)
-        statements.append(f"INSERT BULK INTO COLLECTION {COLLECTION} VALUES [\n  {docs}\n] USING HYBRID")
+        statements.append(f"INSERT INTO {COLLECTION} VALUES\n  {docs}\nUSING HYBRID")
     statements.append(f"SHOW COLLECTION {COLLECTION}")
     SEED_PATH.write_text("\n\n".join(statements) + "\n", encoding="utf-8")
 

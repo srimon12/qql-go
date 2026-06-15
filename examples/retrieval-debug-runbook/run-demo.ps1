@@ -35,11 +35,11 @@ Write-Host "Running retrieval debug runbook..."
 (& qql-go execute --quiet --json (Join-Path $PSScriptRoot "01-seed.qql")) | Set-Content -Path (Join-Path $artifacts "02-seed.json") -Encoding utf8
 
 Run-Step "03-inspect" "exec" "SHOW COLLECTION $collection"
-Run-Step "04-explain" "explain" "SEARCH $collection SIMILAR TO 'billing policy search regression after index removal' LIMIT 3 USING HYBRID"
-Run-Step "05-search-hybrid" "exec" "SEARCH $collection SIMILAR TO 'billing policy search regression after index removal' LIMIT 3 USING HYBRID"
-Run-Step "06-search-exact" "exec" "SEARCH $collection SIMILAR TO 'billing policy search regression after index removal' LIMIT 3 EXACT"
-Run-Step "07-search-sparse" "exec" "SEARCH $collection SIMILAR TO 'billing policy search regression after index removal' LIMIT 3 USING SPARSE"
-Run-Step "08-search-filtered" "exec" "SEARCH $collection SIMILAR TO 'billing policy search regression after index removal' LIMIT 3 USING HYBRID WHERE team = 'billing'"
+Run-Step "04-explain" "explain" "QUERY 'billing policy search regression after index removal' FROM $collection LIMIT 3 USING HYBRID"
+Run-Step "05-search-hybrid" "exec" "QUERY 'billing policy search regression after index removal' FROM $collection LIMIT 3 USING HYBRID"
+Run-Step "06-search-exact" "exec" "QUERY 'billing policy search regression after index removal' FROM $collection LIMIT 3 EXACT"
+Run-Step "07-search-sparse" "exec" "QUERY 'billing policy search regression after index removal' FROM $collection LIMIT 3 USING SPARSE"
+Run-Step "08-search-filtered" "exec" "QUERY 'billing policy search regression after index removal' FROM $collection LIMIT 3 USING HYBRID WHERE team = 'billing'"
 Run-Step "09-select-doc" "exec" "SELECT * FROM $collection WHERE id = 4104"
 Run-Step "10-scroll-runbooks" "exec" "SCROLL FROM $collection WHERE doc_type = 'runbook' LIMIT 10"
 

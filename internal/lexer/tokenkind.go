@@ -4,7 +4,6 @@ type TokenKind int
 
 const (
 	TokenKindInsert TokenKind = iota
-	TokenKindBulk
 	TokenKindInto
 	TokenKindCollection
 	TokenKindValues
@@ -16,6 +15,7 @@ const (
 	TokenKindRerank
 	TokenKindExact
 	TokenKindWith
+	TokenKindAs
 	TokenKindAcorn
 	TokenKindQuantize
 	TokenKindScalar
@@ -45,9 +45,6 @@ const (
 	TokenKindGroup
 	TokenKindBy
 	TokenKindGroupSize
-	TokenKindPositive
-	TokenKindNegative
-	TokenKindIds
 	TokenKindStrategy
 	TokenKindDelete
 	TokenKindUpdate
@@ -111,7 +108,6 @@ const (
 
 var tokenKindStrings = map[TokenKind]string{
 	TokenKindInsert:      "INSERT",
-	TokenKindBulk:        "BULK",
 	TokenKindInto:        "INTO",
 	TokenKindCollection:  "COLLECTION",
 	TokenKindValues:      "VALUES",
@@ -123,6 +119,7 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindRerank:      "RERANK",
 	TokenKindExact:       "EXACT",
 	TokenKindWith:        "WITH",
+	TokenKindAs:          "AS",
 	TokenKindAcorn:       "ACORN",
 	TokenKindQuantize:    "QUANTIZE",
 	TokenKindScalar:      "SCALAR",
@@ -152,9 +149,6 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindGroup:       "GROUP",
 	TokenKindBy:          "BY",
 	TokenKindGroupSize:   "GROUP_SIZE",
-	TokenKindPositive:    "POSITIVE",
-	TokenKindNegative:    "NEGATIVE",
-	TokenKindIds:         "IDS",
 	TokenKindStrategy:    "STRATEGY",
 	TokenKindDelete:      "DELETE",
 	TokenKindUpdate:      "UPDATE",

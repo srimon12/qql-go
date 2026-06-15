@@ -18,53 +18,52 @@ func TestParseInsert(t *testing.T) {
 	}{
 		{
 			name:  "simple insert",
-			input: `INSERT INTO COLLECTION test VALUES {"text": "hello"}`,
+			input: `INSERT INTO test VALUES {"text": "hello"}`,
 			want: &ast.InsertStmt{
 				Collection: "test",
-				Values:     map[string]any{"text": "hello"},
+				ValuesList: []map[string]any{{"text": "hello"}},
 			},
 		},
 		{
 			name:  "insert with bare keys",
-			input: `INSERT INTO COLLECTION test VALUES {text: 'hello', topic: 'search'}`,
+			input: `INSERT INTO test VALUES {text: 'hello', topic: 'search'}`,
 			want: &ast.InsertStmt{
 				Collection: "test",
-				Values:     map[string]any{"text": "hello", "topic": "search"},
+				ValuesList: []map[string]any{{"text": "hello", "topic": "search"}},
 			},
 		},
 		{
 			name:  "insert with explicit id",
-			input: `INSERT INTO COLLECTION test VALUES {id: 'point-123', text: 'hello'}`,
+			input: `INSERT INTO test VALUES {id: 'point-123', text: 'hello'}`,
 			want: &ast.InsertStmt{
 				Collection: "test",
-				PointID:    "point-123",
-				Values:     map[string]any{"text": "hello"},
+				ValuesList: []map[string]any{{"id": "point-123", "text": "hello"}},
 			},
 		},
 		{
 			name:  "insert with model",
-			input: `INSERT INTO COLLECTION test VALUES {"text": "hello"} USING MODEL 'model-name'`,
+			input: `INSERT INTO test VALUES {"text": "hello"} USING MODEL 'model-name'`,
 			want: &ast.InsertStmt{
 				Collection: "test",
-				Values:     map[string]any{"text": "hello"},
+				ValuesList: []map[string]any{{"text": "hello"}},
 				Model:      strPtr("model-name"),
 			},
 		},
 		{
 			name:  "insert with hybrid",
-			input: `INSERT INTO COLLECTION test VALUES {"text": "hello"} USING HYBRID`,
+			input: `INSERT INTO test VALUES {"text": "hello"} USING HYBRID`,
 			want: &ast.InsertStmt{
 				Collection: "test",
-				Values:     map[string]any{"text": "hello"},
+				ValuesList: []map[string]any{{"text": "hello"}},
 				Hybrid:     true,
 			},
 		},
 		{
 			name:  "insert with hybrid and models",
-			input: `INSERT INTO COLLECTION test VALUES {"text": "hello"} USING HYBRID DENSE MODEL 'dense-model' SPARSE MODEL 'sparse-model'`,
+			input: `INSERT INTO test VALUES {"text": "hello"} USING HYBRID DENSE MODEL 'dense-model' SPARSE MODEL 'sparse-model'`,
 			want: &ast.InsertStmt{
 				Collection:  "test",
-				Values:      map[string]any{"text": "hello"},
+				ValuesList:  []map[string]any{{"text": "hello"}},
 				Hybrid:      true,
 				Model:       strPtr("dense-model"),
 				SparseModel: strPtr("sparse-model"),
@@ -72,10 +71,10 @@ func TestParseInsert(t *testing.T) {
 		},
 		{
 			name:  "insert with sparse model only",
-			input: `INSERT INTO COLLECTION test VALUES {"text": "hello"} USING HYBRID SPARSE MODEL 'sparse-model'`,
+			input: `INSERT INTO test VALUES {"text": "hello"} USING HYBRID SPARSE MODEL 'sparse-model'`,
 			want: &ast.InsertStmt{
 				Collection:  "test",
-				Values:      map[string]any{"text": "hello"},
+				ValuesList:  []map[string]any{{"text": "hello"}},
 				Hybrid:      true,
 				SparseModel: strPtr("sparse-model"),
 			},
@@ -99,8 +98,7 @@ func TestParseInsert(t *testing.T) {
 			stmt, ok := node.(*ast.InsertStmt)
 			require.True(t, ok, "expected InsertStmt")
 			assert.Equal(t, tt.want.Collection, stmt.Collection)
-			assert.Equal(t, tt.want.Values, stmt.Values)
-			assert.Equal(t, tt.want.PointID, stmt.PointID)
+			assert.Equal(t, tt.want.ValuesList, stmt.ValuesList)
 			assert.Equal(t, tt.want.Hybrid, stmt.Hybrid)
 			if tt.want.Model != nil {
 				assert.Equal(t, *tt.want.Model, *stmt.Model)
@@ -116,12 +114,12 @@ func TestParseInsertBulk(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
-		want  *ast.InsertBulkStmt
+		want  *ast.InsertStmt
 	}{
 		{
-			name:  "simple bulk insert",
-			input: `INSERT BULK INTO COLLECTION test VALUES [{"text": "hello"}, {"text": "world"}]`,
-			want: &ast.InsertBulkStmt{
+			name:  "comma separated bulk insert",
+			input: `INSERT INTO test VALUES {"text": "hello"}, {"text": "world"}`,
+			want: &ast.InsertStmt{
 				Collection: "test",
 				ValuesList: []map[string]any{
 					{"text": "hello"},
@@ -131,8 +129,8 @@ func TestParseInsertBulk(t *testing.T) {
 		},
 		{
 			name:  "bulk insert with hybrid models",
-			input: `INSERT BULK INTO COLLECTION test VALUES [{"text": "hello"}] USING HYBRID DENSE MODEL 'dense-model' SPARSE MODEL 'sparse-model'`,
-			want: &ast.InsertBulkStmt{
+			input: `INSERT INTO test VALUES {"text": "hello"} USING HYBRID DENSE MODEL 'dense-model' SPARSE MODEL 'sparse-model'`,
+			want: &ast.InsertStmt{
 				Collection: "test",
 				ValuesList: []map[string]any{
 					{"text": "hello"},
@@ -154,8 +152,8 @@ func TestParseInsertBulk(t *testing.T) {
 			node, err := p.Parse(tokens)
 			require.NoError(t, err)
 
-			stmt, ok := node.(*ast.InsertBulkStmt)
-			require.True(t, ok, "expected InsertBulkStmt")
+			stmt, ok := node.(*ast.InsertStmt)
+			require.True(t, ok, "expected InsertStmt")
 			assert.Equal(t, tt.want.Collection, stmt.Collection)
 			assert.Equal(t, tt.want.ValuesList, stmt.ValuesList)
 			assert.Equal(t, tt.want.Hybrid, stmt.Hybrid)

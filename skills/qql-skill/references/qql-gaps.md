@@ -5,14 +5,18 @@ Use this file when a request sounds reasonable in Qdrant terms but is still outs
 ## Not Supported Yet
 
 - local/external rerank (`RERANK` is cloud-only)
-- discovery API
-- score boosting
-- relevance feedback
-- multi-stage retrieval beyond the built-in hybrid and rerank paths
+- formula / score boosting (payload-aware score shaping, geo decay, conditional scoring)
+- relevance feedback query
+- ORDER BY (non-similarity sorting by payload field)
+- SAMPLE RANDOM (random point sampling)
+- WithPayload / WithVectors selectors (control what's returned in results)
+- per-prefetch filter/score threshold via manual prefetch DAGs (partially supported — `PREFETCH` block supports per-prefetch `WHERE` and `SCORE THRESHOLD`)
 - offset-style pagination for grouped search
 - MMR for `USING SPARSE` or `RECOMMEND`
 - custom vector on-disk toggles
-- `CREATE COLLECTION` with custom vector sizes or distance metrics
+- ReadConsistency / ShardKeySelector / Timeout controls
+- Go programmatic API (`qql.Parse()` + `qql.Execute()`)
+- batch query / mutation surfaces
 
 ## What To Say
 
@@ -27,21 +31,24 @@ Prefer plain language:
 - Need exact baseline: use `EXACT`
 - Need a single point by exact ID: use `SELECT * FROM <collection> WHERE id = ...`
 - Need to browse or export points page by page: use `SCROLL FROM <collection> ... LIMIT <n>`
-- Need recall tuning: use `WITH { hnsw_ef: ... }`
-- Need flat search pagination: use `SEARCH ... LIMIT <n> OFFSET <n>`
-- Need low-score filtering: use `SEARCH ... SCORE THRESHOLD <float|int>`
-- Need cross-collection search lookup: use `SEARCH ... LOOKUP FROM <collection> [VECTOR '<name>']`
+- Need recall tuning: use `WITH (hnsw_ef = ...)`
+- Need flat search pagination: use `QUERY ... LIMIT <n> OFFSET <n>`
+- Need low-score filtering: use `QUERY ... SCORE THRESHOLD <float|int>`
+- Need cross-collection lookup: use `QUERY ... LOOKUP FROM <collection> [VECTOR '<name>']`
 - Need keyword plus semantic retrieval: use `USING HYBRID`
-- Need hybrid DBSF fusion: use `USING HYBRID FUSION 'dbsf'`
+- Need parameterized RRF tuning: use `WITH (rrf_k = <n>, rrf_weights = [...])`
+- Need multi-stage retrieval with per-prefetch filters: use `WITH <name> AS (...) ... PREFETCH (name) FUSION RRF`
+- Need hybrid DBSF fusion: use `USING HYBRID FUSION DBSF`
 - Need better ordering: use `RERANK` (cloud only)
 - Need filtering: create an index first, then use `WHERE`
-- Need grouped top results by field: use `SEARCH ... GROUP BY <field> [GROUP_SIZE <n>]`
-- Need to patch metadata in place: use `UPDATE <collection> SET PAYLOAD ...`
-- Need to replace a stored vector: use `UPDATE <collection> SET VECTOR ...`
-- Need a runnable prototype: stay inside `CREATE`, `CREATE INDEX`, `INSERT`, `SEARCH`, `DELETE`, `RECOMMEND`
-- Need batch insert: use `INSERT BULK`
+- Need grouped top results by field: use `QUERY ... GROUP BY <field> [GROUP_SIZE <n>]`
+- Need to patch metadata in place: use `UPDATE <collection> SET PAYLOAD = {...} WHERE ...`
+- Need to replace a stored vector: use `UPDATE <collection> SET VECTOR = [...] WHERE id = ...`
+- Need a runnable prototype: stay inside `CREATE`, `CREATE INDEX`, `INSERT`, `QUERY`, `DELETE`
+- Need batch insert: use comma-separated `INSERT INTO <name> VALUES {...}, {...}`
 - Need script round-trip: use `qql-go execute` and `qql-go dump [--batch-size N]`
 - Need local inference without cloud: use `qql-go connect --inference-mode local`
+- Need score boosting or formula: use raw Qdrant SDK
 
 ## Reminder
 

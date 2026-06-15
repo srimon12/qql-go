@@ -1,10 +1,6 @@
 package parser
 
 import (
-	"sort"
-	"strconv"
-	"strings"
-
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
 	"github.com/srimon12/qql-go/internal/lexer"
@@ -12,14 +8,7 @@ import (
 
 func (p *Parser) parseInsert() (ast.ASTNode, error) {
 	p.advance()
-	if p.peek().Kind == lexer.TokenKindBulk {
-		p.advance()
-		return p.parseInsertBulk()
-	}
 	if _, err := p.expect(lexer.TokenKindInto); err != nil {
-		return nil, err
-	}
-	if _, err := p.expect(lexer.TokenKindCollection); err != nil {
 		return nil, err
 	}
 	collection, err := p.parseIdentifier()
@@ -29,58 +18,30 @@ func (p *Parser) parseInsert() (ast.ASTNode, error) {
 	if _, err := p.expect(lexer.TokenKindValues); err != nil {
 		return nil, err
 	}
-	values, err := p.parseDict()
-	if err != nil {
-		return nil, err
+
+	// Parse comma-separated dicts: {'a': 1}, {'b': 2}
+	var valuesList []map[string]any
+	for {
+		dict, err := p.parseDict()
+		if err != nil {
+			return nil, err
+		}
+		valuesList = append(valuesList, dict)
+		if p.peek().Kind == lexer.TokenKindComma {
+			p.advance()
+			continue
+		}
+		break
 	}
-	pointID, values := extractInsertPointID(values)
+	if len(valuesList) == 0 {
+		return nil, errors.NewQQLSyntaxError("INSERT VALUES requires at least one row", p.peek().Pos)
+	}
+
 	model, hybrid, sparseModel, denseVector, sparseVector, err := p.parseEmbeddingOptions()
 	if err != nil {
 		return nil, err
 	}
 	return &ast.InsertStmt{
-		Collection:   collection,
-		PointID:      pointID,
-		Values:       values,
-		Model:        model,
-		Hybrid:       hybrid,
-		SparseModel:  sparseModel,
-		DenseVector:  denseVector,
-		SparseVector: sparseVector,
-	}, nil
-}
-
-func (p *Parser) parseInsertBulk() (*ast.InsertBulkStmt, error) {
-	if _, err := p.expect(lexer.TokenKindInto); err != nil {
-		return nil, err
-	}
-	if _, err := p.expect(lexer.TokenKindCollection); err != nil {
-		return nil, err
-	}
-	collection, err := p.parseIdentifier()
-	if err != nil {
-		return nil, err
-	}
-	if _, err := p.expect(lexer.TokenKindValues); err != nil {
-		return nil, err
-	}
-	rawItems, err := p.parseList()
-	if err != nil {
-		return nil, err
-	}
-	valuesList := make([]map[string]any, 0, len(rawItems))
-	for idx, item := range rawItems {
-		dict, ok := item.(map[string]any)
-		if !ok {
-			return nil, errors.NewQQLSyntaxError("INSERT BULK VALUES item at index "+strconv.Itoa(idx)+" must be a dict", p.peek().Pos)
-		}
-		valuesList = append(valuesList, dict)
-	}
-	model, hybrid, sparseModel, denseVector, sparseVector, err := p.parseEmbeddingOptions()
-	if err != nil {
-		return nil, err
-	}
-	return &ast.InsertBulkStmt{
 		Collection:   collection,
 		ValuesList:   valuesList,
 		Model:        model,
@@ -94,16 +55,37 @@ func (p *Parser) parseInsertBulk() (*ast.InsertBulkStmt, error) {
 func extractInsertPointID(values map[string]any) (any, map[string]any) {
 	var matches []string
 	for key := range values {
-		if strings.ToLower(key) == "id" {
+		if toLowerEqual(key, "id") {
 			matches = append(matches, key)
 		}
 	}
 	if len(matches) == 0 {
 		return nil, values
 	}
-	sort.Strings(matches)
 	chosen := matches[0]
 	value := values[chosen]
 	delete(values, chosen)
 	return value, values
 }
+
+func toLowerEqual(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		ca := a[i]
+		cb := b[i]
+		if ca >= 'A' && ca <= 'Z' {
+			ca += 32
+		}
+		if cb >= 'A' && cb <= 'Z' {
+			cb += 32
+		}
+		if ca != cb {
+			return false
+		}
+	}
+	return true
+}
+
+

@@ -24,14 +24,6 @@ func TestTokenizeKeywords(t *testing.T) {
 			},
 		},
 		{
-			name:  "BULK",
-			input: "BULK",
-			expected: []Token{
-				{Kind: TokenKindBulk, Value: "BULK", Pos: 0},
-				{Kind: TokenKindEof, Value: "", Pos: 4},
-			},
-		},
-		{
 			name:  "INTO",
 			input: "INTO",
 			expected: []Token{
@@ -246,30 +238,6 @@ func TestTokenizeKeywords(t *testing.T) {
 			expected: []Token{
 				{Kind: TokenKindGroupSize, Value: "GROUP_SIZE", Pos: 0},
 				{Kind: TokenKindEof, Value: "", Pos: 10},
-			},
-		},
-		{
-			name:  "POSITIVE",
-			input: "POSITIVE",
-			expected: []Token{
-				{Kind: TokenKindPositive, Value: "POSITIVE", Pos: 0},
-				{Kind: TokenKindEof, Value: "", Pos: 8},
-			},
-		},
-		{
-			name:  "NEGATIVE",
-			input: "NEGATIVE",
-			expected: []Token{
-				{Kind: TokenKindNegative, Value: "NEGATIVE", Pos: 0},
-				{Kind: TokenKindEof, Value: "", Pos: 8},
-			},
-		},
-		{
-			name:  "IDS",
-			input: "IDS",
-			expected: []Token{
-				{Kind: TokenKindIds, Value: "IDS", Pos: 0},
-				{Kind: TokenKindEof, Value: "", Pos: 3},
 			},
 		},
 		{
@@ -852,49 +820,47 @@ func TestTokenizePunctuation(t *testing.T) {
 
 func TestTokenizeFullQuery(t *testing.T) {
 	lexer := &Lexer{}
-	input := `INSERT INTO COLLECTION mycol VALUES {"text": "hello", "vector": [0.1, 0.2]}`
+	input := `INSERT INTO mycol VALUES {"text": "hello", "vector": [0.1, 0.2]}`
 	tokens, err := lexer.Tokenize(input)
 	require.NoError(t, err)
 
 	assert.Equal(t, TokenKindInsert, tokens[0].Kind)
 	assert.Equal(t, TokenKindInto, tokens[1].Kind)
-	assert.Equal(t, TokenKindCollection, tokens[2].Kind)
-	assert.Equal(t, TokenKindIdentifier, tokens[3].Kind)
-	assert.Equal(t, "mycol", tokens[3].Value)
-	assert.Equal(t, TokenKindValues, tokens[4].Kind)
-	assert.Equal(t, TokenKindLbrace, tokens[5].Kind)
-	assert.Equal(t, TokenKindString, tokens[6].Kind)
-	assert.Equal(t, "text", tokens[6].Value)
-	assert.Equal(t, TokenKindColon, tokens[7].Kind)
-	assert.Equal(t, TokenKindString, tokens[8].Kind)
-	assert.Equal(t, "hello", tokens[8].Value)
-	assert.Equal(t, TokenKindComma, tokens[9].Kind)
-	assert.Equal(t, TokenKindString, tokens[10].Kind)
-	assert.Equal(t, "vector", tokens[10].Value)
-	assert.Equal(t, TokenKindColon, tokens[11].Kind)
-	assert.Equal(t, TokenKindLbracket, tokens[12].Kind)
-	assert.Equal(t, TokenKindFloat, tokens[13].Kind)
-	assert.Equal(t, TokenKindComma, tokens[14].Kind)
-	assert.Equal(t, TokenKindFloat, tokens[15].Kind)
-	assert.Equal(t, TokenKindRbracket, tokens[16].Kind)
-	assert.Equal(t, TokenKindRbrace, tokens[17].Kind)
-	assert.Equal(t, TokenKindEof, tokens[18].Kind)
+	assert.Equal(t, TokenKindIdentifier, tokens[2].Kind)
+	assert.Equal(t, "mycol", tokens[2].Value)
+	assert.Equal(t, TokenKindValues, tokens[3].Kind)
+	assert.Equal(t, TokenKindLbrace, tokens[4].Kind)
+	assert.Equal(t, TokenKindString, tokens[5].Kind)
+	assert.Equal(t, "text", tokens[5].Value)
+	assert.Equal(t, TokenKindColon, tokens[6].Kind)
+	assert.Equal(t, TokenKindString, tokens[7].Kind)
+	assert.Equal(t, "hello", tokens[7].Value)
+	assert.Equal(t, TokenKindComma, tokens[8].Kind)
+	assert.Equal(t, TokenKindString, tokens[9].Kind)
+	assert.Equal(t, "vector", tokens[9].Value)
+	assert.Equal(t, TokenKindColon, tokens[10].Kind)
+	assert.Equal(t, TokenKindLbracket, tokens[11].Kind)
+	assert.Equal(t, TokenKindFloat, tokens[12].Kind)
+	assert.Equal(t, TokenKindComma, tokens[13].Kind)
+	assert.Equal(t, TokenKindFloat, tokens[14].Kind)
+	assert.Equal(t, TokenKindRbracket, tokens[15].Kind)
+	assert.Equal(t, TokenKindRbrace, tokens[16].Kind)
+	assert.Equal(t, TokenKindEof, tokens[17].Kind)
 }
 
 func TestTokenizeSearchQuery(t *testing.T) {
 	lexer := &Lexer{}
-	input := `SEARCH mycol SIMILAR TO 'query text' LIMIT 10`
+	input := `QUERY NEAREST 'query text' FROM mycol LIMIT 10`
 	tokens, err := lexer.Tokenize(input)
 	require.NoError(t, err)
 
-	assert.Equal(t, TokenKindIdentifier, tokens[1].Kind)
-	assert.Equal(t, "mycol", tokens[1].Value)
-	assert.Equal(t, TokenKindIdentifier, tokens[2].Kind)
-	assert.Equal(t, "SIMILAR", tokens[2].Value)
-	assert.Equal(t, TokenKindIdentifier, tokens[3].Kind)
-	assert.Equal(t, "TO", tokens[3].Value)
-	assert.Equal(t, TokenKindString, tokens[4].Kind)
-	assert.Equal(t, "query text", tokens[4].Value)
+	assert.Equal(t, TokenKindQuery, tokens[0].Kind)
+	assert.Equal(t, TokenKindNearest, tokens[1].Kind)
+	assert.Equal(t, TokenKindString, tokens[2].Kind)
+	assert.Equal(t, "query text", tokens[2].Value)
+	assert.Equal(t, TokenKindFrom, tokens[3].Kind)
+	assert.Equal(t, TokenKindIdentifier, tokens[4].Kind)
+	assert.Equal(t, "mycol", tokens[4].Value)
 	assert.Equal(t, TokenKindLimit, tokens[5].Kind)
 	assert.Equal(t, TokenKindInteger, tokens[6].Kind)
 	assert.Equal(t, "10", tokens[6].Value)

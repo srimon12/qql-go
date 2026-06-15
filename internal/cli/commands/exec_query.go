@@ -15,22 +15,28 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 	ctx, cancel := e.defaultContext()
 	defer cancel()
 
-	// 1. Resolve embedding options
 	denseVectorName := ""
 	sparseVectorName := ""
 	if stmt.Using != nil {
 		denseVectorName = *stmt.Using
 		sparseVectorName = *stmt.Using
+	} else {
+		topo, err := e.resolveVectorTopology(ctx, stmt.Collection)
+		if err == nil && topo != nil && topo.DenseVector != nil && *topo.DenseVector != "" {
+			denseVectorName = *topo.DenseVector
+			if topo.SparseVector != nil && *topo.SparseVector != "" {
+				sparseVectorName = *topo.SparseVector
+			}
+		}
 	}
 
 	denseModel := e.resolveDenseModel(stmt.Model)
 	var sparseModel *string
 	if stmt.Type == ast.QueryTypeHybrid {
-		sparseModelStr := e.resolveSparseModel(stmt.Model)
-		sparseModel = &sparseModelStr
+		sm := e.resolveSparseModel(stmt.Model)
+		sparseModel = &sm
 	}
 
-	// 2. Build filter (pure AST→protobuf conversion, no I/O)
 	var qdrantFilter *qdrant.Filter
 	if stmt.QueryFilter != nil {
 		var err error
@@ -40,7 +46,6 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 		}
 	}
 
-	// 3. Populate QueryState with ALL request-level fields
 	state := &pipeline.QueryState{
 		Embedder:          e,
 		LocalEmbed:        e.usesLocalEmbeddings(),
@@ -88,7 +93,22 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 		}
 	}
 
-	// 4. Build & execute pipeline (only embeds transform; request assembly is in BuildXxxRequest)
+	// 2a. Resolve CTEs into PrefetchQuery pointers (recursive)
+	cteMap, err := e.resolveCTEs(ctx, stmt.CTEs)
+	if err != nil {
+		return nil, err
+	}
+	if len(stmt.PrefetchRefs) > 0 && len(cteMap) > 0 {
+		for _, ref := range stmt.PrefetchRefs {
+			if pq, ok := cteMap[ref.CTEName]; ok {
+				state.ManualPrefetches = append(state.ManualPrefetches, pq)
+			} else {
+				return nil, fmt.Errorf("unknown CTE referenced in prefetch: '%s'", ref.CTEName)
+			}
+		}
+	}
+
+	// 3. Build & execute pipeline
 	execPipeline := pipeline.NewQueryPipeline()
 
 	switch stmt.Mode {
@@ -99,12 +119,6 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 			if stmt.QueryText != nil {
 				state.QueryText = *stmt.QueryText
 			}
-
-			// Add manual prefetches first
-			if len(stmt.Prefetches) > 0 {
-				execPipeline.Add(&pipeline.PrefetchNode{ASTPrefetches: stmt.Prefetches})
-			}
-
 			switch stmt.Type {
 			case ast.QueryTypeHybrid:
 				execPipeline.Add(&pipeline.DenseEmbedNode{
@@ -130,21 +144,20 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 					VectorName: sparseVectorName,
 					Limit:      uint64(stmt.Limit),
 				})
+				state.VectorName = sparseVectorName
 			default:
-				// If we have manual prefetches, the main dense query itself isn't necessarily the only top-level node unless explicitly provided.
-				// Wait, if there are prefetches, does the main query text become the target? Or is there no target?
-				// The FUSION clause decides the target if there are prefetches!
 				if stmt.QueryText != nil {
 					execPipeline.Add(&pipeline.DenseEmbedNode{
 						Model:      denseModel,
 						VectorName: denseVectorName,
 						Limit:      uint64(stmt.Limit),
 					})
+					state.VectorName = denseVectorName
 				}
 			}
-
 			if stmt.FusionType != nil && stmt.Type != ast.QueryTypeHybrid {
 				execPipeline.Add(&pipeline.FusionNode{Mode: strings.ToLower(*stmt.FusionType)})
+				state.VectorName = ""
 			}
 		}
 
@@ -154,6 +167,7 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 			NegativeIDs: stmt.NegativeIDs,
 			Strategy:    stmt.Strategy,
 		})
+		state.VectorName = denseVectorName
 
 	case ast.QueryModeContext:
 		pairs := make([]pipeline.ContextPair, len(stmt.ContextPairs))
@@ -161,6 +175,7 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 			pairs[i] = pipeline.ContextPair{Positive: p.Positive, Negative: p.Negative}
 		}
 		execPipeline.Add(&pipeline.ContextNode{Pairs: pairs})
+		state.VectorName = denseVectorName
 
 	case ast.QueryModeDiscover:
 		pairs := make([]pipeline.ContextPair, len(stmt.ContextPairs))
@@ -168,6 +183,7 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 			pairs[i] = pipeline.ContextPair{Positive: p.Positive, Negative: p.Negative}
 		}
 		execPipeline.Add(&pipeline.DiscoverNode{Target: stmt.Target, Pairs: pairs})
+		state.VectorName = denseVectorName
 	}
 
 	if stmt.Rerank {
@@ -182,11 +198,148 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 		return nil, err
 	}
 
-	// 5. Pipeline owns request construction — executor just calls Qdrant
 	if state.GroupBy != "" {
 		return e.executeGroupedQuery(ctx, execPipeline, state)
 	}
 	return e.executeFlatQuery(ctx, execPipeline, state)
+}
+
+// resolveCTEs builds a map from CTE name to *qdrant.PrefetchQuery.
+// CTEs are built in definition order and can only reference previously defined CTEs.
+func (e *Executor) resolveCTEs(ctx context.Context, ctes []ast.CTE) (map[string]*qdrant.PrefetchQuery, error) {
+	if len(ctes) == 0 {
+		return nil, nil
+	}
+	
+	built := make(map[string]*qdrant.PrefetchQuery, len(ctes))
+	
+	for _, cte := range ctes {
+		pq, err := e.buildCTEPrefetch(ctx, cte.Stmt, built)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build CTE '%s': %w", cte.Name, err)
+		}
+		built[cte.Name] = pq
+	}
+	return built, nil
+}
+
+// buildCTEPrefetch builds a single *qdrant.PrefetchQuery from a CTE's QueryStmt,
+// resolving embedded PrefetchRefs against the (possibly partially built) CTE map.
+func (e *Executor) buildCTEPrefetch(ctx context.Context, stmt *ast.QueryStmt, cteMap map[string]*qdrant.PrefetchQuery) (*qdrant.PrefetchQuery, error) {
+	pq := &qdrant.PrefetchQuery{}
+
+	denseModel := e.resolveDenseModel(stmt.Model)
+
+	// Resolve nested PrefetchRefs first
+	for _, ref := range stmt.PrefetchRefs {
+		if nested, ok := cteMap[ref.CTEName]; ok {
+			pq.Prefetch = append(pq.Prefetch, nested)
+		} else {
+			return nil, fmt.Errorf("unknown CTE referenced in prefetch: '%s'", ref.CTEName)
+		}
+	}
+
+	if stmt.Using != nil {
+		pq.Using = qdrant.PtrOf(*stmt.Using)
+	}
+	if stmt.Limit > 0 {
+		pq.Limit = qdrant.PtrOf(uint64(stmt.Limit))
+	}
+	if stmt.ScoreThreshold != nil {
+		pq.ScoreThreshold = qdrant.PtrOf(float32(*stmt.ScoreThreshold))
+	}
+	if stmt.LookupFrom != "" {
+		pq.LookupFrom = &qdrant.LookupLocation{
+			CollectionName: stmt.LookupFrom,
+		}
+		if stmt.LookupVector != nil {
+			pq.LookupFrom.VectorName = qdrant.PtrOf(*stmt.LookupVector)
+		}
+	}
+	if stmt.QueryFilter != nil {
+		filter, err := filters.NewFilterConverter().BuildFilter(stmt.QueryFilter)
+		if err != nil {
+			return nil, err
+		}
+		pq.Filter = filter
+	}
+	if stmt.WithClause != nil {
+		pq.Params = pipeline.BuildSearchParams(stmt.WithClause)
+	}
+
+	// Build query based on mode
+	switch stmt.Mode {
+	case ast.QueryModeRecommend:
+		pos := make([]*qdrant.VectorInput, len(stmt.PositiveIDs))
+		for i, id := range stmt.PositiveIDs {
+			pid, _ := buildPointID(id)
+			pos[i] = qdrant.NewVectorInputID(pid)
+		}
+		neg := make([]*qdrant.VectorInput, len(stmt.NegativeIDs))
+		for i, id := range stmt.NegativeIDs {
+			pid, _ := buildPointID(id)
+			neg[i] = qdrant.NewVectorInputID(pid)
+		}
+		pq.Query = qdrant.NewQueryRecommend(&qdrant.RecommendInput{
+			Positive: pos,
+			Negative: neg,
+		})
+
+	case ast.QueryModeNearest:
+		if stmt.QueryText != nil {
+			isSparse := stmt.Type == ast.QueryTypeSparse
+			if isSparse {
+				if e.usesLocalEmbeddings() {
+					indices, values, err := e.EmbedSparse(ctx, *stmt.QueryText)
+					if err != nil {
+						return nil, err
+					}
+					pq.Query = qdrant.NewQuerySparse(indices, values)
+				} else {
+					pq.Query = qdrant.NewQueryDocument(&qdrant.Document{
+						Text:    *stmt.QueryText,
+						Model:   e.resolveSparseModel(stmt.Model),
+						Options: buildDocumentOptionsFromMap(e.cloudModelOptions()),
+					})
+				}
+			} else {
+				if e.usesLocalEmbeddings() {
+					dense, err := e.EmbedDense(ctx, *stmt.QueryText, denseModel)
+					if err != nil {
+						return nil, err
+					}
+					pq.Query = qdrant.NewQueryDense(dense)
+				} else {
+					pq.Query = qdrant.NewQueryDocument(&qdrant.Document{
+						Text:    *stmt.QueryText,
+						Model:   denseModel,
+						Options: buildDocumentOptionsFromMap(e.cloudModelOptions()),
+					})
+				}
+			}
+		} else if stmt.QueryID != nil {
+			pid, _ := buildPointID(stmt.QueryID)
+			pq.Query = qdrant.NewQueryNearest(qdrant.NewVectorInputID(pid))
+		}
+	}
+
+	return pq, nil
+}
+
+// buildPointID converts a point ID value (string or int) to *qdrant.PointId.
+func buildPointID(val any) (*qdrant.PointId, error) {
+	switch v := val.(type) {
+	case string:
+		return qdrant.NewIDUUID(v), nil
+	case int:
+		return qdrant.NewIDNum(uint64(v)), nil
+	case uint64:
+		return qdrant.NewIDNum(v), nil
+	case float64:
+		return qdrant.NewIDNum(uint64(v)), nil
+	default:
+		return nil, fmt.Errorf("unsupported point id type %T", val)
+	}
 }
 
 func (e *Executor) executeFlatQuery(ctx context.Context, p *pipeline.QueryPipeline, state *pipeline.QueryState) (*ExecResponse, error) {

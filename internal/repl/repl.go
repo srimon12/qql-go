@@ -241,25 +241,29 @@ func (r *REPL) printHelp() {
   \033[33mSHOW COLLECTIONS\033[0m
       List all collections in the connected Qdrant instance.
 
-  \033[33mSEARCH\033[0m <name> \033[33mSIMILAR TO\033[0m '<text>' \033[33mLIMIT\033[0m <n>
-	  Semantic search by vector similarity.
+  \033[33mQUERY\033[0m ['<text>' | <id> | NEAREST '<text>' | RECOMMEND WITH (positive = (...)) | CONTEXT PAIRS (...) | DISCOVER TARGET <id>]
+      \033[33mFROM\033[0m <collection> \033[33mLIMIT\033[0m <n>
+	  Universal query: text, point-ID, recommend, context, or discover.
       Optional: \033[33mOFFSET\033[0m <n>
       Optional: \033[33mSCORE THRESHOLD\033[0m <float|int>
       Optional: \033[33mLOOKUP FROM\033[0m <collection> [\033[33mVECTOR\033[0m '<vector_name>']
+      Optional: \033[33mUSING\033[0m HYBRID | SPARSE | DENSE | '<vector_name>'
       Optional: \033[33mUSING MODEL\033[0m '<model>'
-	  Optional: \033[33mUSING HYBRID\033[0m [\033[33mFUSION\033[0m 'rrf|dbsf'] [\033[33mDENSE MODEL\033[0m '<model>'] [\033[33mSPARSE MODEL\033[0m '<model>']
-      Optional: \033[33mUSING SPARSE\033[0m [\033[33mMODEL\033[0m '<model>']
       Optional: \033[33mWHERE\033[0m <filter>
       Optional: \033[33mRERANK\033[0m [\033[33mMODEL\033[0m '<model>']
       Optional: \033[33mEXACT\033[0m
-      Optional: \033[33mWITH\033[0m { hnsw_ef: <int>, exact: <bool>, acorn: <bool>, indexed_only: <bool>, quantization: { ignore: <bool>, rescore: <bool>, oversampling: <n> }, mmr_diversity: <0..1>, mmr_candidates: <int> }
+      Optional: \033[33mWITH\033[0m (hnsw_ef = <int>, exact = <bool>, ...)
       Optional: \033[33mGROUP BY\033[0m <field> [\033[33mGROUP_SIZE\033[0m <n>]
-                  Group results by a payload field value (default GROUP_SIZE: 3).
-                  OFFSET and RERANK cannot be combined with GROUP BY.
+      Optional: \033[33mPREFETCH\033[0m (<cte_name>, ...)
+      Optional: \033[33mFUSION\033[0m RRF | DBSF
 
-  \033[33mRECOMMEND FROM\033[0m <name> \033[33mPOSITIVE IDS\033[0m (<id>, ...)
+  \033[33mWITH\033[0m <name> \033[33mAS\033[0m (\033[33mQUERY\033[0m ...) [, ...]
+      Define named sub-queries (CTEs) for multi-stage retrieval.
+      Reference them in the main query: \033[33mPREFETCH\033[0m (name1, name2)
+
+  \033[33mQUERY RECOMMEND\033[0m \033[33mWITH\033[0m (positive = (<id>, ...), negative = (<id>, ...))
+      \033[33mFROM\033[0m <name> \033[33mLIMIT\033[0m <n>
       Find points similar to known examples.
-      Optional: \033[33mNEGATIVE IDS\033[0m (<id>, ...)
       Optional: \033[33mSTRATEGY\033[0m 'average_vector|best_score|sum_scores'
       Optional: \033[33mLOOKUP FROM\033[0m <collection> [\033[33mVECTOR\033[0m '<vector_name>']
       Optional: \033[33mUSING\033[0m '<vector_name>'

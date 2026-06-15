@@ -61,9 +61,9 @@ $env:QQL_BIN = "C:\path\to\qql-go.exe"
 
 `qql-go` supports three inference modes:
 
-- `cloud` — Qdrant Cloud inference (default)
-- `local` — local Qdrant + local OpenAI-compatible embedding server
-- `external` — any Qdrant + external OpenAI-compatible embedding endpoint
+- `local` — local Qdrant + local embedding server (default)
+- `cloud` — Qdrant Cloud inference
+- `external` — any Qdrant + external embedding endpoint
 
 For local mode, connect with the extra embedding flags:
 
@@ -91,7 +91,7 @@ qql-go connect \
 
 Requirements for local/external mode:
 
-- `--embedding-endpoint` — an OpenAI-compatible `/v1/embeddings` endpoint
+- `--embedding-endpoint` — an embedding endpoint API (e.g., standard /v1/embeddings used by Ollama, LM Studio, Cohere, etc.)
 - `--embedding-key` — optional bearer token for hosted embedding providers
 - `--embedding-model` — the model name to pass in the request
 - `--embedding-dimension` — optional; auto-probed from the endpoint if omitted and reachable

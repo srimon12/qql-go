@@ -6,7 +6,65 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 ## [Unreleased]
 
-- No unreleased changes yet.
+### Added
+
+- **Unified QUERY statement** — `QUERY` replaces `SEARCH` and `RECOMMEND` as a single statement with 4 modes: `NEAREST` (default), `RECOMMEND`, `CONTEXT`, and `DISCOVER`. All modes share the same clause surface: `LIMIT`, `OFFSET`, `SCORE THRESHOLD`, `LOOKUP FROM`, `USING`, `WITH`, `WHERE`, `RERANK`, `GROUP BY`, `GROUP_SIZE`, `STRATEGY`, `EXACT`.
+- **Manual prefetch DAGs** — `PREFETCH (...)` block syntax for explicit multi-stage retrieval with per-prefetch filters, limits, score thresholds, lookup, and nested prefetches.
+- **Parameterized RRF** — `WITH (rrf_k = <n>, rrf_weights: [<float>, ...])` exposes Qdrant's parameterized Reciprocal Rank Fusion with configurable K and per-source weights.
+- **FUSION keyword** — `FUSION RRF` / `FUSION DBSF` for explicit fusion mode selection with manual prefetch DAGs.
+- **CONTEXT and DISCOVER query modes** — `QUERY CONTEXT PAIRS ((pos, neg), ...)` and `QUERY DISCOVER TARGET <id> CONTEXT PAIRS (...)` for context-aware and exploration search.
+- **Configurable BM25 parameters** — BM25 `k1`, `b`, and `avgdl` are now configurable from `~/.qql/config.json`.
+- **Multi-vector DDL** — `CREATE COLLECTION <name> (name VECTOR(size, DISTANCE), ...)` for explicit named-vector schemas with custom sizes and distance metrics.
+- **ALTER COLLECTION** — `ALTER COLLECTION` with `WITH VECTORS`, `WITH HNSW`, `WITH OPTIMIZERS`, `WITH PARAMS`, and `QUANTIZE` / `QUANTIZE DISABLED`.
+- **Duplicate clause detection** — `EXACT`, `GROUP_SIZE`, `STRATEGY`, and `FUSION` clauses now reject duplicates with explicit syntax errors.
+
+### Changed
+
+- **BREAKING:** `SEARCH <collection> SIMILAR TO '<text>'` is removed. Use `QUERY '<text>' FROM <collection>` instead.
+- **BREAKING:** `RECOMMEND FROM <collection> POSITIVE IDS (...)` is removed. Use `QUERY RECOMMEND WITH (positive = (...), negative = (...)) FROM <collection>` instead.
+- **BREAKING:** `internal/utils` package deleted. All callers migrated to `strings.ToUpper` / `strings.ToLower`.
+- Parser and executor broken into focused submodules: `exec_query.go`, `exec_insert.go`, `exec_manage.go`, `exec_select.go`, `exec_update.go`, `cli_cmds.go`, `client.go`, `utils.go` (from `commands.go`); `parse_query.go`, `parse_create.go`, `parse_insert.go`, `parse_update.go`, `parse_manage.go`, `parse_search.go` (from `parser.go`).
+- Execution pipeline now uses a proper DAG (`DenseEmbedNode`, `SparseEmbedNode`, `FusionNode`, `RerankNode`, `RecommendNode`, `ContextNode`, `DiscoverNode`, `PrefetchNode`) with request assembly delegated to `BuildFlatRequest` / `BuildGroupedRequest`.
+- All RPC calls now use a 30-second default timeout via `defaultContext()`.
+- `Upsert` now sets `Wait` consistently with other write operations.
+- `RecommendStrategy` now does case-insensitive matching (`'Average_Vector'` works).
+- `SparseEmbedNode` now explicitly rejects MMR mode instead of silently ignoring it.
+- Config file permissions restricted from `0o644` to `0o600` (contains secrets).
+- Config global state protected by `sync.RWMutex` (was unsynchronized).
+- Hash space expanded from 20-bit to full 32-bit (reduces BM25 token collision probability).
+- Tokenizer `maybeToken` now uses `utf8.RuneCountInString` instead of `len` (correct for non-ASCII text).
+
+### Fixed
+
+- Hybrid search broken by `sparseVectorName` copying `denseVectorName` (both prefetches targeted the same vector).
+- `buildInsertVectorsBatch` used `sparseVectorName` constant instead of `sparseName` parameter in local mode.
+- Error from `resolveVectorTopology` used before check in insert and update paths.
+- Error from `resolveVectorTopology` silently overwritten in `doUpdateVector`.
+- Parser `advance()` panicked on empty token list.
+- Non-deterministic map iteration for ID extraction (Go maps have random iteration order).
+- `newPointID` cast negative `int` to `uint64` without validation (wraps to ~18 quintillion).
+- `newPointID` mapped string `"123"` to `NewIDUUID` instead of coercing to `uint64` first.
+- `int(v.IntegerValue)` truncated `int64` on 32-bit platforms in select and dump paths.
+- `toFloat64` returned `nil` for unsupported types (silent filter corruption in range conditions).
+- `parseInt64` / `toFloat64Value` returned `0` silently for unknown types in filters.
+- `parseUint64` had no overflow protection and returned `0, nil` for empty strings.
+- Timer leak in `waitForCollectionReady` (`time.After` in loop → `time.NewTimer`).
+- Race conditions in `fake_client_test.go` (reads without mutex).
+- `RunFile` swallowed the actual error from `executor.Execute` on stop-on-error.
+- `buildDeleteRequest` used `fmt.Sprintf` + `parseUint64` roundtrip instead of `newPointID`.
+- `buildUpdateVectorRequest` made redundant `GetCollectionInfo` RPC call (caller already had topology).
+- `GROUP_SIZE` token was never consumed by `p.advance()` (was dead code).
+- `seenWith` flag not set on first `WITH` clause, allowing duplicate `WITH` blocks.
+- Variable shadowing in `parseEmbeddingOptions` where `denseVector` was declared then immediately shadowed.
+- 8 false-positive parser tests that tested dead `SEARCH` syntax and passed only because `SEARCH` is not a keyword.
+- `buildVectorInput` rejected `int64` and `uint64` types (common Go database ID types).
+- `buildRecommendVectorInputs` silently dropped unsupported types and wrapped negative integers.
+- `FusionNode` silently defaulted to RRF for unknown fusion modes.
+- `insertPointIDAndPayload` did case-sensitive `"id"` lookup (missing `"ID"`, `"Id"`).
+- `collectionHasRerankVector` and `formatSearchResults` were dead code (zero callers).
+- Dump `escapeString` did not escape control characters (`\n`, `\r`, `\t`, `\0`).
+- Dump `buildDumpCreateLine` panicked on nil config (missing nil check).
+- `cloneConfig` shallow-copied `CloudModelOptions` map (shared mutation).
 
 ## [0.2.0] - 2026-05-21
 

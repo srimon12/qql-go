@@ -60,8 +60,6 @@ func (e *Executor) ExecuteResult(query string) (*ExecResponse, error) {
 		return e.doDropCollection(n)
 	case *ast.InsertStmt:
 		return e.doInsert(n)
-	case *ast.InsertBulkStmt:
-		return e.doInsertBulk(n)
 	case *ast.SelectStmt:
 		return e.doSelect(n)
 	case *ast.ScrollStmt:
@@ -589,22 +587,8 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		} else {
 			plan.WriteString("Search: DENSE\n")
 		}
-		if n.PointID != nil {
-			plan.WriteString(fmt.Sprintf("Point ID: %v\n", n.PointID))
-		}
-		plan.WriteString("Action: Insert point with auto-vectorization\n")
-	case *ast.InsertBulkStmt:
-		plan.WriteString(fmt.Sprintf("Statement: INSERT BULK INTO %s\n", n.Collection))
-		if n.Model != nil && *n.Model != "" {
-			plan.WriteString(fmt.Sprintf("Model: %s\n", *n.Model))
-		}
-		if n.Hybrid {
-			plan.WriteString("Search: HYBRID (dense + sparse)\n")
-		} else {
-			plan.WriteString("Search: DENSE\n")
-		}
-		plan.WriteString(fmt.Sprintf("Batch size: %d\n", len(n.ValuesList)))
-		plan.WriteString("Action: Insert multiple points with auto-vectorization\n")
+		plan.WriteString(fmt.Sprintf("Rows: %d\n", len(n.ValuesList)))
+		plan.WriteString("Action: Insert point(s) with auto-vectorization\n")
 	case *ast.SelectStmt:
 		plan.WriteString(fmt.Sprintf("Statement: SELECT * FROM %s WHERE id = '%v'\n", n.Collection, n.PointID))
 		plan.WriteString("Action: Retrieve a single point by ID\n")
@@ -637,15 +621,15 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			plan.WriteString("Action: Delete point by ID\n")
 		}
 	case *ast.UpdateVectorStmt:
-		plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET VECTOR WHERE id = '%v'\n", n.Collection, n.PointID))
+		plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET VECTOR = [...] WHERE id = '%v'\n", n.Collection, n.PointID))
 		plan.WriteString(fmt.Sprintf("Vector length: %d\n", len(n.Vector)))
 		plan.WriteString("Action: Update point vector\n")
 	case *ast.UpdatePayloadStmt:
 		if n.QueryFilter != nil {
-			plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET PAYLOAD WHERE %s\n", n.Collection, e.filterToString(n.QueryFilter)))
+			plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET PAYLOAD = {...} WHERE %s\n", n.Collection, e.filterToString(n.QueryFilter)))
 			plan.WriteString("Action: Update payload for points matching filter\n")
 		} else {
-			plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET PAYLOAD WHERE id = '%v'\n", n.Collection, n.PointID))
+			plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET PAYLOAD = {...} WHERE id = '%v'\n", n.Collection, n.PointID))
 			plan.WriteString("Action: Update payload for point by ID\n")
 		}
 	case *ast.CreateIndexStmt:
