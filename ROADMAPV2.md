@@ -143,7 +143,7 @@ QUERY 'search' FROM docs LIMIT 10
 
 Features that improve search relevance and enable advanced retrieval patterns.
 
-### 5. Parameterized RRF `[OPEN]`
+### 5. Parameterized RRF `[DONE]`
 
 **Problem:** Qdrant supports `Rrf` as a structured query variant with `K` (rank constant) and `Weights` (per-prefetch source weights). QQL only uses the bare `Fusion_RRF` enum, which uses default K=60 and equal weights.
 
@@ -199,7 +199,7 @@ QUERY 'search' FROM docs LIMIT 10
 
 Features that change how queries are constructed, not just what fields they support.
 
-### 8. Manual Prefetch DAG Construction `[OPEN]`
+### 8. Manual Prefetch DAG Construction `[DONE]`
 
 **Problem:** QQL's pipeline auto-generates prefetches for hybrid search (dense + sparse + fusion). But the Qdrant API supports arbitrary nested prefetch DAGs for multi-stage retrieval. QQL has no syntax for manual prefetch construction.
 
@@ -369,12 +369,12 @@ Phase 1 — Query Completeness (high impact, moderate effort)
   4.  Formula / score boosting (Phase 1)       [Largest Phase 1 item]
 
 Phase 2 — Retrieval Quality (advanced features)
-  5.  Parameterized RRF (K, weights)           [Small extension to FusionNode]
+  5.  Parameterized RRF (K, weights)           [DONE]
   6.  Per-prefetch filter/score threshold      [Blocked by #8]
   7.  Relevance feedback query                 [Defer — narrow use case]
 
 Phase 3 — Query Architecture (structural)
-  8.  Manual prefetch DAG construction         [Significant grammar work]
+  8.  Manual prefetch DAG construction         [DONE]
   9.  Cross-collection lookup (WITH LOOKUP)    [Small, extends GROUP BY]
 
 Phase 4 — Operational Completeness
@@ -416,7 +416,7 @@ Phase 6 — Platform
 | ORDER BY | ❌ | ❌ | Both missing |
 | SAMPLE RANDOM | ❌ | ❌ | Both missing |
 | WithPayload/WithVectors selectors | ❌ | ❌ | Both missing |
-| Parameterized RRF | ❌ | ❌ | Both missing |
+| Parameterized RRF | ❌ | ✅ | Python gap |
 | Programmatic API | ✅ `run_query()` | ❌ | Go gap |
 
 ---
