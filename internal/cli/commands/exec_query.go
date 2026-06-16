@@ -116,7 +116,7 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 				return nil, fmt.Errorf("unknown CTE referenced in prefetch: '%s'", ref.CTEName)
 			}
 			// Apply per-prefetch overrides
-			if ref.Filter != nil || ref.ScoreThreshold != nil {
+			if ref.Filter != nil || ref.ScoreThreshold != nil || ref.LookupFrom != "" {
 				clone := &qdrant.PrefetchQuery{
 					Prefetch:   pq.Prefetch,
 					Query:      pq.Query,
@@ -135,6 +135,14 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 				}
 				if ref.ScoreThreshold != nil {
 					clone.ScoreThreshold = qdrant.PtrOf(float32(*ref.ScoreThreshold))
+				}
+				if ref.LookupFrom != "" {
+					clone.LookupFrom = &qdrant.LookupLocation{
+						CollectionName: ref.LookupFrom,
+					}
+					if ref.LookupVector != nil {
+						clone.LookupFrom.VectorName = qdrant.PtrOf(*ref.LookupVector)
+					}
 				}
 				state.ManualPrefetches = append(state.ManualPrefetches, clone)
 			} else {

@@ -71,9 +71,11 @@ const (
 )
 
 type VectorDef struct {
-	Name     string
-	Size     uint64
-	Distance VectorDistance
+	Name         string
+	Size         uint64
+	Distance     VectorDistance
+	Hnsw         *HnswRuntimeConfig
+	Quantization *QuantizationConfig
 }
 
 type SparseVectorDef struct {
@@ -193,6 +195,8 @@ type PrefetchRef struct {
 	CTEName        string
 	Filter         FilterExpr // per-prefetch WHERE clause
 	ScoreThreshold *float64   // per-prefetch SCORE THRESHOLD
+	LookupFrom     string     // per-prefetch LOOKUP FROM <collection>
+	LookupVector   *string    // per-prefetch LOOKUP FROM ... VECTOR <name>
 }
 
 type QueryStmt struct {

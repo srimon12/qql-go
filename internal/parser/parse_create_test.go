@@ -439,3 +439,35 @@ func TestParseCreateMultiVector(t *testing.T) {
 	require.NotNil(t, create.Config.Hnsw)
 	require.Equal(t, uint64(32), *create.Config.Hnsw.M)
 }
+
+func TestParseCreateMultiVectorWithOverrides(t *testing.T) {
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(`CREATE COLLECTION test_overrides (
+		dense_vec VECTOR(384, COSINE) WITH HNSW { m: 16 } QUANTIZE SCALAR ALWAYS RAM,
+		colbert_vec VECTOR(128, DOT) QUANTIZE TURBO BITS 2
+	)`)
+	require.NoError(t, err)
+
+	p := NewParser()
+	stmt, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	create, ok := stmt.(*ast.CreateCollectionStmt)
+	require.True(t, ok)
+	require.Equal(t, "test_overrides", create.Collection)
+	require.Len(t, create.Vectors, 2)
+
+	require.Equal(t, "dense_vec", create.Vectors[0].Name)
+	require.NotNil(t, create.Vectors[0].Hnsw)
+	require.Equal(t, uint64(16), *create.Vectors[0].Hnsw.M)
+	require.NotNil(t, create.Vectors[0].Quantization)
+	require.Equal(t, ast.QuantizationTypeScalar, create.Vectors[0].Quantization.Type)
+	require.True(t, create.Vectors[0].Quantization.AlwaysRAM)
+
+	require.Equal(t, "colbert_vec", create.Vectors[1].Name)
+	require.Nil(t, create.Vectors[1].Hnsw)
+	require.NotNil(t, create.Vectors[1].Quantization)
+	require.Equal(t, ast.QuantizationTypeTurbo, create.Vectors[1].Quantization.Type)
+	require.NotNil(t, create.Vectors[1].Quantization.TurboBits)
+	require.Equal(t, float64(2.0), *create.Vectors[1].Quantization.TurboBits)
+}

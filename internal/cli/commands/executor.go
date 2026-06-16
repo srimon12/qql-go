@@ -1277,10 +1277,21 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 			case ast.DistanceManhattan:
 				qDist = qdrant.Distance_Manhattan
 			}
-			paramsMap[v.Name] = &qdrant.VectorParams{
+			vp := &qdrant.VectorParams{
 				Size:     v.Size,
 				Distance: qDist,
 			}
+			if v.Hnsw != nil {
+				vp.HnswConfig = buildHnswConfigDiff(v.Hnsw)
+			}
+			if v.Quantization != nil {
+				qc, err := buildQuantizationConfig(v.Quantization)
+				if err != nil {
+					return nil, err
+				}
+				vp.QuantizationConfig = qc
+			}
+			paramsMap[v.Name] = vp
 		}
 		vectorsConfig = qdrant.NewVectorsConfigMap(paramsMap)
 	} else {

@@ -446,6 +446,24 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 					}
 				}
 
+				// Optional per-prefetch LOOKUP FROM
+				if p.peek().Kind == lexer.TokenKindLookup {
+					p.advance()
+					if _, err := p.expect(lexer.TokenKindFrom); err != nil {
+						return
+					}
+					lookupFrom, err := p.parseIdentifier()
+					if err != nil {
+						return
+					}
+					ref.LookupFrom = lookupFrom
+					if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && strings.ToUpper(p.peek().Value) == "VECTOR") {
+						p.advance()
+						lv, _ := p.parseStringPtr()
+						ref.LookupVector = lv
+					}
+				}
+
 				stmt.PrefetchRefs = append(stmt.PrefetchRefs, ref)
 
 				if p.peek().Kind == lexer.TokenKindComma {

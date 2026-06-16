@@ -287,6 +287,27 @@ QUERY 'search' FROM docs LIMIT 10 PREFETCH (a WHERE priority = 'high' SCORE THRE
 	assert.InDelta(t, 0.8, *stmt.PrefetchRefs[0].ScoreThreshold, 1e-6)
 }
 
+func TestParseQueryPrefetchPerRefLookup(t *testing.T) {
+	input := `WITH a AS (QUERY 'search' USING dense LIMIT 100)
+QUERY 'search' FROM docs LIMIT 10 PREFETCH (a LOOKUP FROM external_col VECTOR 'dense_vec') FUSION RRF`
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	require.Len(t, stmt.PrefetchRefs, 1)
+	assert.Equal(t, "a", stmt.PrefetchRefs[0].CTEName)
+	assert.Equal(t, "external_col", stmt.PrefetchRefs[0].LookupFrom)
+	require.NotNil(t, stmt.PrefetchRefs[0].LookupVector)
+	assert.Equal(t, "dense_vec", *stmt.PrefetchRefs[0].LookupVector)
+}
+
 func TestParseQueryOrderBy(t *testing.T) {
 	input := "QUERY ORDER BY timestamp ASC FROM logs LIMIT 100"
 	l := &lexer.Lexer{}

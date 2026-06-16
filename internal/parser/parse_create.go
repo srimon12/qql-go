@@ -71,10 +71,33 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 				if _, err := p.expect(lexer.TokenKindRparen); err != nil {
 					return nil, err
 				}
+				
+				var hnsw *ast.HnswRuntimeConfig
+				if p.peek().Kind == lexer.TokenKindWith {
+					p.advance()
+					if p.peek().Kind == lexer.TokenKindHnsw {
+						p.advance()
+						block, err := p.parseHnswConfigBlock()
+						if err != nil {
+							return nil, err
+						}
+						hnsw = block.Hnsw
+					} else {
+						return nil, errors.NewQQLSyntaxError("Expected HNSW after WITH for vector configuration", p.peek().Pos)
+					}
+				}
+				
+				quant, err := p.parseOptionalCreateQuantization()
+				if err != nil {
+					return nil, err
+				}
+
 				explicitVectors = append(explicitVectors, ast.VectorDef{
-					Name:     nameTok.Value,
-					Size:     uint64(size),
-					Distance: distance,
+					Name:         nameTok.Value,
+					Size:         uint64(size),
+					Distance:     distance,
+					Hnsw:         hnsw,
+					Quantization: quant,
 				})
 			} else if p.peek().Kind == lexer.TokenKindSparse {
 				p.advance()
