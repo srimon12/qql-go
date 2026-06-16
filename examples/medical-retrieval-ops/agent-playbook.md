@@ -15,7 +15,9 @@ qql-go exec --quiet --json "QUERY '<medical question>' FROM medical_retrieval_op
 qql-go exec --quiet --json "QUERY '<medical question>' FROM medical_retrieval_ops LIMIT 5 USING HYBRID WHERE specialty = '<expected specialty>'"
 qql-go exec --quiet --json "QUERY '<medical question>' FROM medical_retrieval_ops LIMIT 6 SCORE THRESHOLD 0.5 USING HYBRID GROUP BY specialty GROUP_SIZE 2"
 qql-go exec --quiet --json "SELECT * FROM medical_retrieval_ops WHERE id = <best_result_id>"
-qql-go exec --quiet --json "QUERY RECOMMEND WITH (positive = (<best_result_id>) LIMIT 5"
+qql-go exec --quiet --json "QUERY RECOMMEND WITH (positive = (<best_result_id>)) FROM medical_retrieval_ops LIMIT 5"
+qql-go exec --quiet --json "QUERY ORDER BY case_priority DESC FROM medical_retrieval_ops LIMIT 5"
+qql-go exec --quiet --json "QUERY '<medical question>' FROM medical_retrieval_ops LIMIT 5 USING HYBRID WITH PAYLOAD (exclude = ['reference'])"
 ```
 
 ## Report

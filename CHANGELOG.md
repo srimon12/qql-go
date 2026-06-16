@@ -8,9 +8,11 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 ### Added
 
+- **ORDER BY** — `QUERY ORDER BY <field> [ASC|DESC] FROM <collection> LIMIT <n>` for pagination and sorting without similarity scoring.
+- **Payload and Vector Selectors** — `WITH PAYLOAD` and `WITH VECTORS` clauses for granular control over returned fields (e.g., `WITH PAYLOAD (include = ['title'], exclude = ['metadata']) WITH VECTORS ('dense')`).
 - **Unified QUERY statement** — `QUERY` replaces `SEARCH` and `RECOMMEND` as a single statement with 4 modes: `NEAREST` (default), `RECOMMEND`, `CONTEXT`, and `DISCOVER`. All modes share the same clause surface: `LIMIT`, `OFFSET`, `SCORE THRESHOLD`, `LOOKUP FROM`, `USING`, `WITH`, `WHERE`, `RERANK`, `GROUP BY`, `GROUP_SIZE`, `STRATEGY`, `EXACT`.
-- **Manual prefetch DAGs** — `PREFETCH (...)` block syntax for explicit multi-stage retrieval with per-prefetch filters, limits, score thresholds, lookup, and nested prefetches.
-- **Parameterized RRF** — `WITH (rrf_k = <n>, rrf_weights: [<float>, ...])` exposes Qdrant's parameterized Reciprocal Rank Fusion with configurable K and per-source weights.
+- **Manual prefetch DAGs via CTEs** — `WITH <name> AS (QUERY ...), ... QUERY ... PREFETCH (<name>, ...) FUSION RRF` for explicit multi-stage retrieval with per-prefetch filters, limits, and nested CTE references.
+- **Parameterized RRF** — `WITH (rrf_k = <n>, rrf_weights = [<float>, ...])` exposes Qdrant's parameterized Reciprocal Rank Fusion.
 - **FUSION keyword** — `FUSION RRF` / `FUSION DBSF` for explicit fusion mode selection with manual prefetch DAGs.
 - **CONTEXT and DISCOVER query modes** — `QUERY CONTEXT PAIRS ((pos, neg), ...)` and `QUERY DISCOVER TARGET <id> CONTEXT PAIRS (...)` for context-aware and exploration search.
 - **Configurable BM25 parameters** — BM25 `k1`, `b`, and `avgdl` are now configurable from `~/.qql/config.json`.

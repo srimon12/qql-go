@@ -81,3 +81,29 @@ QUERY 'search' FROM docs LIMIT 10 WITH (hnsw_ef = 128, exact = true, acorn = tru
 ```sql
 QUERY 'search' FROM docs LIMIT 10 USING HYBRID GROUP BY category GROUP_SIZE 3
 ```
+
+## Pagination without similarity score (ORDER BY)
+
+```sql
+-- Retrieve the 10 most recently published articles from the tech category,
+-- sorted chronologically (newest first) rather than by semantic similarity.
+-- Useful for standard list views where exact ordering is strictly required.
+QUERY ORDER BY published_at DESC FROM articles 
+  WHERE category = 'tech' AND status = 'published'
+  LIMIT 10 OFFSET 20
+```
+
+## Field and Vector selection (WITH PAYLOAD / WITH VECTORS)
+
+```sql
+-- Execute a semantic search on medical records, but heavily restrict the returned
+-- payload to only what's necessary for the UI (title, summary, url).
+-- We explicitly exclude heavy fields to drastically reduce network transfer latency.
+-- We also explicitly request the 'dense_v2' vector back for downstream local processing.
+QUERY 'acute bronchitis treatment' FROM medical_records 
+  USING HYBRID 
+  WHERE specialty = 'pulmonology'
+  LIMIT 10
+  WITH PAYLOAD (include = ['title', 'summary', 'url'], exclude = ['raw_text', 'embedding'])
+  WITH VECTORS ('dense_v2')
+```

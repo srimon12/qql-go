@@ -81,7 +81,7 @@ DELETE FROM <name> WHERE <filter_expression>
 
 ### Query
 ```sql
-QUERY ['<text>' | <id> | NEAREST '<text>' | RECOMMEND WITH (positive = (...), negative = (...)) [STRATEGY '<strategy>'] | CONTEXT PAIRS (...) | DISCOVER TARGET <id> CONTEXT PAIRS (...)]
+QUERY ['<text>' | <id> | RECOMMEND WITH (positive = (...), negative = (...)) [STRATEGY '<strategy>'] | CONTEXT PAIRS (...) | DISCOVER TARGET <id> CONTEXT PAIRS (...) | ORDER BY <field> [ASC|DESC]]
 FROM <collection>
   [PREFETCH ( <cte_name>, ... ) FUSION <RRF | DBSF>]
   [LOOKUP FROM <collection> [VECTOR '<name>']]
@@ -90,6 +90,8 @@ FROM <collection>
   [WHERE <filter_expression>]
   [GROUP BY <field> [GROUP_SIZE <m>]]
   [WITH (hnsw_ef = <n>, exact = <bool>, acorn = <bool>, mmr_diversity = <f>, mmr_candidates = <n>, rrf_k = <n>, rrf_weights = [...])]
+  [WITH PAYLOAD [true | false | (include = ['<field>', ...], exclude = ['<field>', ...])]]
+  [WITH VECTORS [true | false | ('<name>', ...)]]
   [RERANK [MODEL '<model>']]
   [EXACT]
   [LIMIT <n>] [OFFSET <n>] [SCORE THRESHOLD <float>]
