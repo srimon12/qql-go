@@ -157,6 +157,29 @@ QUERY 'search' FROM docs LIMIT 10 PREFETCH (p1, p2) FUSION RRF WITH (rrf_k = 10,
 	assert.Equal(t, float32(0.3), stmt.WithClause.RrfWeights[1])
 }
 
+func TestParseQueryWithLookup(t *testing.T) {
+	input := "QUERY 'search' FROM docs LIMIT 10 GROUP BY 'category' GROUP_SIZE 5 WITH LOOKUP FROM metadata"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	assert.Equal(t, "docs", stmt.Collection)
+	assert.Equal(t, 10, stmt.Limit)
+	require.NotNil(t, stmt.GroupBy)
+	assert.Equal(t, "category", *stmt.GroupBy)
+	require.NotNil(t, stmt.GroupSize)
+	assert.Equal(t, 5, *stmt.GroupSize)
+	require.NotNil(t, stmt.WithLookupCollection)
+	assert.Equal(t, "metadata", *stmt.WithLookupCollection)
+}
+
 func TestParseQueryPrefetchEdgeCases(t *testing.T) {
 	tests := []struct {
 		name    string

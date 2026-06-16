@@ -43,8 +43,9 @@ type QueryState struct {
 	WithVectors    *qdrant.WithVectorsSelector
 
 	// --- GroupBy ---
-	GroupBy   string
-	GroupSize uint64
+	GroupBy    string
+	GroupSize  uint64
+	WithLookup *qdrant.WithLookup
 }
 
 // ExecutionNode defines a single step in the QQL Query Planner DAG.
@@ -126,6 +127,7 @@ func (p *QueryPipeline) BuildGroupedRequest(state *QueryState) *qdrant.QueryPoin
 		Params:         flat.Params,
 		WithPayload:    flat.WithPayload,
 		WithVectors:    flat.WithVectors,
+		WithLookup:     state.WithLookup,
 	}
 }
 

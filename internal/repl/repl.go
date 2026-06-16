@@ -253,7 +253,7 @@ func (r *REPL) printHelp() {
       Optional: \033[33mRERANK\033[0m [\033[33mMODEL\033[0m '<model>']
       Optional: \033[33mEXACT\033[0m
       Optional: \033[33mWITH\033[0m (hnsw_ef = <int>, exact = <bool>, ...)
-      Optional: \033[33mGROUP BY\033[0m <field> [\033[33mGROUP_SIZE\033[0m <n>]
+      Optional: \033[33mGROUP BY\033[0m <field> [\033[33mGROUP_SIZE\033[0m <n>] [\033[33mWITH LOOKUP FROM\033[0m <collection>]
       Optional: \033[33mPREFETCH\033[0m (<cte_name> [\033[33mWHERE\033[0m <filter>] [\033[33mSCORE THRESHOLD\033[0m <n>], ...)
       Optional: \033[33mFUSION\033[0m RRF | DBSF
 
@@ -316,10 +316,6 @@ func (r *REPL) addToHistory(cmd string) {
 	if len(r.history) > 100 {
 		r.history = r.history[len(r.history)-100:]
 	}
-}
-
-func isWordChar(ch rune) bool {
-	return unicode.IsLetter(ch) || unicode.IsDigit(ch) || ch == '_' || ch == '-'
 }
 
 func cutCommandPrefix(input, prefix string) (string, bool) {

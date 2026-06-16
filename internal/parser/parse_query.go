@@ -521,6 +521,17 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 				}
 				stmt.WithVectors = parsed
 				seenWith = false // allow other WITH clauses
+			} else if p.peek().Kind == lexer.TokenKindLookup {
+				p.advance()
+				if _, err := p.expect(lexer.TokenKindFrom); err != nil {
+					return
+				}
+				collection, err := p.parseIdentifier()
+				if err != nil {
+					return
+				}
+				stmt.WithLookupCollection = &collection
+				seenWith = false // allow other WITH clauses
 			} else {
 				parsed, err := p.parseWithClause()
 				if err != nil {
