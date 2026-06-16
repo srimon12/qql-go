@@ -117,7 +117,7 @@ func TestExplainSelectAndScrollQueries(t *testing.T) {
 	})
 
 	t.Run("turbo quantization explain", func(t *testing.T) {
-		plan, err := exec.Explain(`CREATE COLLECTION docs QUANTIZE TURBO BITS 2 ALWAYS RAM`)
+		plan, err := exec.Explain(`CREATE COLLECTION docs WITH QUANTIZATION (type = 'turbo', bits = 2, always_ram = true)`)
 		require.NoError(t, err)
 		require.Contains(t, plan, "Quantization: turbo")
 		require.Contains(t, plan, "Turbo bits: 2")

@@ -65,7 +65,7 @@ func TestExecutorExplainDocumentedQueries(t *testing.T) {
 		},
 		{
 			name:  "create with quantization",
-			query: "CREATE COLLECTION docs QUANTIZE SCALAR QUANTILE 0.95 ALWAYS RAM",
+			query: "CREATE COLLECTION docs WITH QUANTIZATION (type = 'scalar', quantile = 0.95, always_ram = true)",
 			wants: []string{
 				"Statement: CREATE COLLECTION docs",
 				"Quantization: scalar",

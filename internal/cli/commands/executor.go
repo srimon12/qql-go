@@ -531,15 +531,15 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 				plan.WriteString(fmt.Sprintf("HNSW payload_m: %d\n", *n.Config.Hnsw.PayloadM))
 			}
 		}
-		if n.Quantization != nil {
-			plan.WriteString(fmt.Sprintf("Quantization: %s\n", n.Quantization.Type))
-			if n.Quantization.Quantile != nil {
-				plan.WriteString(fmt.Sprintf("Quantile: %.4f\n", *n.Quantization.Quantile))
+		if n.Config != nil && n.Config.Quantization != nil {
+			plan.WriteString(fmt.Sprintf("Quantization: %s\n", n.Config.Quantization.Type))
+			if n.Config.Quantization.Quantile != nil {
+				plan.WriteString(fmt.Sprintf("Quantile: %.4f\n", *n.Config.Quantization.Quantile))
 			}
-			if n.Quantization.TurboBits != nil {
-				plan.WriteString(fmt.Sprintf("Turbo bits: %g\n", *n.Quantization.TurboBits))
+			if n.Config.Quantization.TurboBits != nil {
+				plan.WriteString(fmt.Sprintf("Turbo bits: %g\n", *n.Config.Quantization.TurboBits))
 			}
-			if n.Quantization.AlwaysRAM {
+			if n.Config.Quantization.AlwaysRAM {
 				plan.WriteString("Quantization storage: ALWAYS RAM\n")
 			}
 		}
@@ -567,11 +567,11 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 				plan.WriteString("Alteration: Params config\n")
 			}
 		}
-		if n.Quantization != nil {
-			if n.Quantization.Disabled {
+		if n.Config != nil && n.Config.QuantizationUpdate != nil {
+			if n.Config.QuantizationUpdate.Disabled {
 				plan.WriteString("Alteration: Disable quantization\n")
 			} else {
-				plan.WriteString(fmt.Sprintf("Alteration: %s quantization\n", n.Quantization.Config.Type))
+				plan.WriteString(fmt.Sprintf("Alteration: %s quantization\n", n.Config.QuantizationUpdate.Config.Type))
 			}
 		}
 		plan.WriteString("Action: Alter existing collection\n")
@@ -1285,11 +1285,11 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 				vp.HnswConfig = buildHnswConfigDiff(v.Hnsw)
 			}
 			if v.Quantization != nil {
-				qc, err := buildQuantizationConfig(v.Quantization)
+				cfg, err := buildQuantizationConfig(v.Quantization)
 				if err != nil {
 					return nil, err
 				}
-				vp.QuantizationConfig = qc
+				vp.QuantizationConfig = cfg
 			}
 			paramsMap[v.Name] = vp
 		}
@@ -1322,8 +1322,8 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 			applyCollectionParamsCreate(n.Config.Params, collection)
 		}
 	}
-	if n.Quantization != nil {
-		collection.QuantizationConfig, err = buildQuantizationConfig(n.Quantization)
+	if n.Config != nil && n.Config.Quantization != nil {
+		collection.QuantizationConfig, err = buildQuantizationConfig(n.Config.Quantization)
 		if err != nil {
 			return nil, err
 		}
@@ -1364,8 +1364,8 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 		message += " (multi-vector schema)"
 	}
 
-	if n.Quantization != nil {
-		message = strings.TrimSuffix(message, ")") + fmt.Sprintf(", %s quantization)", n.Quantization.Type)
+	if n.Config != nil && n.Config.Quantization != nil {
+		message = strings.TrimSuffix(message, ")") + fmt.Sprintf(", %s quantization)", n.Config.Quantization.Type)
 	}
 	return &ExecResponse{
 		OK:        true,
@@ -1442,9 +1442,9 @@ func (e *Executor) doAlterCollection(n *ast.AlterCollectionStmt) (*ExecResponse,
 			req.Params = buildCollectionParamsDiff(n.Config.Params)
 		}
 	}
-	if n.Quantization != nil {
+	if n.Config != nil && n.Config.QuantizationUpdate != nil {
 		var err error
-		req.QuantizationConfig, err = buildAlterQuantizationConfig(n.Quantization)
+		req.QuantizationConfig, err = buildAlterQuantizationConfig(n.Config.QuantizationUpdate)
 		if err != nil {
 			return nil, err
 		}

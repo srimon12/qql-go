@@ -40,41 +40,47 @@ func TestParseCreate(t *testing.T) {
 		},
 		{
 			name:  "create with scalar quantization",
-			input: "CREATE COLLECTION mycollection QUANTIZE SCALAR",
+			input: "CREATE COLLECTION mycollection WITH QUANTIZATION (type = 'scalar')",
 			want: &ast.CreateCollectionStmt{
 				Collection: "mycollection",
-				Quantization: &ast.QuantizationConfig{
-					Type: ast.QuantizationTypeScalar,
+				Config: &ast.CollectionConfig{
+					Quantization: &ast.QuantizationConfig{
+						Type: ast.QuantizationTypeScalar,
+					},
 				},
 			},
 		},
 		{
 			name:  "create with scalar quantization integer boundary",
-			input: "CREATE COLLECTION mycollection QUANTIZE SCALAR QUANTILE 1",
+			input: "CREATE COLLECTION mycollection WITH QUANTIZATION (type = 'scalar', quantile = 1)",
 			want: &ast.CreateCollectionStmt{
 				Collection: "mycollection",
-				Quantization: &ast.QuantizationConfig{
-					Type:     ast.QuantizationTypeScalar,
-					Quantile: float64Ptr(1.0),
+				Config: &ast.CollectionConfig{
+					Quantization: &ast.QuantizationConfig{
+						Type:     ast.QuantizationTypeScalar,
+						Quantile: float64Ptr(1.0),
+					},
 				},
 			},
 		},
 		{
 			name:  "create with hybrid rerank product quantization",
-			input: "CREATE COLLECTION mycollection HYBRID RERANK QUANTIZE PRODUCT ALWAYS RAM",
+			input: "CREATE COLLECTION mycollection HYBRID RERANK WITH QUANTIZATION (type = 'product', always_ram = true)",
 			want: &ast.CreateCollectionStmt{
 				Collection: "mycollection",
 				Hybrid:     true,
 				Rerank:     true,
-				Quantization: &ast.QuantizationConfig{
-					Type:      ast.QuantizationTypeProduct,
-					AlwaysRAM: true,
+				Config: &ast.CollectionConfig{
+					Quantization: &ast.QuantizationConfig{
+						Type:      ast.QuantizationTypeProduct,
+						AlwaysRAM: true,
+					},
 				},
 			},
 		},
 		{
 			name:  "create with payload hnsw",
-			input: "CREATE COLLECTION mycollection WITH HNSW {payload_m: 16}",
+			input: "CREATE COLLECTION mycollection WITH HNSW (payload_m = 16)",
 			want: &ast.CreateCollectionStmt{
 				Collection: "mycollection",
 				Config: &ast.CollectionConfig{
@@ -104,15 +110,16 @@ func TestParseCreate(t *testing.T) {
 			if tt.want.Model != nil {
 				assert.Equal(t, *tt.want.Model, *stmt.Model)
 			}
-			if tt.want.Quantization != nil {
-				require.NotNil(t, stmt.Quantization)
-				assert.Equal(t, tt.want.Quantization.Type, stmt.Quantization.Type)
-				assert.Equal(t, tt.want.Quantization.AlwaysRAM, stmt.Quantization.AlwaysRAM)
-				if tt.want.Quantization.Quantile != nil {
-					require.NotNil(t, stmt.Quantization.Quantile)
-					assert.InDelta(t, *tt.want.Quantization.Quantile, *stmt.Quantization.Quantile, 0.0001)
+			if tt.want.Config != nil && tt.want.Config.Quantization != nil {
+				require.NotNil(t, stmt.Config)
+				require.NotNil(t, stmt.Config.Quantization)
+				assert.Equal(t, tt.want.Config.Quantization.Type, stmt.Config.Quantization.Type)
+				assert.Equal(t, tt.want.Config.Quantization.AlwaysRAM, stmt.Config.Quantization.AlwaysRAM)
+				if tt.want.Config.Quantization.Quantile != nil {
+					require.NotNil(t, stmt.Config.Quantization.Quantile)
+					assert.InDelta(t, *tt.want.Config.Quantization.Quantile, *stmt.Config.Quantization.Quantile, 0.0001)
 				} else {
-					assert.Nil(t, stmt.Quantization.Quantile)
+					assert.Nil(t, stmt.Config.Quantization.Quantile)
 				}
 			}
 			if tt.want.Config != nil {
@@ -132,7 +139,7 @@ func TestParseCreate(t *testing.T) {
 
 func TestParseCollectionConfigCaseVariantKeysAreDeterministic(t *testing.T) {
 	l := &lexer.Lexer{}
-	tokens, err := l.Tokenize("CREATE COLLECTION docs WITH HNSW { M: 32, m: 16 }")
+	tokens, err := l.Tokenize("CREATE COLLECTION docs WITH HNSW ( M = 32, m = 16 )")
 	require.NoError(t, err)
 
 	p := NewParser()
@@ -154,27 +161,27 @@ func TestParseCollectionConfigRejectsNonPositiveValues(t *testing.T) {
 	}{
 		{
 			name:  "hnsw m zero",
-			input: "CREATE COLLECTION docs WITH HNSW { m: 0 }",
+			input: "CREATE COLLECTION docs WITH HNSW ( m = 0 )",
 			want:  "m must be a positive integer",
 		},
 		{
 			name:  "params replication factor zero",
-			input: "CREATE COLLECTION docs WITH PARAMS { replication_factor: 0 }",
+			input: "CREATE COLLECTION docs WITH PARAMS ( replication_factor = 0 )",
 			want:  "replication_factor must be a positive integer",
 		},
 		{
 			name:  "hnsw full scan threshold negative",
-			input: "CREATE COLLECTION docs WITH HNSW { full_scan_threshold: -1 }",
+			input: "CREATE COLLECTION docs WITH HNSW ( full_scan_threshold = -1 )",
 			want:  "full_scan_threshold must be a non-negative integer",
 		},
 		{
 			name:  "optimizer indexing threshold negative",
-			input: "CREATE COLLECTION docs WITH OPTIMIZERS { indexing_threshold: -1 }",
+			input: "CREATE COLLECTION docs WITH OPTIMIZERS ( indexing_threshold = -1 )",
 			want:  "indexing_threshold must be a non-negative integer",
 		},
 		{
 			name:  "alter read fan out delay negative",
-			input: "ALTER COLLECTION docs WITH PARAMS { read_fan_out_delay_ms: -1 }",
+			input: "ALTER COLLECTION docs WITH PARAMS ( read_fan_out_delay_ms = -1 )",
 			want:  "read_fan_out_delay_ms must be a non-negative integer",
 		},
 	}
@@ -203,15 +210,15 @@ func TestParseCreateQuantizeErrors(t *testing.T) {
 		},
 		{
 			name:  "unknown quantize type",
-			input: "CREATE COLLECTION docs QUANTIZE FULL",
+			input: "CREATE COLLECTION docs WITH QUANTIZATION (type = 'full')",
 		},
 		{
 			name:  "quantile above one",
-			input: "CREATE COLLECTION docs QUANTIZE SCALAR QUANTILE 1.5",
+			input: "CREATE COLLECTION docs WITH QUANTIZATION (type = 'scalar', quantile = 1.5)",
 		},
 		{
 			name:  "quantile integer above one",
-			input: "CREATE COLLECTION docs QUANTIZE SCALAR QUANTILE 2",
+			input: "CREATE COLLECTION docs WITH QUANTIZATION (type = 'scalar', quantile = 2)",
 		},
 	}
 
@@ -281,7 +288,7 @@ func TestParseCreateIndex(t *testing.T) {
 		},
 		{
 			name:  "create index with keyword options",
-			input: "CREATE INDEX ON COLLECTION mycollection FOR tenant_id TYPE keyword WITH {is_tenant: true, on_disk: true, enable_hnsw: false}",
+			input: "CREATE INDEX ON COLLECTION mycollection FOR tenant_id TYPE keyword WITH (is_tenant = true, on_disk = true, enable_hnsw = false)",
 			want: &ast.CreateIndexStmt{
 				Collection: "mycollection",
 				Field:      "tenant_id",
@@ -295,7 +302,7 @@ func TestParseCreateIndex(t *testing.T) {
 		},
 		{
 			name:  "create index with text options",
-			input: "CREATE INDEX ON COLLECTION mycollection FOR title TYPE text WITH {tokenizer: 'word', min_token_len: 2, max_token_len: 20, lowercase: true}",
+			input: "CREATE INDEX ON COLLECTION mycollection FOR title TYPE text WITH (tokenizer = 'word', min_token_len = 2, max_token_len = 20, lowercase = true)",
 			want: &ast.CreateIndexStmt{
 				Collection: "mycollection",
 				Field:      "title",
@@ -343,32 +350,20 @@ func TestParseCreateCollectionWithTurboQuantization(t *testing.T) {
 		wantRAM  bool
 	}{
 		{
-			name:     "turbo without bits",
-			input:    `CREATE COLLECTION docs QUANTIZE TURBO`,
+			name:     "turbo default",
+			input:    `CREATE COLLECTION docs WITH QUANTIZATION (type = 'turbo')`,
 			wantType: ast.QuantizationTypeTurbo,
-		},
-		{
-			name:     "turbo bits 4",
-			input:    `CREATE COLLECTION docs QUANTIZE TURBO BITS 4`,
-			wantType: ast.QuantizationTypeTurbo,
-			wantBits: float64Ptr(4.0),
-		},
-		{
-			name:     "turbo bits 2 always ram",
-			input:    `CREATE COLLECTION docs QUANTIZE TURBO BITS 2 ALWAYS RAM`,
-			wantType: ast.QuantizationTypeTurbo,
-			wantBits: float64Ptr(2.0),
-			wantRAM:  true,
+			wantRAM:  false,
 		},
 		{
 			name:     "turbo bits 1.5",
-			input:    `CREATE COLLECTION docs QUANTIZE TURBO BITS 1.5`,
+			input:    `CREATE COLLECTION docs WITH QUANTIZATION (type = 'turbo', bits = 1.5)`,
 			wantType: ast.QuantizationTypeTurbo,
 			wantBits: float64Ptr(1.5),
 		},
 		{
 			name:     "turbo bits 1 always ram",
-			input:    `CREATE COLLECTION docs QUANTIZE TURBO BITS 1 ALWAYS RAM`,
+			input:    `CREATE COLLECTION docs WITH QUANTIZATION (type = 'turbo', bits = 1, always_ram = true)`,
 			wantType: ast.QuantizationTypeTurbo,
 			wantBits: float64Ptr(1.0),
 			wantRAM:  true,
@@ -384,25 +379,26 @@ func TestParseCreateCollectionWithTurboQuantization(t *testing.T) {
 			require.NoError(t, err)
 			create, ok := node.(*ast.CreateCollectionStmt)
 			require.True(t, ok, "expected CreateCollectionStmt, got %T", node)
-			require.NotNil(t, create.Quantization)
-			assert.Equal(t, tt.wantType, create.Quantization.Type)
-			assert.Equal(t, tt.wantRAM, create.Quantization.AlwaysRAM)
+			require.NotNil(t, create.Config)
+			require.NotNil(t, create.Config.Quantization)
+			assert.Equal(t, tt.wantType, create.Config.Quantization.Type)
+			assert.Equal(t, tt.wantRAM, create.Config.Quantization.AlwaysRAM)
 			if tt.wantBits != nil {
-				require.NotNil(t, create.Quantization.TurboBits)
-				assert.InDelta(t, *tt.wantBits, *create.Quantization.TurboBits, 0.0001)
+				require.NotNil(t, create.Config.Quantization.TurboBits)
+				assert.InDelta(t, *tt.wantBits, *create.Config.Quantization.TurboBits, 0.0001)
 			} else {
-				assert.Nil(t, create.Quantization.TurboBits)
+				assert.Nil(t, create.Config.Quantization.TurboBits)
 			}
 		})
 	}
 
 	t.Run("invalid turbo bits", func(t *testing.T) {
 		l := &lexer.Lexer{}
-		tokens, err := l.Tokenize(`CREATE COLLECTION docs QUANTIZE TURBO BITS 3`)
+		tokens, err := l.Tokenize(`CREATE COLLECTION docs WITH QUANTIZATION (type = 'turbo', bits = 3)`)
 		require.NoError(t, err)
 		_, err = NewParser().Parse(tokens)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "BITS must be one of 1, 1.5, 2, or 4")
+		require.Contains(t, err.Error(), "bits must be one of 1, 1.5, 2, or 4")
 	})
 }
 
@@ -412,7 +408,7 @@ func TestParseCreateMultiVector(t *testing.T) {
 		dense_text VECTOR(384, COSINE),
 		clip_img VECTOR(512, DOT),
 		bm25_text SPARSE
-	) WITH HNSW { m: 32 }`)
+	) WITH HNSW ( m = 32 )`)
 	require.NoError(t, err)
 
 	p := NewParser()
@@ -443,8 +439,8 @@ func TestParseCreateMultiVector(t *testing.T) {
 func TestParseCreateMultiVectorWithOverrides(t *testing.T) {
 	l := &lexer.Lexer{}
 	tokens, err := l.Tokenize(`CREATE COLLECTION test_overrides (
-		dense_vec VECTOR(384, COSINE) WITH HNSW { m: 16 } QUANTIZE SCALAR ALWAYS RAM,
-		colbert_vec VECTOR(128, DOT) QUANTIZE TURBO BITS 2
+		dense_vec VECTOR(384, COSINE) WITH HNSW ( m = 16 ) WITH QUANTIZATION (type = 'scalar', always_ram = true),
+		colbert_vec VECTOR(128, DOT) WITH QUANTIZATION (type = 'turbo', bits = 2)
 	)`)
 	require.NoError(t, err)
 

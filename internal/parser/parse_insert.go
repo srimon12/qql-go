@@ -22,7 +22,7 @@ func (p *Parser) parseInsert() (ast.ASTNode, error) {
 	// Parse comma-separated dicts: {'a': 1}, {'b': 2}
 	var valuesList []map[string]any
 	for {
-		dict, err := p.parseDict()
+		dict, err := p.parsePayloadDict()
 		if err != nil {
 			return nil, err
 		}

@@ -50,10 +50,12 @@ type CollectionParamsConfig struct {
 }
 
 type CollectionConfig struct {
-	Vectors    *VectorsConfig
-	Hnsw       *HnswRuntimeConfig
-	Optimizers *OptimizersRuntimeConfig
-	Params     *CollectionParamsConfig
+	Vectors            *VectorsConfig
+	Hnsw               *HnswRuntimeConfig
+	Optimizers         *OptimizersRuntimeConfig
+	Params             *CollectionParamsConfig
+	Quantization       *QuantizationConfig
+	QuantizationUpdate *QuantizationUpdate
 }
 
 type QuantizationUpdate struct {
@@ -93,14 +95,12 @@ type CreateCollectionStmt struct {
 	Vectors       []VectorDef
 	SparseVectors []SparseVectorDef
 
-	Quantization *QuantizationConfig
 	Config       *CollectionConfig
 }
 
 type AlterCollectionStmt struct {
-	Collection   string
-	Config       *CollectionConfig
-	Quantization *QuantizationUpdate
+	Collection string
+	Config     *CollectionConfig
 }
 
 type QuantizationType string
