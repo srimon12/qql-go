@@ -224,13 +224,13 @@ func newEmbeddingServer(t *testing.T, embedding []float32) *httptest.Server {
 func TestBuildWithPayload(t *testing.T) {
 	val := false
 	assert.Equal(t, false, buildWithPayload(&ast.PayloadSelector{Enable: &val}).GetEnable())
-	
+
 	include := []string{"title"}
 	assert.Equal(t, include, buildWithPayload(&ast.PayloadSelector{Include: include}).GetInclude().GetFields())
-	
+
 	exclude := []string{"embedding"}
 	assert.Equal(t, exclude, buildWithPayload(&ast.PayloadSelector{Exclude: exclude}).GetExclude().GetFields())
-	
+
 	assert.Nil(t, buildWithPayload(nil))
 	assert.Nil(t, buildWithPayload(&ast.PayloadSelector{})) // Empty selector
 }
@@ -238,10 +238,10 @@ func TestBuildWithPayload(t *testing.T) {
 func TestBuildWithVectors(t *testing.T) {
 	val := true
 	assert.Equal(t, true, buildWithVectors(&ast.VectorsSelector{Enable: &val}).GetEnable())
-	
+
 	vectors := []string{"dense"}
 	assert.Equal(t, vectors, buildWithVectors(&ast.VectorsSelector{Vectors: vectors}).GetInclude().GetNames())
-	
+
 	assert.Nil(t, buildWithVectors(nil))
 	assert.Nil(t, buildWithVectors(&ast.VectorsSelector{})) // Empty selector
 }

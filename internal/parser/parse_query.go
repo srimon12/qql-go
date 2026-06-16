@@ -398,166 +398,195 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 			}
 
 		case lexer.TokenKindPrefetch:
-		p.advance()
-		if _, err := p.expect(lexer.TokenKindLparen); err != nil {
-			return
-		}
-		for p.peek().Kind != lexer.TokenKindRparen {
-			if p.peek().Kind == lexer.TokenKindIdentifier {
-				stmt.PrefetchRefs = append(stmt.PrefetchRefs, ast.PrefetchRef{CTEName: p.peek().Value})
+			p.advance()
+			if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+				return
+			}
+			for p.peek().Kind != lexer.TokenKindRparen {
+				if p.peek().Kind != lexer.TokenKindIdentifier {
+					break
+				}
+				ref := ast.PrefetchRef{CTEName: p.peek().Value}
 				p.advance()
-			} else {
-				break
+
+				// Optional per-prefetch WHERE
+				if p.peek().Kind == lexer.TokenKindWhere {
+					p.advance()
+					filter, err := p.parseFilterExpr()
+					if err != nil {
+						return
+					}
+					ref.Filter = filter
+				}
+
+				// Optional per-prefetch SCORE THRESHOLD
+				if p.peek().Kind == lexer.TokenKindScore {
+					p.advance()
+					if _, err := p.expect(lexer.TokenKindThreshold); err != nil {
+						return
+					}
+					scoreTok := p.peek()
+					if scoreTok.Kind == lexer.TokenKindFloat || scoreTok.Kind == lexer.TokenKindInteger {
+						p.advance()
+						f, err := parseFloatToken(scoreTok)
+						if err != nil {
+							return
+						}
+						ref.ScoreThreshold = &f
+					}
+				}
+
+				stmt.PrefetchRefs = append(stmt.PrefetchRefs, ref)
+
+				if p.peek().Kind == lexer.TokenKindComma {
+					p.advance()
+				} else {
+					break
+				}
 			}
-			if p.peek().Kind == lexer.TokenKindComma {
+			p.expect(lexer.TokenKindRparen)
+
+		case lexer.TokenKindFusion:
+			if seenFusion {
+				return
+			}
+			seenFusion = true
+			p.advance()
+			fusionTok := p.peek()
+			if fusionTok.Kind != lexer.TokenKindIdentifier || (strings.ToUpper(fusionTok.Value) != "RRF" && strings.ToUpper(fusionTok.Value) != "DBSF") {
+				return
+			}
+			p.advance()
+			upper := strings.ToUpper(fusionTok.Value)
+			stmt.FusionType = &upper
+
+		case lexer.TokenKindWhere:
+			if seenWhere {
+				return
+			}
+			seenWhere = true
+			p.advance()
+			filter, err := p.parseFilterExpr()
+			if err != nil {
+				return
+			}
+			stmt.QueryFilter = filter
+
+		case lexer.TokenKindRerank:
+			if seenRerank {
+				return
+			}
+			seenRerank = true
+			p.advance()
+			stmt.Rerank = true
+			if p.peek().Kind == lexer.TokenKindModel {
 				p.advance()
+				stmt.RerankModel, _ = p.parseStringPtr()
+			}
+
+		case lexer.TokenKindExact:
+			if seenExact {
+				return
+			}
+			seenExact = true
+			p.advance()
+			mergeSearchWith(&stmt.WithClause, &ast.SearchWith{Exact: true})
+
+		case lexer.TokenKindWith:
+			if seenWith {
+				return
+			}
+			seenWith = true
+			p.advance()
+			if p.peek().Kind == lexer.TokenKindModel {
+				p.advance()
+				modelTok, err := p.expect(lexer.TokenKindString)
+				if err != nil {
+					return
+				}
+				stmt.Model = &modelTok.Value
+			} else if p.peek().Kind == lexer.TokenKindPayload {
+				p.advance()
+				parsed, err := p.parseWithPayload()
+				if err != nil {
+					return
+				}
+				stmt.WithPayload = parsed
+				seenWith = false // allow other WITH clauses
+			} else if p.peek().Kind == lexer.TokenKindVectors {
+				p.advance()
+				parsed, err := p.parseWithVectors()
+				if err != nil {
+					return
+				}
+				stmt.WithVectors = parsed
+				seenWith = false // allow other WITH clauses
 			} else {
-				break
+				parsed, err := p.parseWithClause()
+				if err != nil {
+					return
+				}
+				mergeSearchWith(&stmt.WithClause, parsed)
 			}
-		}
-		p.expect(lexer.TokenKindRparen)
 
-	case lexer.TokenKindFusion:
-		if seenFusion {
-			return
-		}
-		seenFusion = true
-		p.advance()
-		fusionTok := p.peek()
-		if fusionTok.Kind != lexer.TokenKindIdentifier || (strings.ToUpper(fusionTok.Value) != "RRF" && strings.ToUpper(fusionTok.Value) != "DBSF") {
-			return
-		}
-		p.advance()
-		upper := strings.ToUpper(fusionTok.Value)
-		stmt.FusionType = &upper
-
-	case lexer.TokenKindWhere:
-		if seenWhere {
-			return
-		}
-		seenWhere = true
-		p.advance()
-		filter, err := p.parseFilterExpr()
-		if err != nil {
-			return
-		}
-		stmt.QueryFilter = filter
-
-	case lexer.TokenKindRerank:
-		if seenRerank {
-			return
-		}
-		seenRerank = true
-		p.advance()
-		stmt.Rerank = true
-		if p.peek().Kind == lexer.TokenKindModel {
+		case lexer.TokenKindGroup:
+			if seenGroup {
+				return
+			}
+			seenGroup = true
 			p.advance()
-			stmt.RerankModel, _ = p.parseStringPtr()
-		}
-
-	case lexer.TokenKindExact:
-		if seenExact {
-			return
-		}
-		seenExact = true
-		p.advance()
-		mergeSearchWith(&stmt.WithClause, &ast.SearchWith{Exact: true})
-
-	case lexer.TokenKindWith:
-		if seenWith {
-			return
-		}
-		seenWith = true
-		p.advance()
-		if p.peek().Kind == lexer.TokenKindModel {
-			p.advance()
-			modelTok, err := p.expect(lexer.TokenKindString)
+			if _, err := p.expect(lexer.TokenKindBy); err != nil {
+				return
+			}
+			groupField, err := p.parseStringPtr()
 			if err != nil {
 				return
 			}
-			stmt.Model = &modelTok.Value
-		} else if p.peek().Kind == lexer.TokenKindPayload {
+			stmt.GroupBy = groupField
+
+		case lexer.TokenKindGroupSize:
+			if seenGroupSize {
+				return
+			}
+			seenGroupSize = true
 			p.advance()
-			parsed, err := p.parseWithPayload()
+			val, err := p.parseNumericLiteral()
 			if err != nil {
 				return
 			}
-			stmt.WithPayload = parsed
-			seenWith = false // allow other WITH clauses
-		} else if p.peek().Kind == lexer.TokenKindVectors {
+			if val <= 0 || float64(uint64(val)) != val {
+				return
+			}
+			size := int(val)
+			stmt.GroupSize = &size
+
+		case lexer.TokenKindStrategy:
+			if seenStrategy {
+				return
+			}
+			seenStrategy = true
 			p.advance()
-			parsed, err := p.parseWithVectors()
+			strategy, err := p.parseStringPtr()
 			if err != nil {
 				return
 			}
-			stmt.WithVectors = parsed
-			seenWith = false // allow other WITH clauses
-		} else {
-			parsed, err := p.parseWithClause()
+			stmt.Strategy = strategy
+
+		case lexer.TokenKindLimit:
+			p.advance()
+			limitTok, err := p.expect(lexer.TokenKindInteger)
 			if err != nil {
 				return
 			}
-			mergeSearchWith(&stmt.WithClause, parsed)
-		}
+			limit, err := parseIntToken(limitTok)
+			if err != nil {
+				return
+			}
+			stmt.Limit = limit
 
-	case lexer.TokenKindGroup:
-		if seenGroup {
+		default:
 			return
 		}
-		seenGroup = true
-		p.advance()
-		if _, err := p.expect(lexer.TokenKindBy); err != nil {
-			return
-		}
-		groupField, err := p.parseStringPtr()
-		if err != nil {
-			return
-		}
-		stmt.GroupBy = groupField
-
-	case lexer.TokenKindGroupSize:
-		if seenGroupSize {
-			return
-		}
-		seenGroupSize = true
-		p.advance()
-		val, err := p.parseNumericLiteral()
-		if err != nil {
-			return
-		}
-		if val <= 0 || float64(uint64(val)) != val {
-			return
-		}
-		size := int(val)
-		stmt.GroupSize = &size
-
-	case lexer.TokenKindStrategy:
-		if seenStrategy {
-			return
-		}
-		seenStrategy = true
-		p.advance()
-		strategy, err := p.parseStringPtr()
-		if err != nil {
-			return
-		}
-		stmt.Strategy = strategy
-
-	case lexer.TokenKindLimit:
-		p.advance()
-		limitTok, err := p.expect(lexer.TokenKindInteger)
-		if err != nil {
-			return
-		}
-		limit, err := parseIntToken(limitTok)
-		if err != nil {
-			return
-		}
-		stmt.Limit = limit
-
-	default:
-		return
-	}
 	}
 }
 

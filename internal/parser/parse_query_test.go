@@ -215,6 +215,55 @@ func TestParseQueryPrefetchEdgeCases(t *testing.T) {
 	}
 }
 
+func TestParseQueryPrefetchPerRefFilter(t *testing.T) {
+	input := `WITH a AS (QUERY 'search' USING dense LIMIT 100), b AS (QUERY 'search' USING sparse LIMIT 100)
+QUERY 'search' FROM docs LIMIT 10 PREFETCH (a WHERE category = 'tech', b SCORE THRESHOLD 0.5) FUSION RRF`
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	require.Len(t, stmt.PrefetchRefs, 2)
+
+	// First ref: a WHERE category = 'tech'
+	assert.Equal(t, "a", stmt.PrefetchRefs[0].CTEName)
+	require.NotNil(t, stmt.PrefetchRefs[0].Filter)
+	assert.Nil(t, stmt.PrefetchRefs[0].ScoreThreshold)
+
+	// Second ref: b SCORE THRESHOLD 0.5
+	assert.Equal(t, "b", stmt.PrefetchRefs[1].CTEName)
+	assert.Nil(t, stmt.PrefetchRefs[1].Filter)
+	require.NotNil(t, stmt.PrefetchRefs[1].ScoreThreshold)
+	assert.InDelta(t, 0.5, *stmt.PrefetchRefs[1].ScoreThreshold, 1e-6)
+}
+
+func TestParseQueryPrefetchPerRefBoth(t *testing.T) {
+	input := `WITH a AS (QUERY 'search' USING dense LIMIT 100)
+QUERY 'search' FROM docs LIMIT 10 PREFETCH (a WHERE priority = 'high' SCORE THRESHOLD 0.8) FUSION RRF`
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	require.Len(t, stmt.PrefetchRefs, 1)
+	assert.Equal(t, "a", stmt.PrefetchRefs[0].CTEName)
+	require.NotNil(t, stmt.PrefetchRefs[0].Filter)
+	require.NotNil(t, stmt.PrefetchRefs[0].ScoreThreshold)
+	assert.InDelta(t, 0.8, *stmt.PrefetchRefs[0].ScoreThreshold, 1e-6)
+}
+
 func TestParseQueryOrderBy(t *testing.T) {
 	input := "QUERY ORDER BY timestamp ASC FROM logs LIMIT 100"
 	l := &lexer.Lexer{}
@@ -283,8 +332,8 @@ func TestParseQueryWithPayloadAndVectors(t *testing.T) {
 
 func TestParseQueryWithPayloadVectorsErrors(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   string
+		name  string
+		input string
 	}{
 		{
 			name:  "invalid payload key",

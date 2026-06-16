@@ -187,8 +187,11 @@ type VectorsSelector struct {
 }
 
 // PrefetchRef is a reference to a CTE by name, used in PREFETCH clauses.
+// Optional Filter and ScoreThreshold allow per-prefetch overrides.
 type PrefetchRef struct {
-	CTEName string
+	CTEName        string
+	Filter         FilterExpr // per-prefetch WHERE clause
+	ScoreThreshold *float64   // per-prefetch SCORE THRESHOLD
 }
 
 type QueryStmt struct {

@@ -254,7 +254,7 @@ func (r *REPL) printHelp() {
       Optional: \033[33mEXACT\033[0m
       Optional: \033[33mWITH\033[0m (hnsw_ef = <int>, exact = <bool>, ...)
       Optional: \033[33mGROUP BY\033[0m <field> [\033[33mGROUP_SIZE\033[0m <n>]
-      Optional: \033[33mPREFETCH\033[0m (<cte_name>, ...)
+      Optional: \033[33mPREFETCH\033[0m (<cte_name> [\033[33mWHERE\033[0m <filter>] [\033[33mSCORE THRESHOLD\033[0m <n>], ...)
       Optional: \033[33mFUSION\033[0m RRF | DBSF
 
   \033[33mWITH\033[0m <name> \033[33mAS\033[0m (\033[33mQUERY\033[0m ...) [, ...]

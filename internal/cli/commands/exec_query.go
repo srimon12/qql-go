@@ -106,10 +106,34 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 	}
 	if len(stmt.PrefetchRefs) > 0 && len(cteMap) > 0 {
 		for _, ref := range stmt.PrefetchRefs {
-			if pq, ok := cteMap[ref.CTEName]; ok {
-				state.ManualPrefetches = append(state.ManualPrefetches, pq)
-			} else {
+			pq, ok := cteMap[ref.CTEName]
+			if !ok {
 				return nil, fmt.Errorf("unknown CTE referenced in prefetch: '%s'", ref.CTEName)
+			}
+			// Apply per-prefetch overrides
+			if ref.Filter != nil || ref.ScoreThreshold != nil {
+				clone := &qdrant.PrefetchQuery{
+					Prefetch:   pq.Prefetch,
+					Query:      pq.Query,
+					Using:      pq.Using,
+					Filter:     pq.Filter,
+					Params:     pq.Params,
+					Limit:      pq.Limit,
+					LookupFrom: pq.LookupFrom,
+				}
+				if ref.Filter != nil {
+					f, err := filters.NewFilterConverter().BuildFilter(ref.Filter)
+					if err != nil {
+						return nil, fmt.Errorf("per-prefetch filter on '%s': %w", ref.CTEName, err)
+					}
+					clone.Filter = f
+				}
+				if ref.ScoreThreshold != nil {
+					clone.ScoreThreshold = qdrant.PtrOf(float32(*ref.ScoreThreshold))
+				}
+				state.ManualPrefetches = append(state.ManualPrefetches, clone)
+			} else {
+				state.ManualPrefetches = append(state.ManualPrefetches, pq)
 			}
 		}
 	}
