@@ -39,6 +39,8 @@ type QueryState struct {
 	QdrantFilter   *qdrant.Filter
 	ScoreThreshold *float32
 	LookupFrom     *qdrant.LookupLocation
+	WithPayload    *qdrant.WithPayloadSelector
+	WithVectors    *qdrant.WithVectorsSelector
 
 	// --- GroupBy ---
 	GroupBy   string
@@ -88,6 +90,8 @@ func (p *QueryPipeline) BuildFlatRequest(state *QueryState) *qdrant.QueryPoints 
 		Limit:          &state.Limit,
 		Params:         state.Params,
 		Filter:         state.QdrantFilter,
+		WithPayload:    state.WithPayload,
+		WithVectors:    state.WithVectors,
 	}
 	if state.VectorName != "" {
 		req.Using = qdrant.PtrOf(state.VectorName)
@@ -120,6 +124,8 @@ func (p *QueryPipeline) BuildGroupedRequest(state *QueryState) *qdrant.QueryPoin
 		ScoreThreshold: flat.ScoreThreshold,
 		LookupFrom:     flat.LookupFrom,
 		Params:         flat.Params,
+		WithPayload:    flat.WithPayload,
+		WithVectors:    flat.WithVectors,
 	}
 }
 

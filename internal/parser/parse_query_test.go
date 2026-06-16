@@ -214,3 +214,135 @@ func TestParseQueryPrefetchEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+func TestParseQueryOrderBy(t *testing.T) {
+	input := "QUERY ORDER BY timestamp ASC FROM logs LIMIT 100"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	assert.Equal(t, ast.QueryModeOrderBy, stmt.Mode)
+	require.NotNil(t, stmt.OrderByField)
+	assert.Equal(t, "timestamp", *stmt.OrderByField)
+	require.NotNil(t, stmt.OrderByAsc)
+	assert.True(t, *stmt.OrderByAsc)
+	assert.Equal(t, "logs", stmt.Collection)
+	assert.Equal(t, 100, stmt.Limit)
+}
+
+func TestParseQueryWithPayloadAndVectors(t *testing.T) {
+	input := "QUERY 'search' FROM docs WITH PAYLOAD (include = ['title'], exclude = ['metadata']) WITH VECTORS true"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	require.NotNil(t, stmt.WithPayload)
+	assert.ElementsMatch(t, []string{"title"}, stmt.WithPayload.Include)
+	assert.ElementsMatch(t, []string{"metadata"}, stmt.WithPayload.Exclude)
+	assert.Nil(t, stmt.WithPayload.Enable)
+
+	require.NotNil(t, stmt.WithVectors)
+	require.NotNil(t, stmt.WithVectors.Enable)
+	assert.True(t, *stmt.WithVectors.Enable)
+	assert.Empty(t, stmt.WithVectors.Vectors)
+
+	// Test WITH VECTORS ('dense') and WITH PAYLOAD false
+	input2 := "QUERY 'search' FROM docs WITH PAYLOAD false WITH VECTORS ('dense', 'sparse')"
+	tokens2, err := l.Tokenize(input2)
+	require.NoError(t, err)
+
+	p2 := NewParser()
+	node2, err := p2.Parse(tokens2)
+	require.NoError(t, err)
+
+	stmt2, ok := node2.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	require.NotNil(t, stmt2.WithPayload)
+	require.NotNil(t, stmt2.WithPayload.Enable)
+	assert.False(t, *stmt2.WithPayload.Enable)
+
+	require.NotNil(t, stmt2.WithVectors)
+	assert.Nil(t, stmt2.WithVectors.Enable)
+	assert.ElementsMatch(t, []string{"dense", "sparse"}, stmt2.WithVectors.Vectors)
+}
+
+func TestParseQueryWithPayloadVectorsErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+	}{
+		{
+			name:  "invalid payload key",
+			input: "QUERY FROM docs WITH PAYLOAD (badkey = ['a'])",
+		},
+		{
+			name:  "missing parens",
+			input: "QUERY FROM docs WITH PAYLOAD include = ['a']",
+		},
+		{
+			name:  "missing bracket",
+			input: "QUERY FROM docs WITH PAYLOAD (include = 'a')",
+		},
+		{
+			name:  "missing equals",
+			input: "QUERY FROM docs WITH PAYLOAD (include ['a'])",
+		},
+		{
+			name:  "missing string in list",
+			input: "QUERY FROM docs WITH PAYLOAD (include = [123])",
+		},
+		{
+			name:  "missing closing bracket",
+			input: "QUERY FROM docs WITH PAYLOAD (include = ['a'",
+		},
+		{
+			name:  "missing closing paren",
+			input: "QUERY FROM docs WITH PAYLOAD (include = ['a']",
+		},
+		{
+			name:  "missing string in vectors",
+			input: "QUERY FROM docs WITH VECTORS (123)",
+		},
+		{
+			name:  "missing closing paren vectors",
+			input: "QUERY FROM docs WITH VECTORS ('dense'",
+		},
+		{
+			name:  "invalid vectors format",
+			input: "QUERY FROM docs WITH VECTORS (['dense'])",
+		},
+		{
+			name:  "invalid order by",
+			input: "QUERY ORDER BY FROM docs",
+		},
+		{
+			name:  "order by without by",
+			input: "QUERY ORDER timestamp FROM docs",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, _ := l.Tokenize(tt.input)
+			p := NewParser()
+			_, err := p.Parse(tokens)
+			assert.Error(t, err)
+		})
+	}
+}

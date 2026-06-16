@@ -185,14 +185,20 @@ def main():
     run("Update payload by filter", f"UPDATE {COL} SET PAYLOAD = {{'status': 'archived'}} WHERE status = 'discharged'", execute=args.execute)
     run("Delete by filter", f"DELETE FROM {COL} WHERE status = 'archived'", execute=args.execute)
 
+    # -- ORDER BY & Selectors --
+    print("\n[11] ORDER BY & Field Selection")
+    run("ORDER BY year DESC", f"QUERY ORDER BY year DESC FROM {COL} LIMIT 5", execute=args.execute)
+    run("WITH PAYLOAD false", f"QUERY 'stroke' FROM {COL} LIMIT 3 USING HYBRID WITH PAYLOAD false", execute=args.execute)
+    run("WITH PAYLOAD exclude", f"QUERY 'emergency' FROM {COL} LIMIT 3 USING HYBRID WITH PAYLOAD (exclude = ['patient_id', 'diagnosis'])", execute=args.execute)
+
     # -- Access --
-    print("\n[11] Point Access")
+    print("\n[12] Point Access")
     run("Select by ID", f"SELECT * FROM {COL} WHERE id = 2", execute=args.execute)
     run("Scroll all", f"SCROLL FROM {COL} LIMIT 3", execute=args.execute)
     run("Scroll filtered", f"SCROLL FROM {COL} WHERE priority = 'high' LIMIT 3", execute=args.execute)
 
     # -- Operations --
-    print("\n[12] Operations")
+    print("\n[13] Operations")
     run("SHOW COLLECTIONS", "SHOW COLLECTIONS", execute=args.execute)
     run("SHOW COLLECTION", f"SHOW COLLECTION {COL}", execute=args.execute)
     run("EXPLAIN", f"QUERY 'stroke' FROM {COL} LIMIT 3 USING HYBRID", execute=args.execute, explain=True)

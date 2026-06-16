@@ -18,11 +18,11 @@
 | OFFSET / SCORE THRESHOLD / LOOKUP FROM | ✅ | — |
 | WHERE / WITH / EXACT / STRATEGY / MODEL | ✅ | — |
 | Formula / Score boosting | ❌ | Entirely missing |
-| ORDER BY | ❌ | No syntax |
+| ORDER BY | ✅ | — |
 | Sample (random) | ❌ | No syntax |
-| WithPayload / WithVectors selectors | ❌ | No syntax |
-| Per-prefetch filter/score/lookup | ❌ | No syntax |
-| Parameterized RRF (K, weights) | ❌ | Only bare fusion |
+| WithPayload / WithVectors selectors | ✅ | — |
+| Per-prefetch filter/score/lookup | ✅ | — |
+| Parameterized RRF (K, weights) | ✅ | — |
 | Relevance feedback | ❌ | No syntax |
 | ExplainResult for QueryStmt | ⚠️ | Shows only mode/collection/limit |
 | ReadConsistency / ShardKeySelector / Timeout | ❌ | No syntax |
@@ -33,7 +33,7 @@
 
 Features that fill gaps in the QUERY statement itself. These are the highest-value additions because they unlock capabilities users already have in the Qdrant API but can't express in QQL.
 
-### 1. WithPayload / WithVectors Selectors `[OPEN]`
+### 1. WithPayload / WithVectors Selectors `[DONE]`
 
 **Problem:** QQL hardcodes payload return behavior. Users cannot request vectors in query results, exclude specific payload fields, or include only certain fields. The Qdrant API supports `WithPayload` and `WithVectors` on every query.
 
@@ -63,7 +63,7 @@ QUERY 'search text' FROM docs LIMIT 10
 
 ---
 
-### 2. ORDER BY Query Mode `[OPEN]`
+### 2. ORDER BY Query Mode `[DONE]`
 
 **Problem:** Qdrant supports `QueryOrderBy` as a query variant that returns results ordered by a payload field instead of vector similarity. QQL has no syntax for this.
 

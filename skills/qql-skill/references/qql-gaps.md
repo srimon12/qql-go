@@ -7,9 +7,7 @@ Use this file when a request sounds reasonable in Qdrant terms but is still outs
 - local/external rerank (`RERANK` is cloud-only)
 - formula / score boosting (payload-aware score shaping, geo decay, conditional scoring)
 - relevance feedback query
-- ORDER BY (non-similarity sorting by payload field)
 - SAMPLE RANDOM (random point sampling)
-- WithPayload / WithVectors selectors (control what's returned in results)
 - per-prefetch filter/score threshold via manual prefetch DAGs (partially supported — `PREFETCH` block supports per-prefetch `WHERE` and `SCORE THRESHOLD`)
 - offset-style pagination for grouped search
 - MMR for `USING SPARSE` or `RECOMMEND`
@@ -29,8 +27,10 @@ Prefer plain language:
 ## Practical Fallbacks
 
 - Need exact baseline: use `EXACT`
-- Need a single point by exact ID: use `SELECT * FROM <collection> WHERE id = ...`
+- Need single point by exact ID: use `SELECT * FROM <collection> WHERE id = ...`
 - Need to browse or export points page by page: use `SCROLL FROM <collection> ... LIMIT <n>`
+- Need pagination without similarity score: use `QUERY ORDER BY <field> [ASC|DESC] FROM <collection> LIMIT <n>`
+- Need to filter returned fields: use `WITH PAYLOAD (include=['f1'], exclude=['f2']) WITH VECTORS ('name')`
 - Need recall tuning: use `WITH (hnsw_ef = ...)`
 - Need flat search pagination: use `QUERY ... LIMIT <n> OFFSET <n>`
 - Need low-score filtering: use `QUERY ... SCORE THRESHOLD <float|int>`

@@ -352,6 +352,8 @@ QUERY DISCOVER TARGET <id> CONTEXT PAIRS ((<pos_id>, <neg_id>), ...) FROM <name>
 
 WITH <name> AS (QUERY ...), <name> AS (QUERY ...)
 QUERY '<text>' FROM <name> LIMIT 10 PREFETCH (<name>, <name>) FUSION RRF WITH (rrf_k = <n>, rrf_weights = [...])
+QUERY ORDER BY <field> [ASC|DESC] FROM <name> LIMIT <n>
+QUERY '<text>' FROM <name> LIMIT <n> WITH PAYLOAD (include = ['f1'], exclude = ['f2']) WITH VECTORS ('v1')
 
 SELECT * FROM <name> WHERE id = '<uuid>'
 SELECT * FROM <name> WHERE id = <integer>

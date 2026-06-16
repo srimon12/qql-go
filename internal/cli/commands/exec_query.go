@@ -78,6 +78,12 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 			VectorName:     stmt.LookupVector,
 		}
 	}
+	if stmt.WithPayload != nil {
+		state.WithPayload = buildWithPayload(stmt.WithPayload)
+	}
+	if stmt.WithVectors != nil {
+		state.WithVectors = buildWithVectors(stmt.WithVectors)
+	}
 	if stmt.GroupBy != nil {
 		state.GroupBy = *stmt.GroupBy
 	}
@@ -112,6 +118,15 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 	execPipeline := pipeline.NewQueryPipeline()
 
 	switch stmt.Mode {
+	case ast.QueryModeOrderBy:
+		asc := true
+		if stmt.OrderByAsc != nil {
+			asc = *stmt.OrderByAsc
+		}
+		execPipeline.Add(&pipeline.OrderByNode{
+			Field: *stmt.OrderByField,
+			Asc:   asc,
+		})
 	case ast.QueryModeNearest:
 		if stmt.QueryID != nil {
 			execPipeline.Add(&pipeline.RecommendNode{PositiveIDs: []any{stmt.QueryID}})
@@ -210,9 +225,9 @@ func (e *Executor) resolveCTEs(ctx context.Context, ctes []ast.CTE) (map[string]
 	if len(ctes) == 0 {
 		return nil, nil
 	}
-	
+
 	built := make(map[string]*qdrant.PrefetchQuery, len(ctes))
-	
+
 	for _, cte := range ctes {
 		pq, err := e.buildCTEPrefetch(ctx, cte.Stmt, built)
 		if err != nil {
@@ -399,4 +414,33 @@ func (e *Executor) executeGroupedQuery(ctx context.Context, p *pipeline.QueryPip
 		Message:   fmt.Sprintf("Found %d groups", len(formatted)),
 		Data:      formatted,
 	}, nil
+}
+
+func buildWithPayload(sel *ast.PayloadSelector) *qdrant.WithPayloadSelector {
+	if sel == nil {
+		return nil
+	}
+	if sel.Enable != nil {
+		return qdrant.NewWithPayload(*sel.Enable)
+	}
+	if len(sel.Include) > 0 {
+		return qdrant.NewWithPayloadInclude(sel.Include...)
+	}
+	if len(sel.Exclude) > 0 {
+		return qdrant.NewWithPayloadExclude(sel.Exclude...)
+	}
+	return nil
+}
+
+func buildWithVectors(sel *ast.VectorsSelector) *qdrant.WithVectorsSelector {
+	if sel == nil {
+		return nil
+	}
+	if sel.Enable != nil {
+		return qdrant.NewWithVectors(*sel.Enable)
+	}
+	if len(sel.Vectors) > 0 {
+		return qdrant.NewWithVectorsInclude(sel.Vectors...)
+	}
+	return nil
 }
