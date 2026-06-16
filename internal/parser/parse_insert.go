@@ -87,5 +87,3 @@ func toLowerEqual(a, b string) bool {
 	}
 	return true
 }
-
-

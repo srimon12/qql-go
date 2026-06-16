@@ -8,7 +8,7 @@ Use this file when a request sounds reasonable in Qdrant terms but is still outs
 - formula / score boosting (payload-aware score shaping, geo decay, conditional scoring)
 - relevance feedback query
 - SAMPLE RANDOM (random point sampling)
-- per-prefetch filter/score threshold via manual prefetch DAGs (partially supported — `PREFETCH` block supports per-prefetch `WHERE` and `SCORE THRESHOLD`)
+- per-prefetch `LookupFrom` (not yet supported on individual prefetch stages; filter and score threshold are done)
 - offset-style pagination for grouped search
 - MMR for `USING SPARSE` or `RECOMMEND`
 - custom vector on-disk toggles

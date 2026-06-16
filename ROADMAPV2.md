@@ -165,7 +165,7 @@ QUERY 'search' FROM docs LIMIT 10
 
 ---
 
-### 6. Per-Prefetch Filtering and Score Threshold `[OPEN]`
+### 6. Per-Prefetch Filtering and Score Threshold `[DONE]`
 
 **Problem:** `PrefetchQuery` supports per-prefetch `Filter`, `ScoreThreshold`, and `LookupFrom`. QQL only sets these at the top-level request. This limits multi-stage retrieval — users can't apply different filters to different prefetch stages.
 
@@ -174,14 +174,23 @@ QUERY 'search' FROM docs LIMIT 10
 - `ScoreThreshold` — `*float32`
 - `LookupFrom` — `*LookupLocation`
 
-**Proposed syntax:**
+**Implemented syntax:**
 ```sql
--- This requires manual prefetch DAG syntax, which is a larger feature.
--- Phase 1: expose via WITH { prefetch_filter: {...} } on hybrid queries.
--- Phase 2: full manual prefetch syntax.
+-- Per-prefetch filter and score threshold on CTE refs
+WITH a AS (QUERY 'search' USING dense LIMIT 100),
+     b AS (QUERY 'search' USING sparse LIMIT 100)
+QUERY 'search' FROM docs LIMIT 10
+  PREFETCH (a WHERE category = 'tech', b SCORE THRESHOLD 0.5)
+  FUSION RRF
 ```
 
-**Guidance:** This is blocked by manual prefetch DAG construction (Phase 3). For now, the auto-generated hybrid prefetches use the top-level filter, which covers most cases.
+**Implementation:**
+- Extended `PrefetchRef` AST node with `Filter` and `ScoreThreshold` fields
+- Parser handles `WHERE` and `SCORE THRESHOLD` inline on each prefetch ref
+- Executor clones the resolved CTE `PrefetchQuery` and applies per-ref overrides
+- Cloning avoids mutating the original CTE when referenced multiple times
+
+**Touches:** `ast/nodes.go`, `parser/parse_query.go`, `cli/commands/exec_query.go`
 
 ---
 
@@ -370,7 +379,7 @@ Phase 1 — Query Completeness (high impact, moderate effort)
 
 Phase 2 — Retrieval Quality (advanced features)
   5.  Parameterized RRF (K, weights)           [DONE]
-  6.  Per-prefetch filter/score threshold      [Blocked by #8]
+  6.  Per-prefetch filter/score threshold      [DONE]
   7.  Relevance feedback query                 [Defer — narrow use case]
 
 Phase 3 — Query Architecture (structural)
