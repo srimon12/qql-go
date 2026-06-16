@@ -406,3 +406,20 @@ func BuildSearchParams(withClause *ast.SearchWith) *qdrant.SearchParams {
 	}
 	return params
 }
+
+type OrderByNode struct {
+	Field string
+	Asc   bool
+}
+
+func (n *OrderByNode) Execute(ctx context.Context, state *QueryState) error {
+	dir := qdrant.Direction_Asc
+	if !n.Asc {
+		dir = qdrant.Direction_Desc
+	}
+	state.TargetQuery = qdrant.NewQueryOrderBy(&qdrant.OrderBy{
+		Key:       n.Field,
+		Direction: &dir,
+	})
+	return nil
+}

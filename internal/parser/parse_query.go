@@ -79,7 +79,30 @@ func (p *Parser) parseQueryBody() (*ast.QueryStmt, error) {
 			if _, err := p.expect(lexer.TokenKindPairs); err != nil {
 				return nil, err
 			}
-			stmt.ContextPairs = p.parseContextPairs("DISCOVER")
+			stmt.ContextPairs = p.parseContextPairs("DISCOVER CONTEXT")
+		}
+
+	case lexer.TokenKindOrder:
+		stmt.Mode = ast.QueryModeOrderBy
+		p.advance()
+		if _, err := p.expect(lexer.TokenKindBy); err != nil {
+			return nil, err
+		}
+		fieldTok, err := p.expect(lexer.TokenKindIdentifier)
+		if err != nil {
+			return nil, err
+		}
+		stmt.OrderByField = &fieldTok.Value
+
+		tok := p.peek()
+		if tok.Kind == lexer.TokenKindAsc {
+			p.advance()
+			asc := true
+			stmt.OrderByAsc = &asc
+		} else if tok.Kind == lexer.TokenKindDesc {
+			p.advance()
+			asc := false
+			stmt.OrderByAsc = &asc
 		}
 
 	default:
@@ -453,6 +476,22 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 				return
 			}
 			stmt.Model = &modelTok.Value
+		} else if p.peek().Kind == lexer.TokenKindPayload {
+			p.advance()
+			parsed, err := p.parseWithPayload()
+			if err != nil {
+				return
+			}
+			stmt.WithPayload = parsed
+			seenWith = false // allow other WITH clauses
+		} else if p.peek().Kind == lexer.TokenKindVectors {
+			p.advance()
+			parsed, err := p.parseWithVectors()
+			if err != nil {
+				return
+			}
+			stmt.WithVectors = parsed
+			seenWith = false // allow other WITH clauses
 		} else {
 			parsed, err := p.parseWithClause()
 			if err != nil {

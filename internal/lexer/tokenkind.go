@@ -77,6 +77,9 @@ const (
 	TokenKindDot
 	TokenKindEuclid
 	TokenKindManhattan
+	TokenKindOrder
+	TokenKindAsc
+	TokenKindDesc
 	TokenKindQuery
 	TokenKindNearest
 	TokenKindContext
@@ -181,6 +184,9 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindDot:         "DOT",
 	TokenKindEuclid:      "EUCLID",
 	TokenKindManhattan:   "MANHATTAN",
+	TokenKindOrder:       "ORDER",
+	TokenKindAsc:         "ASC",
+	TokenKindDesc:        "DESC",
 	TokenKindQuery:       "QUERY",
 	TokenKindNearest:     "NEAREST",
 	TokenKindContext:     "CONTEXT",

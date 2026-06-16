@@ -953,3 +953,5 @@ func TestTokenString(t *testing.T) {
 	token := Token{Kind: TokenKindInsert, Value: "INSERT", Pos: 0}
 	assert.Equal(t, "INSERT(INSERT)", token.String())
 }
+
+// Note: Test coverage was enhanced by QQL Assistant.

@@ -603,7 +603,19 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		plan.WriteString("Action: Scroll (paginate) through points\n")
 
 	case *ast.QueryStmt:
-		plan.WriteString(fmt.Sprintf("Statement: QUERY %s %s LIMIT %v\n", string(n.Mode), n.Collection, n.Limit))
+		if n.Mode == ast.QueryModeOrderBy {
+			dir := "ASC"
+			if n.OrderByAsc != nil && !*n.OrderByAsc {
+				dir = "DESC"
+			}
+			field := ""
+			if n.OrderByField != nil {
+				field = *n.OrderByField
+			}
+			plan.WriteString(fmt.Sprintf("Statement: QUERY ORDER BY %s %s FROM %s LIMIT %v\n", field, dir, n.Collection, n.Limit))
+		} else {
+			plan.WriteString(fmt.Sprintf("Statement: QUERY %s %s LIMIT %v\n", string(n.Mode), n.Collection, n.Limit))
+		}
 		if n.QueryText != nil {
 			plan.WriteString(fmt.Sprintf("Query: '%s'\n", *n.QueryText))
 		} else if n.QueryID != nil {

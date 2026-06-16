@@ -153,6 +153,7 @@ const (
 	QueryModeRecommend QueryMode = "RECOMMEND"
 	QueryModeDiscover  QueryMode = "DISCOVER"
 	QueryModeContext   QueryMode = "CONTEXT"
+	QueryModeOrderBy   QueryMode = "ORDER_BY"
 )
 
 type ContextPair struct {
@@ -172,6 +173,17 @@ const (
 type CTE struct {
 	Name string
 	Stmt *QueryStmt
+}
+
+type PayloadSelector struct {
+	Enable  *bool
+	Include []string
+	Exclude []string
+}
+
+type VectorsSelector struct {
+	Enable  *bool
+	Vectors []string
 }
 
 // PrefetchRef is a reference to a CTE by name, used in PREFETCH clauses.
@@ -198,6 +210,10 @@ type QueryStmt struct {
 	// For DISCOVER
 	Target any
 
+	// For ORDER BY
+	OrderByField *string
+	OrderByAsc   *bool
+
 	Limit          int
 	Strategy       *string
 	QueryFilter    FilterExpr
@@ -206,6 +222,8 @@ type QueryStmt struct {
 	GroupBy        *string
 	GroupSize      *int
 	WithClause     *SearchWith
+	WithPayload    *PayloadSelector
+	WithVectors    *VectorsSelector
 	LookupFrom     string
 	LookupVector   *string
 	Using          *string

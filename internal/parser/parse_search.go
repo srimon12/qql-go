@@ -636,3 +636,89 @@ func mergeSearchWith(dst **ast.SearchWith, src *ast.SearchWith) {
 		current.RrfWeights = src.RrfWeights
 	}
 }
+
+func (p *Parser) parseWithPayload() (*ast.PayloadSelector, error) {
+	if p.peek().Kind == lexer.TokenKindIdentifier && (strings.ToUpper(p.peek().Value) == "TRUE" || strings.ToUpper(p.peek().Value) == "FALSE") {
+		tok := p.peek()
+		p.advance()
+		val := strings.ToUpper(tok.Value) == "TRUE"
+		return &ast.PayloadSelector{Enable: &val}, nil
+	}
+	if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+		return nil, err
+	}
+	var include, exclude []string
+	for p.peek().Kind != lexer.TokenKindRparen {
+		keyTok, err := p.expect(lexer.TokenKindIdentifier)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(lexer.TokenKindLbracket); err != nil {
+			return nil, err
+		}
+		var fields []string
+		for p.peek().Kind != lexer.TokenKindRbracket {
+			valTok, err := p.expect(lexer.TokenKindString)
+			if err != nil {
+				return nil, err
+			}
+			fields = append(fields, valTok.Value)
+			if p.peek().Kind == lexer.TokenKindComma {
+				p.advance()
+			} else {
+				break
+			}
+		}
+		if _, err := p.expect(lexer.TokenKindRbracket); err != nil {
+			return nil, err
+		}
+		if strings.ToLower(keyTok.Value) == "include" {
+			include = fields
+		} else if strings.ToLower(keyTok.Value) == "exclude" {
+			exclude = fields
+		} else {
+			return nil, errors.NewQQLSyntaxError("Expected 'include' or 'exclude', got '"+keyTok.Value+"'", keyTok.Pos)
+		}
+		if p.peek().Kind == lexer.TokenKindComma {
+			p.advance()
+		} else {
+			break
+		}
+	}
+	if _, err := p.expect(lexer.TokenKindRparen); err != nil {
+		return nil, err
+	}
+	return &ast.PayloadSelector{Include: include, Exclude: exclude}, nil
+}
+
+func (p *Parser) parseWithVectors() (*ast.VectorsSelector, error) {
+	if p.peek().Kind == lexer.TokenKindIdentifier && (strings.ToUpper(p.peek().Value) == "TRUE" || strings.ToUpper(p.peek().Value) == "FALSE") {
+		tok := p.peek()
+		p.advance()
+		val := strings.ToUpper(tok.Value) == "TRUE"
+		return &ast.VectorsSelector{Enable: &val}, nil
+	}
+	if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+		return nil, err
+	}
+	var vectors []string
+	for p.peek().Kind != lexer.TokenKindRparen {
+		valTok, err := p.expect(lexer.TokenKindString)
+		if err != nil {
+			return nil, err
+		}
+		vectors = append(vectors, valTok.Value)
+		if p.peek().Kind == lexer.TokenKindComma {
+			p.advance()
+		} else {
+			break
+		}
+	}
+	if _, err := p.expect(lexer.TokenKindRparen); err != nil {
+		return nil, err
+	}
+	return &ast.VectorsSelector{Vectors: vectors}, nil
+}

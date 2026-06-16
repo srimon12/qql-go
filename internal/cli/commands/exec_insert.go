@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 	"sync"
 
@@ -221,9 +222,7 @@ func (e *Executor) buildPayload(values map[string]any) map[string]*qdrant.Value 
 
 func insertPointIDAndPayload(values map[string]any) (any, map[string]any, error) {
 	payload := make(map[string]any, len(values))
-	for k, v := range values {
-		payload[k] = v
-	}
+	maps.Copy(payload, values)
 	rawID := extractID(payload)
 	if rawID == nil {
 		return uuid.New().String(), payload, nil
