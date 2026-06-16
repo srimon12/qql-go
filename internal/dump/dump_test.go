@@ -137,10 +137,10 @@ func TestCollectionDumpsRuntimeConfigBlocks(t *testing.T) {
 	data, err := os.ReadFile(outputPath)
 	require.NoError(t, err)
 	text := string(data)
-	require.Contains(t, text, "WITH VECTORS { on_disk: true }")
-	require.Contains(t, text, "WITH OPTIMIZERS { max_optimization_threads: 3 }")
-	require.Contains(t, text, "WITH PARAMS { on_disk_payload: true }")
-	require.Contains(t, text, "QUANTIZE TURBO BITS 1.5 ALWAYS RAM")
+	require.Contains(t, text, "WITH VECTORS (on_disk = true)")
+	require.Contains(t, text, "WITH OPTIMIZERS (max_optimization_threads = 3)")
+	require.Contains(t, text, "WITH PARAMS (on_disk_payload = true)")
+	require.Contains(t, text, "WITH QUANTIZATION (type = 'turbo', bits = 1.5, always_ram = true)")
 }
 
 func TestCollectionRejectsInvalidBatchSize(t *testing.T) {

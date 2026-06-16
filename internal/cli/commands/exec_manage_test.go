@@ -274,7 +274,7 @@ func TestAlterCollectionCanDisableQuantization(t *testing.T) {
 	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 
 	resp, err := exec.doAlterCollection(&ast.AlterCollectionStmt{
-		Collection:   "docs",
+		Collection: "docs",
 		Config: &ast.CollectionConfig{
 			QuantizationUpdate: &ast.QuantizationUpdate{Disabled: true},
 		},

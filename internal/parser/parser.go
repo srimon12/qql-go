@@ -167,13 +167,7 @@ func (p *Parser) parseConfigBlock() (map[string]any, error) {
 		}
 		p.advance()
 		key := keyTok.Value
-		
-		// Some config blocks might support nested keys like `hnsw.m`. 
-		// Tokenizer currently gives `hnsw`, `.`, `m`? Or does it tokenize it as a single string?
-		// Actually QQL lexer tokenizes `hnsw.m` as identifier `hnsw.m` or split? Let's check tokenization or just parse normally.
-		// Wait, if it splits on '.', then we'd need to stitch it. Currently QQL identifiers allow underscores, what about dots?
-		// We'll see. For now just use `keyTok.Value`.
-		
+
 		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
 			return nil, err
 		}
@@ -182,7 +176,7 @@ func (p *Parser) parseConfigBlock() (map[string]any, error) {
 			return nil, err
 		}
 		result[key] = value
-		
+
 		if p.peek().Kind == lexer.TokenKindComma {
 			p.advance()
 			if p.peek().Kind == lexer.TokenKindRparen {

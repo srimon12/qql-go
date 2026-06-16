@@ -208,8 +208,6 @@ func (p *Parser) parseCollectionConfigBlocks(forAlter bool) (*ast.CollectionConf
 	return config, nil
 }
 
-
-
 func mergeCollectionConfig(current, new *ast.CollectionConfig, pos int) (*ast.CollectionConfig, error) {
 	if new.Vectors != nil {
 		if current.Vectors != nil {
@@ -462,7 +460,7 @@ func (p *Parser) parseCollectionParamsConfigBlock(forAlter bool) (*ast.Collectio
 	}
 	if !forAlter {
 		if configHasKey(config, "read_fan_out_factor") || configHasKey(config, "read_fan_out_delay_ms") {
-			return nil, errors.NewQQLSyntaxError("WITH PARAMS { read_fan_out_factor, read_fan_out_delay_ms } is supported only for ALTER COLLECTION", p.peek().Pos)
+			return nil, errors.NewQQLSyntaxError("WITH PARAMS (read_fan_out_factor, read_fan_out_delay_ms) is supported only for ALTER COLLECTION", p.peek().Pos)
 		}
 	}
 	replicationFactor, err := collectionPositiveUint64(config, "replication_factor", p.peek().Pos)
@@ -500,7 +498,6 @@ func collectionBool(config map[string]any, key string) *bool {
 	if b, ok := v.(bool); ok {
 		return &b
 	}
-	// This shouldn't happen at runtime since parseDict validates types
 	return nil
 }
 

@@ -95,7 +95,7 @@ type CreateCollectionStmt struct {
 	Vectors       []VectorDef
 	SparseVectors []SparseVectorDef
 
-	Config       *CollectionConfig
+	Config *CollectionConfig
 }
 
 type AlterCollectionStmt struct {
