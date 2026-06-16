@@ -71,6 +71,8 @@ run_step "13-search-offset-window" "exec" "QUERY '$MAIN_QUERY' FROM $COLLECTION 
 run_step "14-search-grouped-specialty" "exec" "QUERY '$MAIN_QUERY' FROM $COLLECTION LIMIT 6 SCORE THRESHOLD 0.0 USING HYBRID GROUP BY 'specialty' GROUP_SIZE 2"
 run_step "15-search-hybrid-mmr" "exec" "QUERY '$MAIN_QUERY' FROM $COLLECTION LIMIT 5 USING HYBRID WITH (mmr_diversity = 0.5, mmr_candidates = 20)"
 run_step "15b-search-prefetch-rrf" "exec" "WITH a AS (QUERY '$MAIN_QUERY' USING dense LIMIT 20), b AS (QUERY '$MAIN_QUERY' USING sparse LIMIT 20) QUERY '$MAIN_QUERY' FROM $COLLECTION LIMIT 5 PREFETCH (a, b) FUSION RRF"
+run_step "15c-search-prefetch-rrf-per-filter" "exec" "WITH a AS (QUERY '$MAIN_QUERY' USING dense LIMIT 20), b AS (QUERY '$MAIN_QUERY' USING sparse LIMIT 20) QUERY '$MAIN_QUERY' FROM $COLLECTION LIMIT 5 PREFETCH (a WHERE case_priority = '$MAIN_PRIORITY' SCORE THRESHOLD 0.5, b SCORE THRESHOLD 0.3) FUSION RRF WITH (rrf_k = 20, rrf_weights = [0.6, 0.4])"
+run_step "15d-search-grouped-with-lookup" "exec" "QUERY '$MAIN_QUERY' FROM $COLLECTION LIMIT 6 GROUP BY 'specialty' GROUP_SIZE 2"
 run_step "16-select-main" "exec" "SELECT * FROM $COLLECTION WHERE id = $MAIN_ID"
 run_step "17-recommend-related" "exec" "QUERY RECOMMEND WITH (positive = ($RELATED_ID)) FROM $COLLECTION LIMIT 5"
 run_step "17b-context-pairs" "exec" "QUERY CONTEXT PAIRS ($MAIN_ID, $RELATED_ID) FROM $COLLECTION LIMIT 5"

@@ -1,109 +1,286 @@
 # QQL Query Examples
 
-Use these examples for complex, advanced retrieval patterns. For basic syntax, see the grammar in `SKILL.md`.
+Golden examples for crafting complex QQL. Each example solves a real retrieval problem — study the structure, not just the syntax.
 
-## Multi-Stage Retrieval with CTEs
+---
 
-Define named sub-queries and reference them in the main query:
+## 1. Multi-Stage Hybrid Retrieval with Per-Prefetch Tuning
 
-```sql
-WITH
-  dense_stage AS (QUERY 'search' USING dense LIMIT 100 WHERE category = 'tech' SCORE THRESHOLD 0.8),
-  sparse_stage AS (QUERY 'search' USING sparse LIMIT 100 WITH (exact = true))
-QUERY 'search' FROM docs LIMIT 10 PREFETCH (dense_stage, sparse_stage) FUSION RRF
-```
+**Problem:** You need semantic + keyword recall, but the dense leg should only search recent tech articles while the sparse leg should cast a wider net with a lower quality bar.
 
-Nested CTE (one CTE references another):
+**Why this works:** CTEs let you define independent retrieval strategies with their own filters, limits, and score thresholds. The top-level `FUSION RRF` merges results using reciprocal rank fusion. Per-prefetch `WHERE` clauses push filters down to Qdrant — they are not post-filters.
 
 ```sql
 WITH
-  inner AS (QUERY 'deep search' USING dense LIMIT 50),
-  outer AS (QUERY 'fallback' USING sparse LIMIT 100 PREFETCH (inner))
-QUERY 'search' FROM docs LIMIT 10 PREFETCH (outer) FUSION RRF
+  dense AS (
+    QUERY 'vector database performance' USING dense LIMIT 200
+    WHERE category = 'tech' AND published_at >= '2025-01-01'
+  ),
+  sparse AS (
+    QUERY 'vector database performance' USING sparse LIMIT 300
+  )
+QUERY 'vector database performance' FROM articles LIMIT 10
+  PREFETCH (
+    dense SCORE THRESHOLD 0.6,
+    sparse SCORE THRESHOLD 0.3
+  )
+  FUSION RRF
+  WITH (rrf_k = 20, rrf_weights = [0.6, 0.4])
 ```
 
-With RRF tuning:
+**Key decisions:**
+- Dense prefetch is smaller (200) but filtered to recent tech — higher precision leg.
+- Sparse prefetch is larger (300) with no filter — casts a wider keyword net.
+- `rrf_weights = [0.6, 0.4]` favors the dense leg.
+- `rrf_k = 20` (default is 60) makes the rank penalty steeper — top-ranked items dominate more.
+
+---
+
+## 2. Tiered Retrieval with Nested CTEs
+
+**Problem:** You want a broad first pass, then a narrower second pass that only searches within the first pass results. This is a coarse-to-fine retrieval pattern common in RAG pipelines.
+
+**Why this works:** CTEs can reference other CTEs in their `PREFETCH`. The inner CTE does a broad dense search. The outer CTE uses the inner results as a prefetch, effectively scoping its search to the inner CTE's candidates.
 
 ```sql
 WITH
-  a AS (QUERY 'search' USING dense LIMIT 100),
-  b AS (QUERY 'search' USING sparse LIMIT 100)
-QUERY 'search' FROM docs LIMIT 10 PREFETCH (a, b) FUSION RRF WITH (rrf_k = 10, rrf_weights = [0.7, 0.3])
+  broad AS (
+    QUERY 'emergency neurological assessment' USING dense LIMIT 500
+    WHERE department = 'emergency'
+  ),
+  narrow AS (
+    QUERY 'emergency neurological assessment' USING sparse LIMIT 100
+    PREFETCH (broad)
+  )
+QUERY 'emergency neurological assessment' FROM clinical_docs LIMIT 5
+  PREFETCH (narrow)
+  FUSION RRF
 ```
 
-## Hybrid Search with Parametrized RRF
+**Key decisions:**
+- `broad` retrieves 500 dense candidates from the emergency department.
+- `narrow` does a sparse search scoped to those 500 candidates — keyword precision within a semantic neighborhood.
+- The top-level query fuses only the narrow results. This is a 2-stage pipeline: dense broad → sparse narrow → RRF.
+
+---
+
+## 3. Hybrid Search with Conditional Scoring via Per-Prefetch Filters
+
+**Problem:** You want hybrid retrieval, but results from a specific category or priority level should be boosted by being in a separate, higher-weighted prefetch.
+
+**Why this works:** Instead of a single hybrid query, you split into multiple CTEs with different filters and weights. The RRF weights control how much each leg contributes to the final ranking.
 
 ```sql
-QUERY 'vector search' FROM docs LIMIT 10
-USING HYBRID
-WITH (rrf_k = 30, rrf_weights = [0.7, 0.3])
+WITH
+  high_priority AS (
+    QUERY 'kubernetes deployment' USING dense LIMIT 50
+    WHERE priority = 'critical' AND status = 'open'
+  ),
+  general AS (
+    QUERY 'kubernetes deployment' USING dense LIMIT 200
+  ),
+  keyword AS (
+    QUERY 'kubernetes deployment' USING sparse LIMIT 200
+  )
+QUERY 'kubernetes deployment' FROM incidents LIMIT 10
+  PREFETCH (
+    high_priority SCORE THRESHOLD 0.7,
+    general SCORE THRESHOLD 0.4,
+    keyword SCORE THRESHOLD 0.3
+  )
+  FUSION RRF
+  WITH (rrf_k = 30, rrf_weights = [0.5, 0.3, 0.2])
 ```
 
-## MMR Diversity
+**Key decisions:**
+- Three prefetch legs: critical incidents (dense), general incidents (dense), keyword (sparse).
+- `rrf_weights = [0.5, 0.3, 0.2]` — critical incidents get 50% of the RRF weight.
+- This effectively boosts priority without a formula engine — the filter + weight combination achieves conditional scoring.
+- Each leg has its own score threshold to prune low-quality candidates before fusion.
+
+---
+
+## 4. Grouped Retrieval with Cross-Collection Lookup
+
+**Problem:** You search in collection `docs`, but the group IDs (e.g., author names) live in a separate `metadata` collection. You want top-5 results per author, but the author info comes from metadata.
+
+**Why this works:** `WITH LOOKUP FROM` tells Qdrant to resolve group IDs from a different collection than the one being searched. This is useful when your search corpus and your grouping taxonomy are stored separately.
 
 ```sql
-QUERY 'vector database performance tuning' FROM articles LIMIT 5
-WITH (mmr_diversity = 0.5, mmr_candidates = 25)
-
-QUERY 'vector database performance tuning' FROM articles LIMIT 5
-USING HYBRID WITH (mmr_diversity = 0.5, mmr_candidates = 25)
+QUERY 'machine learning optimization' FROM research_papers LIMIT 20
+  GROUP BY 'author_id'
+  GROUP_SIZE 5
+  WITH LOOKUP FROM author_metadata
+  USING HYBRID
+  WHERE year >= 2023
+  WITH (rrf_k = 30, rrf_weights = [0.7, 0.3])
 ```
 
-## Context Search
+**Key decisions:**
+- Search happens on `research_papers`, but `author_id` group resolution happens against `author_metadata`.
+- `GROUP_SIZE 5` returns up to 5 papers per author.
+- Combined with hybrid RRF — the search itself uses both dense and keyword signals.
+- The `WHERE year >= 2023` filter applies to the search, not the lookup.
+
+---
+
+## 5. Paginated Browse with ORDER BY
+
+**Problem:** You need a standard paginated list view (e.g., "show me the next page of articles") ordered by a payload field, not by similarity score.
+
+**Why this works:** `QUERY ORDER BY` bypasses vector search entirely. It uses Qdrant's `OrderBy` query variant — a full scan sorted by a payload field. Combine with `OFFSET` for pagination.
 
 ```sql
-QUERY CONTEXT PAIRS (('uuid-1', 'uuid-2'), ('uuid-3', 'uuid-4')) FROM docs LIMIT 10
+-- Page 1
+QUERY ORDER BY created_at DESC FROM articles
+  WHERE status = 'published' AND category = 'engineering'
+  LIMIT 20
+
+-- Page 2 (offset by 20)
+QUERY ORDER BY created_at DESC FROM articles
+  WHERE status = 'published' AND category = 'engineering'
+  LIMIT 20 OFFSET 20
 ```
 
-## Discover Search
+**Key decisions:**
+- No text query — this is a browse, not a search.
+- `ORDER BY created_at DESC` — newest first.
+- Create a payload index on `created_at` for this to be fast:
+  ```sql
+  CREATE INDEX ON COLLECTION articles FOR created_at TYPE integer
+  ```
+
+---
+
+## 6. Retrieval with Payload and Vector Selection
+
+**Problem:** You're searching a medical corpus with large payloads (full text, embeddings, metadata). You only need titles and scores for the UI, and you want the rerank vector back for downstream processing.
+
+**Why this works:** `WITH PAYLOAD` controls which fields are returned. `WITH VECTORS` controls which stored vectors come back. This reduces network transfer and deserialization overhead — critical when payloads are large.
 
 ```sql
-QUERY DISCOVER TARGET 'uuid-1' CONTEXT PAIRS (('uuid-2', 'uuid-3')) FROM docs LIMIT 10
+QUERY 'acute bronchitis treatment protocols' FROM medical_records
+  USING HYBRID
+  WHERE specialty = 'pulmonology' AND evidence_level IN ('A', 'B')
+  LIMIT 15
+  RERANK
+  WITH PAYLOAD (include = ['title', 'summary', 'evidence_level', 'url'], exclude = ['raw_text', 'embedding'])
+  WITH VECTORS ('colbert_rerank')
+  WITH (hnsw_ef = 256)
 ```
 
-## Cross-collection Recommend (Lookup)
+**Key decisions:**
+- `include` + `exclude` — include the lightweight fields, explicitly exclude the heavy ones.
+- `WITH VECTORS ('colbert_rerank')` — returns the ColBERT multivector for downstream re-processing.
+- `hnsw_ef = 256` — higher recall at query time since we're doing hybrid + rerank.
+- `RERANK` applies ColBERT reranking after the hybrid retrieval.
+
+---
+
+## 7. Recommendation with Cross-Collection Lookup
+
+**Problem:** You have example point IDs in a `user_interactions` collection, but you want to find similar items in a `product_catalog` collection.
+
+**Why this works:** `LOOKUP FROM` tells Qdrant where to find the example vectors. `USING` specifies which vector space to use for similarity. This decouples the "example source" from the "search target."
 
 ```sql
-QUERY RECOMMEND WITH (positive = ('uuid-1')) FROM target_collection
-  LOOKUP FROM source_collection VECTOR 'dense'
-  USING sparse
-  LIMIT 5
+QUERY RECOMMEND WITH (positive = ('user-click-1', 'user-click-2', 'user-click-3'))
+  NEGATIVE IDS ('user-skip-1')
+  FROM product_catalog
+  LOOKUP FROM user_interactions VECTOR 'dense'
+  USING 'product_dense'
+  LIMIT 20
+  SCORE THRESHOLD 0.5
+  WHERE availability = 'in_stock' AND price >= 10
 ```
 
-## Query-time Params
+**Key decisions:**
+- Positive examples come from `user_interactions` — Qdrant looks up their vectors there.
+- Similarity is computed against `product_dense` vectors in `product_catalog`.
+- `NEGATIVE IDS` excludes items the user explicitly skipped.
+- `WHERE` filter applies to the result set in `product_catalog`.
+
+---
+
+## 8. Full RAG Pipeline: Retrieve, Group, Limit
+
+**Problem:** You're building a RAG pipeline. You want to retrieve relevant documents, group them by source (so you don't return 10 chunks from the same document), and limit per-group diversity.
+
+**Why this works:** `GROUP BY` + `GROUP_SIZE` ensures diversity in the result set. Combined with hybrid retrieval and per-prefetch tuning, this gives you a production-grade retrieval step.
 
 ```sql
-QUERY 'search' FROM docs LIMIT 10 WITH (hnsw_ef = 128, exact = true, acorn = true)
+WITH
+  semantic AS (
+    QUERY 'how does transformer attention mechanism work' USING dense LIMIT 300
+    WHERE doc_type IN ('paper', 'textbook', 'blog')
+  ),
+  keyword AS (
+    QUERY 'transformer attention mechanism' USING sparse LIMIT 200
+  )
+QUERY 'how does transformer attention mechanism work' FROM knowledge_base LIMIT 20
+  PREFETCH (
+    semantic SCORE THRESHOLD 0.5,
+    keyword SCORE THRESHOLD 0.3
+  )
+  FUSION RRF
+  WITH (rrf_k = 20, rrf_weights = [0.65, 0.35])
+  GROUP BY 'source_id'
+  GROUP_SIZE 3
 ```
 
-## Grouped Retrieval
+**Key decisions:**
+- Dense leg searches only papers, textbooks, and blogs — excludes noise.
+- Sparse leg has no filter — catches exact terminology matches.
+- `GROUP BY 'source_id'` with `GROUP_SIZE 3` — max 3 chunks per source document.
+- `rrf_weights = [0.65, 0.35]` — semantic understanding matters more than keyword matching.
+- This is the kind of query you'd store in a config file and tune over time.
+
+---
+
+## 9. Multi-Collection Discovery
+
+**Problem:** You have a set of "context pairs" (positive/negative examples) and want to explore the vector space around them. This is useful for finding items that are similar to the positives but dissimilar to the negatives.
 
 ```sql
-QUERY 'search' FROM docs LIMIT 10 USING HYBRID GROUP BY category GROUP_SIZE 3
+QUERY DISCOVER TARGET 'uuid-anchor-item'
+  CONTEXT PAIRS (
+    ('uuid-positive-1', 'uuid-negative-1'),
+    ('uuid-positive-2', 'uuid-negative-2'),
+    ('uuid-positive-3', 'uuid-negative-3')
+  )
+  FROM product_catalog
+  LIMIT 15
+  WHERE category = 'electronics' AND rating >= 4.0
+  WITH (hnsw_ef = 128)
 ```
 
-## Pagination without similarity score (ORDER BY)
+**Key decisions:**
+- The target anchors the search direction.
+- Context pairs teach the algorithm what "similar" and "different" mean in this context.
+- Useful for exploration: "show me items like these but not like those."
+
+---
+
+## 10. Complex Filter Chains
+
+**Problem:** You need to combine multiple filter conditions with boolean logic, ranges, and null checks.
 
 ```sql
--- Retrieve the 10 most recently published articles from the tech category,
--- sorted chronologically (newest first) rather than by semantic similarity.
--- Useful for standard list views where exact ordering is strictly required.
-QUERY ORDER BY published_at DESC FROM articles 
-  WHERE category = 'tech' AND status = 'published'
-  LIMIT 10 OFFSET 20
+QUERY 'incident response playbook' FROM runbooks LIMIT 10
+  WHERE (
+    (severity >= 3 AND status = 'open')
+    OR (severity >= 5 AND status = 'acknowledged')
+  )
+  AND assigned_team IS NOT NULL
+  AND tags MATCH ANY 'kubernetes' 'docker' 'container'
+  AND created_at BETWEEN '2024-01-01' AND '2025-12-31'
+  AND NOT (category = 'deprecated')
 ```
 
-## Field and Vector selection (WITH PAYLOAD / WITH VECTORS)
-
-```sql
--- Execute a semantic search on medical records, but heavily restrict the returned
--- payload to only what's necessary for the UI (title, summary, url).
--- We explicitly exclude heavy fields to drastically reduce network transfer latency.
--- We also explicitly request the 'dense_v2' vector back for downstream local processing.
-QUERY 'acute bronchitis treatment' FROM medical_records 
-  USING HYBRID 
-  WHERE specialty = 'pulmonology'
-  LIMIT 10
-  WITH PAYLOAD (include = ['title', 'summary', 'url'], exclude = ['raw_text', 'embedding'])
-  WITH VECTORS ('dense_v2')
-```
+**Key decisions:**
+- Nested `OR` inside `AND` — complex boolean logic.
+- `IS NOT NULL` — exclude unassigned runbooks.
+- `MATCH ANY` — at least one of the listed terms must appear in `tags`.
+- `BETWEEN` — date range filter.
+- `NOT (...)` — exclusion clause.
+- Create indexes on `severity`, `status`, `assigned_team`, `tags`, `created_at`, and `category` for this to perform well.

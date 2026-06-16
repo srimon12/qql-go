@@ -71,8 +71,11 @@ Run-Step "12-search-score-threshold" "exec" "QUERY '$mainQuery' FROM $collection
 Run-Step "13-search-offset-window" "exec" "QUERY '$mainQuery' FROM $collection LIMIT 5 OFFSET 1 USING HYBRID"
 Run-Step "14-search-grouped-specialty" "exec" "QUERY '$mainQuery' FROM $collection LIMIT 6 SCORE THRESHOLD 0.0 USING HYBRID GROUP BY specialty GROUP_SIZE 2"
 Run-Step "15-search-hybrid-mmr" "exec" "QUERY '$mainQuery' FROM $collection LIMIT 5 USING HYBRID WITH (mmr_diversity = 0.5, mmr_candidates: 20)"
+Run-Step "15b-search-prefetch-rrf" "exec" "WITH a AS (QUERY '$mainQuery' USING dense LIMIT 20), b AS (QUERY '$mainQuery' USING sparse LIMIT 20) QUERY '$mainQuery' FROM $collection LIMIT 5 PREFETCH (a, b) FUSION RRF"
+Run-Step "15c-search-prefetch-rrf-per-filter" "exec" "WITH a AS (QUERY '$mainQuery' USING dense LIMIT 20), b AS (QUERY '$mainQuery' USING sparse LIMIT 20) QUERY '$mainQuery' FROM $collection LIMIT 5 PREFETCH (a WHERE case_priority = '$mainPriority' SCORE THRESHOLD 0.5, b SCORE THRESHOLD 0.3) FUSION RRF WITH (rrf_k = 20, rrf_weights = [0.6, 0.4])"
+Run-Step "15d-search-grouped-with-lookup" "exec" "QUERY '$mainQuery' FROM $collection LIMIT 6 GROUP BY 'specialty' GROUP_SIZE 2"
 Run-Step "16-select-main" "exec" "SELECT * FROM $collection WHERE id = $mainId"
-Run-Step "17-recommend-related" "exec" "QUERY RECOMMEND WITH (positive = ($relatedId) LIMIT 5"
+Run-Step "17-recommend-related" "exec" "QUERY RECOMMEND WITH (positive = ($relatedId)) FROM $collection LIMIT 5"
 Run-Step "18-scroll-tenant" "exec" "SCROLL FROM $collection WHERE tenant_id = '$mainTenant' LIMIT 5"
 (& qql-go dump --quiet --json $collection (Join-Path $artifacts "backup.qql")) | Set-Content -Path (Join-Path $artifacts "19-dump.json") -Encoding utf8
 (& uv run (Join-Path $demoRoot "run-benchmark.py") (Join-Path $generated "benchmark-questions.json")) | Set-Content -Path (Join-Path $artifacts "20-benchmark.json") -Encoding utf8

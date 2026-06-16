@@ -14,6 +14,8 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 - **Manual prefetch DAGs via CTEs** — `WITH <name> AS (QUERY ...), ... QUERY ... PREFETCH (<name>, ...) FUSION RRF` for explicit multi-stage retrieval with per-prefetch filters, limits, and nested CTE references.
 - **Parameterized RRF** — `WITH (rrf_k = <n>, rrf_weights = [<float>, ...])` exposes Qdrant's parameterized Reciprocal Rank Fusion.
 - **FUSION keyword** — `FUSION RRF` / `FUSION DBSF` for explicit fusion mode selection with manual prefetch DAGs.
+- **Per-prefetch filtering and score thresholds** — `PREFETCH (a WHERE category = 'tech' SCORE THRESHOLD 0.8, b SCORE THRESHOLD 0.5)` applies independent filters and score thresholds to each CTE prefetch stage.
+- **Cross-collection group lookup (`WITH LOOKUP FROM`)** — `QUERY ... GROUP BY <field> GROUP_SIZE <n> WITH LOOKUP FROM <collection>` enables cross-collection group ID lookup via `QueryPointGroups.WithLookup`.
 - **CONTEXT and DISCOVER query modes** — `QUERY CONTEXT PAIRS ((pos, neg), ...)` and `QUERY DISCOVER TARGET <id> CONTEXT PAIRS (...)` for context-aware and exploration search.
 - **Configurable BM25 parameters** — BM25 `k1`, `b`, and `avgdl` are now configurable from `~/.qql/config.json`.
 - **Multi-vector DDL** — `CREATE COLLECTION <name> (name VECTOR(size, DISTANCE), ...)` for explicit named-vector schemas with custom sizes and distance metrics.

@@ -29,7 +29,7 @@ Use `qql-go` when you need repeatable commands, stable JSON output, version-cont
 - manual prefetch DAGs for multi-stage retrieval
 - parameterized RRF tuning
 - search pagination, score thresholds, and cross-collection lookup
-- grouped retrieval
+- grouped retrieval with cross-collection group lookup
 - recommendation by example IDs
 - rerank retrieval
 - explain plans
@@ -338,7 +338,7 @@ QUERY '<text>' FROM <name> LIMIT <n> RERANK
 QUERY '<text>' FROM <name> LIMIT <n> RERANK MODEL '<model>'
 QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID RERANK
 QUERY '<text>' FROM <name> LIMIT <n> USING SPARSE RERANK
-QUERY '<text>' FROM <name> LIMIT <n> GROUP BY <field> [GROUP_SIZE <n>]
+QUERY '<text>' FROM <name> LIMIT <n> GROUP BY <field> [GROUP_SIZE <n>] [WITH LOOKUP FROM <collection>]
 
 QUERY RECOMMEND WITH (positive = (<id>, ...)) FROM <name> LIMIT <n>
 QUERY RECOMMEND WITH (positive = (<id>, ...), negative = (<id>, ...)) FROM <name> LIMIT <n>
@@ -351,7 +351,7 @@ QUERY CONTEXT PAIRS ((<pos_id>, <neg_id>), ...) FROM <name> LIMIT <n>
 QUERY DISCOVER TARGET <id> CONTEXT PAIRS ((<pos_id>, <neg_id>), ...) FROM <name> LIMIT <n>
 
 WITH <name> AS (QUERY ...), <name> AS (QUERY ...)
-QUERY '<text>' FROM <name> LIMIT 10 PREFETCH (<name>, <name>) FUSION RRF WITH (rrf_k = <n>, rrf_weights = [...])
+QUERY '<text>' FROM <name> LIMIT 10 PREFETCH (<name> [WHERE <filter>] [SCORE THRESHOLD <n>], <name> [WHERE <filter>] [SCORE THRESHOLD <n>]) FUSION RRF WITH (rrf_k = <n>, rrf_weights = [...])
 QUERY ORDER BY <field> [ASC|DESC] FROM <name> LIMIT <n>
 QUERY '<text>' FROM <name> LIMIT <n> WITH PAYLOAD (include = ['f1'], exclude = ['f2']) WITH VECTORS ('v1')
 
@@ -407,6 +407,8 @@ Hybrid search:
 Manual prefetch DAGs:
 
 - use `PREFETCH (...)` for multi-stage retrieval with per-prefetch filters, limits, and score thresholds
+- add `WHERE <filter>` after a CTE name to apply a per-prefetch filter
+- add `SCORE THRESHOLD <n>` after a CTE name to apply a per-prefetch score threshold
 - combine with `FUSION RRF` or `FUSION DBSF` for the top-level fusion
 - `PREFETCH` and `USING HYBRID` are mutually exclusive
 

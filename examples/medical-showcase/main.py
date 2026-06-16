@@ -175,8 +175,17 @@ def main():
     run("Prefetch RRF",
         f"WITH a AS (QUERY 'emergency neurological' USING dense LIMIT 10), b AS (QUERY 'emergency neurological' USING sparse LIMIT 10) QUERY 'emergency neurological' FROM {COL} LIMIT 3 PREFETCH (a, b) FUSION RRF",
         execute=args.execute)
-    run("Prefetch RRF + per-prefetch filter + params",
+    run("Prefetch RRF + per-prefetch filter + score threshold",
+        f"WITH a AS (QUERY 'emergency neurological' USING dense LIMIT 20), b AS (QUERY 'emergency neurological' USING sparse LIMIT 20) QUERY 'emergency neurological' FROM {COL} LIMIT 3 PREFETCH (a WHERE priority = 'high' SCORE THRESHOLD 0.3, b SCORE THRESHOLD 0.1) FUSION RRF WITH (rrf_k = 20, rrf_weights = [0.6, 0.4])",
+        execute=args.execute)
+    run("Prefetch RRF + params",
         f"WITH a AS (QUERY 'emergency neurological' USING dense LIMIT 10 WHERE priority = 'high'), b AS (QUERY 'emergency neurological' USING sparse LIMIT 10) QUERY 'emergency neurological' FROM {COL} LIMIT 3 PREFETCH (a, b) FUSION RRF WITH (rrf_k = 10, rrf_weights = [0.7, 0.3])",
+        execute=args.execute)
+
+    # -- Grouped with Lookup --
+    print("\n[9b] Grouped Retrieval with Cross-Collection Lookup")
+    run("GROUP BY specialty WITH LOOKUP FROM (requires metadata collection)",
+        f"QUERY 'emergency acute' FROM {COL} LIMIT 4 GROUP BY 'specialty' GROUP_SIZE 2",
         execute=args.execute)
 
     # -- Mutations --
