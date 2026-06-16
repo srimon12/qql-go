@@ -90,6 +90,11 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 	if stmt.GroupSize != nil {
 		state.GroupSize = uint64(*stmt.GroupSize)
 	}
+	if stmt.WithLookupCollection != nil {
+		state.WithLookup = &qdrant.WithLookup{
+			Collection: *stmt.WithLookupCollection,
+		}
+	}
 	if state.HasMMR {
 		if stmt.WithClause.MmrDiversity != nil {
 			state.MmrDiversity = float32(*stmt.WithClause.MmrDiversity)

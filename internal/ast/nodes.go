@@ -217,20 +217,21 @@ type QueryStmt struct {
 	OrderByField *string
 	OrderByAsc   *bool
 
-	Limit          int
-	Strategy       *string
-	QueryFilter    FilterExpr
-	Offset         int
-	ScoreThreshold *float64
-	GroupBy        *string
-	GroupSize      *int
-	WithClause     *SearchWith
-	WithPayload    *PayloadSelector
-	WithVectors    *VectorsSelector
-	LookupFrom     string
-	LookupVector   *string
-	Using          *string
-	Model          *string
+	Limit                int
+	Strategy             *string
+	QueryFilter          FilterExpr
+	Offset               int
+	ScoreThreshold       *float64
+	GroupBy              *string
+	GroupSize            *int
+	WithClause           *SearchWith
+	WithPayload          *PayloadSelector
+	WithVectors          *VectorsSelector
+	LookupFrom           string
+	LookupVector         *string
+	WithLookupCollection *string // cross-collection group ID lookup (WITH LOOKUP FROM <collection>)
+	Using                *string
+	Model                *string
 
 	// CTEs defined at the top level or within a CTE's body
 	CTEs []CTE
