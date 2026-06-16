@@ -438,7 +438,7 @@ const (
 	defaultInferenceMode    = "local"
 )
 
-var Version = "0.2.0"
+var Version = "0.3.0"
 
 type commandOutputMode struct {
 	json  bool

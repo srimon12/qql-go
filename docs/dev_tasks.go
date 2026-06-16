@@ -39,7 +39,7 @@ func init() {
 	rootDir = filepath.Dir(filepath.Dir(thisFile))
 
 	versionFile = filepath.Join(rootDir, "VERSION")
-	commandsGo = filepath.Join(rootDir, "internal", "cli", "commands", "commands.go")
+	commandsGo = filepath.Join(rootDir, "internal", "cli", "commands", "executor.go")
 }
 
 // semver pattern: MAJOR.MINOR.PATCH

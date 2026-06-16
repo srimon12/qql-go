@@ -6,6 +6,10 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 ## [Unreleased]
 
+- No unreleased changes yet.
+
+## [0.3.0] - 2026-06-17
+
 ### Added
 
 - **ORDER BY** — `QUERY ORDER BY <field> [ASC|DESC] FROM <collection> LIMIT <n>` for pagination and sorting without similarity scoring.
