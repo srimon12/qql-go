@@ -11,8 +11,6 @@ import (
 	"github.com/qdrant/go-client/qdrant"
 )
 
-const batchSize = 50
-
 type Client interface {
 	CollectionExists(ctx context.Context, collectionName string) (bool, error)
 	GetCollectionInfo(ctx context.Context, collectionName string) (*qdrant.CollectionInfo, error)
@@ -32,16 +30,14 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 		return 0, 0, fmt.Errorf("collection '%s' does not exist", collection)
 	}
 
-	hybrid, err := isHybrid(ctx, client, collection)
+	info, err := client.GetCollectionInfo(ctx, collection)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get collection info: %w", err)
+	}
+
+	hybrid, denseName, sparseName, err := getVectorTopology(info)
 	if err != nil {
 		return 0, 0, err
-	}
-	total, err := client.Count(ctx, &qdrant.CountPoints{
-		CollectionName: collection,
-		Exact:          qdrant.PtrOf(true),
-	})
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to count points: %w", err)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
@@ -49,14 +45,7 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 	}
 
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("-- QQL dump for %s\n", collection))
-	builder.WriteString(fmt.Sprintf("-- Points: %d\n\n", total))
-
-	info, err := client.GetCollectionInfo(ctx, collection)
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to get collection info: %w", err)
-	}
-	createLine := buildDumpCreateLine(collection, hybrid, info)
+	createLine := buildDumpCreateLine(collection, hybrid, denseName, sparseName, info)
 	builder.WriteString(createLine)
 	builder.WriteString("\n\n")
 
@@ -64,6 +53,9 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 	skipped := 0
 	var offset *qdrant.PointId
 	for {
+		if err := ctx.Err(); err != nil {
+			return written, skipped, err
+		}
 		points, nextOffset, err := client.ScrollAndOffset(ctx, &qdrant.ScrollPoints{
 			CollectionName: collection,
 			Limit:          qdrant.PtrOf(uint32(batchSize)),
@@ -78,7 +70,7 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 			break
 		}
 
-		batch := make([]map[string]interface{}, 0, len(points))
+		batch := make([]map[string]any, 0, len(points))
 		for _, point := range points {
 			payload := point.GetPayload()
 			textValue, ok := payload["text"]
@@ -92,7 +84,7 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 		}
 
 		if len(batch) > 0 {
-			builder.WriteString(fmt.Sprintf("INSERT BULK INTO COLLECTION %s VALUES [\n", collection))
+			builder.WriteString(fmt.Sprintf("INSERT INTO %s VALUES\n", collection))
 			for idx, record := range batch {
 				builder.WriteString(indent(serializeMap(record), "  "))
 				if idx+1 < len(batch) {
@@ -101,9 +93,14 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 				builder.WriteString("\n")
 				written++
 			}
-			builder.WriteString("]")
 			if hybrid {
-				builder.WriteString(" USING HYBRID")
+				if denseName != "dense" || sparseName != "sparse" {
+					builder.WriteString(fmt.Sprintf(" USING HYBRID DENSE VECTOR '%s' SPARSE VECTOR '%s'", escapeString(denseName), escapeString(sparseName)))
+				} else {
+					builder.WriteString(" USING HYBRID")
+				}
+			} else if denseName != "dense" && denseName != "" {
+				builder.WriteString(fmt.Sprintf(" USING VECTOR '%s'", escapeString(denseName)))
 			}
 			builder.WriteString("\n\n")
 		}
@@ -114,48 +111,86 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 		offset = nextOffset
 	}
 
-	builder.WriteString(fmt.Sprintf("-- Written: %d\n-- Skipped: %d\n", written, skipped))
-	if err := os.WriteFile(outputPath, []byte(builder.String()), 0o644); err != nil {
+	var header strings.Builder
+	header.WriteString(fmt.Sprintf("-- QQL dump for %s\n", collection))
+	header.WriteString(fmt.Sprintf("-- Points: %d\n\n", written))
+
+	finalOutput := header.String() + builder.String() + fmt.Sprintf("-- Written: %d\n-- Skipped: %d\n", written, skipped)
+
+	if err := os.WriteFile(outputPath, []byte(finalOutput), 0o644); err != nil {
 		return written, skipped, fmt.Errorf("failed to write dump: %w", err)
 	}
 	return written, skipped, nil
 }
 
-func isHybrid(ctx context.Context, client Client, collection string) (bool, error) {
-	info, err := client.GetCollectionInfo(ctx, collection)
-	if err != nil {
-		return false, fmt.Errorf("failed to inspect collection: %w", err)
+func getVectorTopology(info *qdrant.CollectionInfo) (hybrid bool, denseName, sparseName string, err error) {
+	if info == nil {
+		return false, "", "", nil
 	}
-	return info.GetConfig().GetParams().GetSparseVectorsConfig() != nil, nil
+	config := info.GetConfig()
+	if config == nil {
+		return false, "", "", nil
+	}
+	params := config.GetParams()
+	if params == nil {
+		return false, "", "", nil
+	}
+
+	if vcfg := params.GetVectorsConfig(); vcfg != nil {
+		if vmap := vcfg.GetParamsMap(); vmap != nil {
+			for k := range vmap.GetMap() {
+				if k == "dense" {
+					denseName = "dense"
+				} else if denseName == "" {
+					denseName = k
+				}
+			}
+		} else {
+			denseName = ""
+		}
+	} else {
+		denseName = "dense"
+	}
+	if scfg := params.GetSparseVectorsConfig(); scfg != nil {
+		hybrid = true
+		for k := range scfg.GetMap() {
+			if k == "sparse" {
+				sparseName = "sparse"
+			} else if sparseName == "" {
+				sparseName = k
+			}
+		}
+	}
+	return hybrid, denseName, sparseName, nil
 }
 
-func payloadToMap(payload map[string]*qdrant.Value) map[string]interface{} {
+func payloadToMap(payload map[string]*qdrant.Value) map[string]any {
 	keys := make([]string, 0, len(payload))
 	for key := range payload {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	result := make(map[string]interface{}, len(payload))
+	result := make(map[string]any, len(payload))
 	for _, key := range keys {
 		result[key] = payloadValue(payload[key])
 	}
 	return result
 }
 
-func payloadValue(value *qdrant.Value) interface{} {
+func payloadValue(value *qdrant.Value) any {
 	switch kind := value.GetKind().(type) {
 	case *qdrant.Value_NullValue:
 		return nil
 	case *qdrant.Value_BoolValue:
 		return kind.BoolValue
 	case *qdrant.Value_IntegerValue:
-		return int(kind.IntegerValue)
+		return kind.IntegerValue
 	case *qdrant.Value_DoubleValue:
 		return kind.DoubleValue
 	case *qdrant.Value_StringValue:
 		return kind.StringValue
 	case *qdrant.Value_ListValue:
-		items := make([]interface{}, 0, len(kind.ListValue.GetValues()))
+		items := make([]any, 0, len(kind.ListValue.GetValues()))
 		for _, item := range kind.ListValue.GetValues() {
 			items = append(items, payloadValue(item))
 		}
@@ -167,7 +202,7 @@ func payloadValue(value *qdrant.Value) interface{} {
 	}
 }
 
-func pointIDValue(id *qdrant.PointId) interface{} {
+func pointIDValue(id *qdrant.PointId) any {
 	if id == nil {
 		return ""
 	}
@@ -175,13 +210,13 @@ func pointIDValue(id *qdrant.PointId) interface{} {
 	case *qdrant.PointId_Uuid:
 		return value.Uuid
 	case *qdrant.PointId_Num:
-		return int(value.Num)
+		return value.Num
 	default:
 		return fmt.Sprintf("%v", id)
 	}
 }
 
-func serializeMap(values map[string]interface{}) string {
+func serializeMap(values map[string]any) string {
 	keys := make([]string, 0, len(values))
 	for key := range values {
 		keys = append(keys, key)
@@ -201,7 +236,7 @@ func serializeMap(values map[string]interface{}) string {
 	return builder.String()
 }
 
-func serializeValue(value interface{}) string {
+func serializeValue(value any) string {
 	switch typed := value.(type) {
 	case nil:
 		return "null"
@@ -212,17 +247,21 @@ func serializeValue(value interface{}) string {
 		return "false"
 	case int:
 		return fmt.Sprintf("%d", typed)
+	case int64:
+		return fmt.Sprintf("%d", typed)
+	case uint64:
+		return fmt.Sprintf("%d", typed)
 	case float64:
 		return fmt.Sprintf("%v", typed)
 	case string:
 		return "'" + escapeString(typed) + "'"
-	case []interface{}:
+	case []any:
 		parts := make([]string, 0, len(typed))
 		for _, item := range typed {
 			parts = append(parts, serializeValue(item))
 		}
 		return "[" + strings.Join(parts, ", ") + "]"
-	case map[string]interface{}:
+	case map[string]any:
 		return serializeMap(typed)
 	default:
 		return "'" + escapeString(fmt.Sprintf("%v", value)) + "'"
@@ -232,19 +271,34 @@ func serializeValue(value interface{}) string {
 func escapeString(value string) string {
 	value = strings.ReplaceAll(value, "\\", "\\\\")
 	value = strings.ReplaceAll(value, "'", "\\'")
+	value = strings.ReplaceAll(value, "\n", "\\n")
+	value = strings.ReplaceAll(value, "\r", "\\r")
+	value = strings.ReplaceAll(value, "\t", "\\t")
+	value = strings.ReplaceAll(value, "\x00", "\\0")
 	return value
 }
 
-func buildDumpCreateLine(collection string, hybrid bool, info *qdrant.CollectionInfo) string {
+func buildDumpCreateLine(collection string, hybrid bool, denseName, sparseName string, info *qdrant.CollectionInfo) string {
 	var b strings.Builder
 	b.WriteString("CREATE COLLECTION ")
 	b.WriteString(collection)
 	if hybrid {
 		b.WriteString(" HYBRID")
+		if denseName != "dense" || sparseName != "sparse" {
+			b.WriteString(fmt.Sprintf(" DENSE VECTOR '%s' SPARSE VECTOR '%s'", escapeString(denseName), escapeString(sparseName)))
+		}
+	} else if denseName != "dense" && denseName != "" {
+		b.WriteString(fmt.Sprintf(" VECTOR '%s'", escapeString(denseName)))
 	}
 
 	config := info.GetConfig()
+	if config == nil {
+		return b.String()
+	}
 	params := config.GetParams()
+	if params == nil {
+		return b.String()
+	}
 
 	// VECTORS
 	if vectorsCfg := params.GetVectorsConfig(); vectorsCfg != nil {

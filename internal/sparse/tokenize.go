@@ -1,7 +1,9 @@
 package sparse
 
 import (
+	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 var specialSingleCharTokens = map[rune]struct{}{
@@ -9,26 +11,27 @@ var specialSingleCharTokens = map[rune]struct{}{
 }
 
 func Tokenize(text string) []string {
-	lower := []rune(text)
-	for i, r := range lower {
-		lower[i] = unicode.ToLower(r)
-	}
+	// First convert to lowercase efficiently
+	text = strings.ToLower(text)
 
 	var tokens []string
-	var current []rune
 
-	for _, r := range lower {
+	// Split by non-token characters
+	start := -1
+	for i, r := range text {
 		if isTokenChar(r) {
-			current = append(current, r)
-			continue
-		}
-		if len(current) > 0 {
-			tokens = appendTokens(tokens, string(current))
-			current = current[:0]
+			if start == -1 {
+				start = i
+			}
+		} else {
+			if start != -1 {
+				tokens = appendTokens(tokens, text[start:i])
+				start = -1
+			}
 		}
 	}
-	if len(current) > 0 {
-		tokens = appendTokens(tokens, string(current))
+	if start != -1 {
+		tokens = appendTokens(tokens, text[start:])
 	}
 
 	return tokens
@@ -39,12 +42,14 @@ func isTokenChar(r rune) bool {
 }
 
 func maybeToken(s string) string {
-	if len(s) >= 2 {
+	rc := utf8.RuneCountInString(s)
+	if rc >= 2 {
 		return s
 	}
-	if len(s) == 1 {
-		_, ok := specialSingleCharTokens[[]rune(s)[0]]
-		if ok {
+	if rc == 1 {
+		// Use the first rune since we know length is exactly 1
+		r, _ := utf8.DecodeRuneInString(s)
+		if _, ok := specialSingleCharTokens[r]; ok {
 			return s
 		}
 	}
@@ -52,47 +57,43 @@ func maybeToken(s string) string {
 }
 
 func appendTokens(tokens []string, raw string) []string {
-	if tok := maybeToken(raw); tok != "" {
-		tokens = append(tokens, tok)
+	// Check for hyphen fast path
+	hasHyphen := false
+	for i := 0; i < len(raw); i++ {
+		if raw[i] == '-' {
+			hasHyphen = true
+			break
+		}
 	}
-	if !containsHyphen(raw) {
+
+	if !hasHyphen {
+		if tok := maybeToken(raw); tok != "" {
+			tokens = append(tokens, tok)
+		}
 		return tokens
 	}
-	for _, part := range splitHyphenatedToken(raw) {
-		tokens = append(tokens, part)
-	}
-	return tokens
-}
 
-func containsHyphen(s string) bool {
-	for _, r := range s {
+	// Split by hyphen
+	start := -1
+	for i, r := range raw {
 		if r == '-' {
-			return true
-		}
-	}
-	return false
-}
-
-func splitHyphenatedToken(token string) []string {
-	parts := []rune(token)
-	var out []string
-	var current []rune
-	for _, r := range parts {
-		if r == '-' {
-			if len(current) > 0 {
-				if tok := maybeToken(string(current)); tok != "" {
-					out = append(out, tok)
+			if start != -1 {
+				if tok := maybeToken(raw[start:i]); tok != "" {
+					tokens = append(tokens, tok)
 				}
-				current = current[:0]
+				start = -1
 			}
-			continue
-		}
-		current = append(current, r)
-	}
-	if len(current) > 0 {
-		if tok := maybeToken(string(current)); tok != "" {
-			out = append(out, tok)
+		} else {
+			if start == -1 {
+				start = i
+			}
 		}
 	}
-	return out
+	if start != -1 {
+		if tok := maybeToken(raw[start:]); tok != "" {
+			tokens = append(tokens, tok)
+		}
+	}
+
+	return tokens
 }

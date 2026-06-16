@@ -1,8 +1,8 @@
 {
   "dataset": "ChatMED-Project/RAGCare-QA",
   "collection": "medical_retrieval_ops",
-  "row_count": 420,
-  "full_dataset": true,
+  "row_count": 10,
+  "full_dataset": false,
   "chunk_size": 200,
   "benchmark_path": "benchmark-questions.json",
   "queries": {

@@ -104,7 +104,7 @@ func TestHandleCommandBuiltinCommands(t *testing.T) {
 	require.Contains(t, stdout, "Available Statements")
 	require.Contains(t, stdout, "SELECT")
 	require.Contains(t, stdout, "SCROLL FROM")
-	require.Contains(t, stdout, "USING SPARSE")
+	require.Contains(t, stdout, "SPARSE")
 	require.Contains(t, stdout, "FUSION")
 	require.Contains(t, stdout, "QUANTIZE TURBO")
 	require.Contains(t, stdout, "Bye.")
@@ -116,12 +116,12 @@ func TestHandleCommandExplainDispatchesToExecutor(t *testing.T) {
 	exec := &stubExecutor{explainResult: "plan body"}
 
 	stdout, stderr := captureREPL(t, exec, func(r *REPL) {
-		err := r.handleCommand("explain SEARCH docs SIMILAR TO 'vector database' LIMIT 5")
+		err := r.handleCommand("explain QUERY 'vector database' FROM docs LIMIT 5")
 		require.NoError(t, err)
 	})
 
 	require.Empty(t, stderr)
-	require.Equal(t, "SEARCH docs SIMILAR TO 'vector database' LIMIT 5", exec.explainQuery)
+	require.Equal(t, "QUERY 'vector database' FROM docs LIMIT 5", exec.explainQuery)
 	require.Contains(t, stdout, "Query Plan")
 	require.Contains(t, stdout, "plan body")
 }
@@ -130,12 +130,12 @@ func TestHandleCommandExplainDispatchesCaseInsensitively(t *testing.T) {
 	exec := &stubExecutor{explainResult: "plan body"}
 
 	_, stderr := captureREPL(t, exec, func(r *REPL) {
-		err := r.handleCommand("ExPlAiN SEARCH docs SIMILAR TO 'vector database' LIMIT 5")
+		err := r.handleCommand("ExPlAiN QUERY 'vector database' FROM docs LIMIT 5")
 		require.NoError(t, err)
 	})
 
 	require.Empty(t, stderr)
-	require.Equal(t, "SEARCH docs SIMILAR TO 'vector database' LIMIT 5", exec.explainQuery)
+	require.Equal(t, "QUERY 'vector database' FROM docs LIMIT 5", exec.explainQuery)
 }
 
 func TestHandleCommandExecutesQuery(t *testing.T) {
@@ -229,7 +229,7 @@ func TestReadLineIgnoresDelimitersInsideQuotedStrings(t *testing.T) {
 func TestAddToHistoryDeduplicatesAndCapsSize(t *testing.T) {
 	repl := NewREPL(&config.Config{URL: "http://localhost:6333"}, &stubExecutor{})
 
-	for i := 0; i < 101; i++ {
+	for i := range 101 {
 		repl.addToHistory(fmt.Sprintf("cmd-%d", i))
 	}
 	repl.addToHistory("cmd-50")

@@ -5,7 +5,7 @@ CREATE INDEX ON COLLECTION retrieval_debug_runbook FOR severity TYPE keyword
 CREATE INDEX ON COLLECTION retrieval_debug_runbook FOR doc_type TYPE keyword
 CREATE INDEX ON COLLECTION retrieval_debug_runbook FOR status TYPE keyword
 CREATE INDEX ON COLLECTION retrieval_debug_runbook FOR title TYPE text WITH { tokenizer: 'word', lowercase: true, phrase_matching: true }
-INSERT BULK INTO COLLECTION retrieval_debug_runbook VALUES [
+INSERT INTO retrieval_debug_runbook VALUES
   {
     'id': 4101,
     'text': 'Customers can request a refund within 30 days of purchase. Annual plans are prorated only during the first billing cycle. Refund requests must include the workspace ID and invoice number.',
@@ -246,5 +246,5 @@ INSERT BULK INTO COLLECTION retrieval_debug_runbook VALUES [
     'doc_type': 'runbook',
     'status': 'active'
   }
-] USING HYBRID
+USING HYBRID
 SHOW COLLECTION retrieval_debug_runbook

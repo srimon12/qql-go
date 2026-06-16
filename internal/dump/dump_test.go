@@ -92,7 +92,7 @@ func TestCollection(t *testing.T) {
 	require.NoError(t, err)
 	text := string(data)
 	require.Contains(t, text, "CREATE COLLECTION docs HYBRID")
-	require.Contains(t, text, "INSERT BULK INTO COLLECTION docs VALUES [")
+	require.Contains(t, text, "INSERT INTO docs VALUES")
 	require.Contains(t, text, "USING HYBRID")
 	require.Contains(t, text, "'id': '123e4567-e89b-12d3-a456-426614174000'")
 }

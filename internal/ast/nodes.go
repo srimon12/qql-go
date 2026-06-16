@@ -1,20 +1,13 @@
 package ast
 
 type InsertStmt struct {
-	Collection  string
-	PointID     interface{}
-	Values      map[string]interface{}
-	Model       *string
-	Hybrid      bool
-	SparseModel *string
-}
-
-type InsertBulkStmt struct {
-	Collection  string
-	ValuesList  []map[string]interface{}
-	Model       *string
-	Hybrid      bool
-	SparseModel *string
+	Collection   string
+	ValuesList   []map[string]any
+	Model        *string
+	Hybrid       bool
+	DenseVector  *string
+	SparseModel  *string
+	SparseVector *string
 }
 
 type VectorsConfig struct {
@@ -39,8 +32,13 @@ type OptimizersRuntimeConfig struct {
 	MemmapThreshold        *uint64
 	IndexingThreshold      *uint64
 	FlushIntervalSec       *uint64
-	MaxOptimizationThreads interface{} // int or "auto" string
+	MaxOptimizationThreads *OptimizationThreads
 	PreventUnoptimized     *bool
+}
+
+type OptimizationThreads struct {
+	Auto  bool
+	Value uint64
 }
 
 type CollectionParamsConfig struct {
@@ -63,11 +61,36 @@ type QuantizationUpdate struct {
 	Config   *QuantizationConfig
 }
 
+type VectorDistance string
+
+const (
+	DistanceCosine    VectorDistance = "COSINE"
+	DistanceDot       VectorDistance = "DOT"
+	DistanceEuclid    VectorDistance = "EUCLID"
+	DistanceManhattan VectorDistance = "MANHATTAN"
+)
+
+type VectorDef struct {
+	Name     string
+	Size     uint64
+	Distance VectorDistance
+}
+
+type SparseVectorDef struct {
+	Name string
+}
+
 type CreateCollectionStmt struct {
 	Collection   string
 	Hybrid       bool
 	Rerank       bool
 	Model        *string
+	DenseVector  *string
+	SparseVector *string
+
+	Vectors       []VectorDef
+	SparseVectors []SparseVectorDef
+
 	Quantization *QuantizationConfig
 	Config       *CollectionConfig
 }
@@ -107,35 +130,14 @@ type ShowCollectionStmt struct {
 
 type SelectStmt struct {
 	Collection string
-	PointID    interface{}
+	PointID    any
 }
 
 type ScrollStmt struct {
 	Collection  string
 	Limit       int
 	QueryFilter FilterExpr
-	After       interface{}
-}
-
-type SearchStmt struct {
-	Collection     string
-	QueryText      string
-	Limit          int
-	Model          *string
-	Hybrid         bool
-	Fusion         *string
-	SparseOnly     bool
-	SparseModel    *string
-	QueryFilter    FilterExpr
-	Rerank         bool
-	RerankModel    *string
-	WithClause     *SearchWith
-	GroupBy        string
-	GroupSize      int
-	Offset         int
-	ScoreThreshold *float64
-	LookupFrom     string
-	LookupVector   *string
+	After       any
 }
 
 type QuantizationSearchWith struct {
@@ -144,46 +146,130 @@ type QuantizationSearchWith struct {
 	Oversampling *float64
 }
 
-type RecommendStmt struct {
-	Collection     string
-	PositiveIDs    []interface{}
-	NegativeIDs    []interface{}
-	Limit          int
-	Strategy       *string
-	QueryFilter    FilterExpr
-	Offset         int
-	ScoreThreshold *float64
-	WithClause     *SearchWith
-	LookupFrom     string
-	LookupVector   *string
-	Using          *string
+type QueryMode string
+
+const (
+	QueryModeNearest   QueryMode = "NEAREST"
+	QueryModeRecommend QueryMode = "RECOMMEND"
+	QueryModeDiscover  QueryMode = "DISCOVER"
+	QueryModeContext   QueryMode = "CONTEXT"
+	QueryModeOrderBy   QueryMode = "ORDER_BY"
+)
+
+type ContextPair struct {
+	Positive any
+	Negative any
+}
+
+type QueryType int
+
+const (
+	QueryTypeDense QueryType = iota
+	QueryTypeSparse
+	QueryTypeHybrid
+)
+
+// CTE represents a named sub-query defined in a WITH clause.
+type CTE struct {
+	Name string
+	Stmt *QueryStmt
+}
+
+type PayloadSelector struct {
+	Enable  *bool
+	Include []string
+	Exclude []string
+}
+
+type VectorsSelector struct {
+	Enable  *bool
+	Vectors []string
+}
+
+// PrefetchRef is a reference to a CTE by name, used in PREFETCH clauses.
+// Optional Filter and ScoreThreshold allow per-prefetch overrides.
+type PrefetchRef struct {
+	CTEName        string
+	Filter         FilterExpr // per-prefetch WHERE clause
+	ScoreThreshold *float64   // per-prefetch SCORE THRESHOLD
+}
+
+type QueryStmt struct {
+	Collection string
+	Mode       QueryMode
+	Type       QueryType
+
+	// For NEAREST
+	QueryText *string
+	QueryID   any
+
+	// For RECOMMEND
+	PositiveIDs []any
+	NegativeIDs []any
+
+	// For CONTEXT
+	ContextPairs []ContextPair
+
+	// For DISCOVER
+	Target any
+
+	// For ORDER BY
+	OrderByField *string
+	OrderByAsc   *bool
+
+	Limit                int
+	Strategy             *string
+	QueryFilter          FilterExpr
+	Offset               int
+	ScoreThreshold       *float64
+	GroupBy              *string
+	GroupSize            *int
+	WithClause           *SearchWith
+	WithPayload          *PayloadSelector
+	WithVectors          *VectorsSelector
+	LookupFrom           string
+	LookupVector         *string
+	WithLookupCollection *string // cross-collection group ID lookup (WITH LOOKUP FROM <collection>)
+	Using                *string
+	Model                *string
+
+	// CTEs defined at the top level or within a CTE's body
+	CTEs []CTE
+
+	// Prefetch DAG — references to CTE names or inline queries
+	PrefetchRefs []PrefetchRef
+	FusionType   *string
+
+	Rerank      bool
+	RerankModel *string
 }
 
 type DeleteStmt struct {
 	Collection string
-	PointID    interface{}
+	PointID    any
 	Field      string
-	Value      interface{}
+	Value      any
 }
 
 type UpdateVectorStmt struct {
 	Collection string
-	PointID    interface{}
+	PointID    any
 	Vector     []float32
+	VectorName *string
 }
 
 type UpdatePayloadStmt struct {
 	Collection  string
-	PointID     interface{}
+	PointID     any
 	QueryFilter FilterExpr
-	Payload     map[string]interface{}
+	Payload     map[string]any
 }
 
 type CreateIndexStmt struct {
 	Collection string
 	Field      string
 	FieldType  string
-	Options    map[string]interface{}
+	Options    map[string]any
 }
 
 type ASTNode interface {
@@ -191,7 +277,6 @@ type ASTNode interface {
 }
 
 func (InsertStmt) isASTNode()           {}
-func (InsertBulkStmt) isASTNode()       {}
 func (CreateCollectionStmt) isASTNode() {}
 func (AlterCollectionStmt) isASTNode()  {}
 func (DropCollectionStmt) isASTNode()   {}
@@ -199,8 +284,7 @@ func (ShowCollectionsStmt) isASTNode()  {}
 func (ShowCollectionStmt) isASTNode()   {}
 func (SelectStmt) isASTNode()           {}
 func (ScrollStmt) isASTNode()           {}
-func (SearchStmt) isASTNode()           {}
-func (RecommendStmt) isASTNode()        {}
+func (QueryStmt) isASTNode()            {}
 func (DeleteStmt) isASTNode()           {}
 func (UpdateVectorStmt) isASTNode()     {}
 func (UpdatePayloadStmt) isASTNode()    {}

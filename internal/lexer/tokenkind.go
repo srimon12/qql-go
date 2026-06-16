@@ -4,7 +4,6 @@ type TokenKind int
 
 const (
 	TokenKindInsert TokenKind = iota
-	TokenKindBulk
 	TokenKindInto
 	TokenKindCollection
 	TokenKindValues
@@ -16,6 +15,7 @@ const (
 	TokenKindRerank
 	TokenKindExact
 	TokenKindWith
+	TokenKindAs
 	TokenKindAcorn
 	TokenKindQuantize
 	TokenKindScalar
@@ -36,22 +36,15 @@ const (
 	TokenKindDrop
 	TokenKindShow
 	TokenKindCollections
-	TokenKindSearch
 	TokenKindSelect
 	TokenKindScroll
 	TokenKindStar
 	TokenKindAfter
-	TokenKindFusion
 	TokenKindRecommend
-	TokenKindSimilar
-	TokenKindTo
 	TokenKindLimit
 	TokenKindGroup
 	TokenKindBy
 	TokenKindGroupSize
-	TokenKindPositive
-	TokenKindNegative
-	TokenKindIds
 	TokenKindStrategy
 	TokenKindDelete
 	TokenKindUpdate
@@ -80,6 +73,19 @@ const (
 	TokenKindScore
 	TokenKindThreshold
 	TokenKindLookup
+	TokenKindCosine
+	TokenKindDot
+	TokenKindEuclid
+	TokenKindManhattan
+	TokenKindOrder
+	TokenKindAsc
+	TokenKindDesc
+	TokenKindQuery
+	TokenKindNearest
+	TokenKindContext
+	TokenKindDiscover
+	TokenKindPairs
+	TokenKindTarget
 	TokenKindIdentifier
 	TokenKindString
 	TokenKindInteger
@@ -98,12 +104,13 @@ const (
 	TokenKindGte
 	TokenKindLt
 	TokenKindLte
+	TokenKindPrefetch
+	TokenKindFusion
 	TokenKindEof
 )
 
 var tokenKindStrings = map[TokenKind]string{
 	TokenKindInsert:      "INSERT",
-	TokenKindBulk:        "BULK",
 	TokenKindInto:        "INTO",
 	TokenKindCollection:  "COLLECTION",
 	TokenKindValues:      "VALUES",
@@ -115,6 +122,7 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindRerank:      "RERANK",
 	TokenKindExact:       "EXACT",
 	TokenKindWith:        "WITH",
+	TokenKindAs:          "AS",
 	TokenKindAcorn:       "ACORN",
 	TokenKindQuantize:    "QUANTIZE",
 	TokenKindScalar:      "SCALAR",
@@ -135,22 +143,15 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindDrop:        "DROP",
 	TokenKindShow:        "SHOW",
 	TokenKindCollections: "COLLECTIONS",
-	TokenKindSearch:      "SEARCH",
 	TokenKindSelect:      "SELECT",
 	TokenKindScroll:      "SCROLL",
 	TokenKindStar:        "STAR",
 	TokenKindAfter:       "AFTER",
-	TokenKindFusion:      "FUSION",
 	TokenKindRecommend:   "RECOMMEND",
-	TokenKindSimilar:     "SIMILAR",
-	TokenKindTo:          "TO",
 	TokenKindLimit:       "LIMIT",
 	TokenKindGroup:       "GROUP",
 	TokenKindBy:          "BY",
 	TokenKindGroupSize:   "GROUP_SIZE",
-	TokenKindPositive:    "POSITIVE",
-	TokenKindNegative:    "NEGATIVE",
-	TokenKindIds:         "IDS",
 	TokenKindStrategy:    "STRATEGY",
 	TokenKindDelete:      "DELETE",
 	TokenKindUpdate:      "UPDATE",
@@ -179,6 +180,19 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindScore:       "SCORE",
 	TokenKindThreshold:   "THRESHOLD",
 	TokenKindLookup:      "LOOKUP",
+	TokenKindCosine:      "COSINE",
+	TokenKindDot:         "DOT",
+	TokenKindEuclid:      "EUCLID",
+	TokenKindManhattan:   "MANHATTAN",
+	TokenKindOrder:       "ORDER",
+	TokenKindAsc:         "ASC",
+	TokenKindDesc:        "DESC",
+	TokenKindQuery:       "QUERY",
+	TokenKindNearest:     "NEAREST",
+	TokenKindContext:     "CONTEXT",
+	TokenKindDiscover:    "DISCOVER",
+	TokenKindPairs:       "PAIRS",
+	TokenKindTarget:      "TARGET",
 	TokenKindIdentifier:  "IDENTIFIER",
 	TokenKindString:      "STRING",
 	TokenKindInteger:     "INTEGER",
@@ -197,6 +211,8 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindGte:         "GTE",
 	TokenKindLt:          "LT",
 	TokenKindLte:         "LTE",
+	TokenKindPrefetch:    "PREFETCH",
+	TokenKindFusion:      "FUSION",
 	TokenKindEof:         "EOF",
 }
 

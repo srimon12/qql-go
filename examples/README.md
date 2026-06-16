@@ -1,90 +1,78 @@
 # Examples
 
-These examples are runnable retrieval workflows.
+Runnable retrieval workflows showcasing `qql-go` capabilities.
 
-Each one ships as a folder with:
+## Before You Run
 
-- a Bash runner
-- a PowerShell runner
-- checked-in QQL used by the workflow
-- JSON artifacts you can inspect, diff, or attach to CI
-
-## Before You Run Them
-
-Install `qql-go`, then connect it to Qdrant:
+Install `qql-go`, then connect:
 
 ```bash
+# Cloud
 qql-go connect --url https://<cluster>.qdrant.io --secret <api-key>
+
+# Local (needs embedding endpoint for text operations)
+qql-go connect --url http://localhost:6334 --inference-mode local \
+  --embedding-endpoint http://127.0.0.1:1234/v1/embeddings \
+  --embedding-model text-embedding-all-minilm-l6-v2-embedding
 ```
 
-If you use local or self-hosted Qdrant:
+## Examples
+
+### `medical-showcase/` — Full QQL feature showcase
+
+Minimal Python script that demonstrates every QQL feature against 12 medical records: hybrid search, filters, grouped retrieval, recommend, context, discover, prefetch DAGs, parameterized RRF, mutations, and operations.
+
+**Best for:** seeing everything QQL can do in one run.
 
 ```bash
-qql-go connect --url http://localhost:6333
+uv run examples/medical-showcase/main.py --execute
 ```
 
-Examples that use text `INSERT` or `SEARCH ... SIMILAR TO ...` also need embeddings through either:
+### `release-validation/` — CI retrieval regression checks
 
-- Qdrant Cloud inference
-- `local` or `external` inference mode with an OpenAI-compatible embeddings endpoint
+Runs `SHOW`, `EXPLAIN`, and `QUERY` checks against an existing collection. Validates JSON results. Fits into CI without reseeding.
 
-## Start Here
-
-### `release-validation/`
-
-Use this when you want retrieval regression checks against an existing collection.
-
-It runs `SHOW`, `EXPLAIN`, and `SEARCH` checks against the dataset you already have, validates the JSON results, and fits naturally into CI without reseeding the corpus. The checked-in suite also exercises the current search syntax for offset windows, score thresholds, and lookup-from plans.
-
-Run:
+**Best for:** CI pipelines, smoke tests, release gates.
 
 ```bash
 bash examples/release-validation/run-demo.sh
 ```
 
-### `retrieval-debug-runbook/`
+### `retrieval-debug-runbook/` — Search incident investigation
 
-Use this when someone says search stopped working and you need to investigate quickly.
+Provisions a small corpus, compares hybrid/exact/sparse retrieval, inspects expected documents, and saves artifacts for support reports.
 
-It provisions a small runbook corpus, compares hybrid, exact, and sparse retrieval, reruns the issue with filters, inspects the expected document, and saves the artifacts you would want in a support or on-call report.
-
-Run:
+**Best for:** on-call debugging, support investigations.
 
 ```bash
 bash examples/retrieval-debug-runbook/run-demo.sh
 ```
 
-### `medical-retrieval-ops/`
+### `medical-retrieval-ops/` — Full benchmark with HuggingFace corpus
 
-Use this when you want a full end-to-end benchmark and showcase.
+Downloads the `RAGCare-QA` dataset, builds a QQL corpus, compares retrieval modes, and writes `hit@1`/`hit@5` benchmark results.
 
-It downloads the full `ChatMED-Project/RAGCare-QA` dataset from Hugging Face, builds a QQL corpus, loads it into Qdrant, compares dense, sparse, hybrid RRF, hybrid DBSF, and exact retrieval, then writes benchmark results for `hit@1` and `hit@5`.
-
-Run:
+**Best for:** retrieval quality evaluation, model comparison.
 
 ```bash
 bash examples/medical-retrieval-ops/run-demo.sh
 ```
 
-## Which One To Show First
+## Which To Show First
 
-- `release-validation/` if you want the clearest CI and ops story
-- `retrieval-debug-runbook/` if you want the fastest investigation story
-- `medical-retrieval-ops/` if you want the broadest feature and benchmark story
+| Audience | Example |
+|----------|---------|
+| Developer evaluating QQL | `medical-showcase/` |
+| CI/ops engineer | `release-validation/` |
+| On-call / support | `retrieval-debug-runbook/` |
+| ML / retrieval engineer | `medical-retrieval-ops/` |
 
-## What The Artifacts Are For
+## Artifacts
 
-Each workflow writes JSON artifacts under its own `artifacts/` directory.
+Each workflow writes JSON artifacts to its `artifacts/` directory.
 
-Use them to:
-
-- diff retrieval behavior between runs
-- attach evidence to a CI failure
-- inspect explain plans and result IDs
-- feed screenshots, docs, or agent reports
+Use them to: diff retrieval between runs, attach to CI failures, inspect explain plans, feed agent reports.
 
 ## Boundaries
 
-These examples show how to operate and validate retrieval systems around an app.
-
-Use the Qdrant SDK in application code. Use `qql-go` when you want deterministic, reviewable retrieval operations.
+Use `qql-go` for deterministic, reviewable retrieval operations. Use the Qdrant SDK for application code.

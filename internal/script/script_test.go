@@ -2,8 +2,6 @@ package script
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -23,20 +21,20 @@ func (s *stubExecutor) Execute(query string) (string, error) {
 }
 
 func TestStripComments(t *testing.T) {
-	input := "SHOW COLLECTIONS -- comment\nINSERT INTO COLLECTION docs VALUES {'text': 'hello'}"
+	input := "SHOW COLLECTIONS -- comment\nINSERT INTO docs VALUES {'text': 'hello'}"
 	got := StripComments(input)
 	require.NotContains(t, got, "comment")
 	require.Contains(t, got, "SHOW COLLECTIONS")
 }
 
 func TestSplitStatements(t *testing.T) {
-	input := "SHOW COLLECTIONS\nINSERT INTO COLLECTION docs VALUES {'text': 'hello'}\nRECOMMEND FROM docs POSITIVE IDS ('1') LIMIT 5"
+	input := "SHOW COLLECTIONS\nINSERT INTO docs VALUES {'text': 'hello'}\nQUERY RECOMMEND WITH (positive = ('1')) FROM docs LIMIT 5"
 	statements, err := SplitStatements(input)
 	require.NoError(t, err)
 	require.Len(t, statements, 3)
 	require.Equal(t, "SHOW COLLECTIONS", statements[0])
-	require.Contains(t, statements[1], "INSERT INTO COLLECTION docs")
-	require.Contains(t, statements[2], "RECOMMEND FROM docs")
+	require.Contains(t, statements[1], "INSERT INTO docs")
+	require.Contains(t, statements[2], "QUERY RECOMMEND WITH")
 }
 
 func TestSplitStatementsSelectAndScroll(t *testing.T) {
@@ -50,23 +48,20 @@ func TestSplitStatementsSelectAndScroll(t *testing.T) {
 }
 
 func TestSplitStatementsUpdate(t *testing.T) {
-	input := "SHOW COLLECTION docs\nUPDATE docs SET PAYLOAD WHERE id = 1 {'status': 'reviewed'}\nDROP COLLECTION docs"
+	input := "SHOW COLLECTION docs\nUPDATE docs SET PAYLOAD = {'status': 'reviewed'} WHERE id = 1\nDROP COLLECTION docs"
 	statements, err := SplitStatements(input)
 	require.NoError(t, err)
 	require.Len(t, statements, 3)
 	require.Equal(t, "SHOW COLLECTION docs", statements[0])
-	require.Equal(t, "UPDATE docs SET PAYLOAD WHERE id = 1 {'status': 'reviewed'}", statements[1])
+	require.Equal(t, "UPDATE docs SET PAYLOAD = {'status': 'reviewed'} WHERE id = 1", statements[1])
 	require.Equal(t, "DROP COLLECTION docs", statements[2])
 }
 
-func TestRunFileWithSelectAndScroll(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "sample.qql")
+func TestRunScriptWithSelectAndScroll(t *testing.T) {
 	content := "SHOW COLLECTION docs\nSELECT * FROM docs WHERE id = 'pt-1'\nSCROLL FROM docs WHERE status = 'active' AFTER 'pt-1' LIMIT 10\n"
-	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
 
 	exec := &stubExecutor{}
-	okCount, failCount, err := RunFile(path, exec, false)
+	okCount, failCount, err := RunScript(content, exec, false)
 	require.NoError(t, err)
 	require.Equal(t, 3, okCount)
 	require.Zero(t, failCount)
@@ -77,31 +72,28 @@ func TestRunFileWithSelectAndScroll(t *testing.T) {
 	}, exec.queries)
 }
 
-func TestRunFile(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "sample.qql")
-	require.NoError(t, os.WriteFile(path, []byte("SHOW COLLECTIONS\nDROP COLLECTION docs\n"), 0o644))
+func TestRunScriptBasic(t *testing.T) {
+	content := "SHOW COLLECTIONS\nDROP COLLECTION docs\n"
 
 	exec := &stubExecutor{}
-	okCount, failCount, err := RunFile(path, exec, false)
+	okCount, failCount, err := RunScript(content, exec, false)
 	require.NoError(t, err)
 	require.Equal(t, 2, okCount)
 	require.Zero(t, failCount)
 	require.Equal(t, []string{"SHOW COLLECTIONS", "DROP COLLECTION docs"}, exec.queries)
 }
 
-func TestRunFileStopOnError(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "sample.qql")
-	require.NoError(t, os.WriteFile(path, []byte("SHOW COLLECTIONS\nDROP COLLECTION docs\nSHOW COLLECTIONS\n"), 0o644))
+func TestRunScriptStopOnError(t *testing.T) {
+	content := "SHOW COLLECTIONS\nDROP COLLECTION docs\nSHOW COLLECTIONS\n"
 
 	exec := &stubExecutor{
 		failFor: map[string]error{
 			"DROP COLLECTION docs": fmt.Errorf("boom"),
 		},
 	}
-	okCount, failCount, err := RunFile(path, exec, true)
-	require.NoError(t, err)
+	okCount, failCount, err := RunScript(content, exec, true)
+	require.Error(t, err)
+	require.Equal(t, "boom", err.Error())
 	require.Equal(t, 1, okCount)
 	require.Equal(t, 1, failCount)
 	require.Equal(t, []string{"SHOW COLLECTIONS", "DROP COLLECTION docs"}, exec.queries)

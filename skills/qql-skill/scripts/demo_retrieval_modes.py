@@ -9,7 +9,14 @@ EXAMPLES = [
     {
         "mode": "dense",
         "when": "Use when semantic similarity matters more than exact term matching.",
-        "query": "SEARCH articles SIMILAR TO 'vector database performance tuning' LIMIT 5",
+        "query": "QUERY 'vector database performance tuning' FROM articles LIMIT 5",
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "dense-by-id",
+        "when": "Use when you want to find results similar to a specific point by its ID.",
+        "query": "QUERY '123e4567-e89b-12d3-a456-426614174001' FROM articles LIMIT 5",
         "setup": [],
         "requires_index": [],
     },
@@ -17,7 +24,7 @@ EXAMPLES = [
         "mode": "hybrid",
         "when": "Use when exact terms, acronyms, model names, or error strings matter.",
         "query": (
-            "SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' "
+            "QUERY 'out of memory hnsw_ef acorn' FROM incidents "
             "LIMIT 10 USING HYBRID"
         ),
         "setup": [],
@@ -27,8 +34,18 @@ EXAMPLES = [
         "mode": "hybrid-dbsf",
         "when": "Use when you want hybrid retrieval with DBSF fusion instead of the default RRF.",
         "query": (
-            "SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' "
-            "LIMIT 10 USING HYBRID FUSION 'dbsf'"
+            "QUERY 'out of memory hnsw_ef acorn' FROM incidents "
+            "LIMIT 10 USING HYBRID FUSION DBSF"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "hybrid-rrf-params",
+        "when": "Use when you want to tune RRF parameters — K controls rank smoothing, weights control source influence.",
+        "query": (
+            "QUERY 'vector search performance' FROM articles "
+            "LIMIT 10 USING HYBRID WITH (rrf_k = 30, rrf_weights: [0.7, 0.3])"
         ),
         "setup": [],
         "requires_index": [],
@@ -37,7 +54,7 @@ EXAMPLES = [
         "mode": "sparse",
         "when": "Use when keyword or BM25 retrieval matters more than semantic similarity.",
         "query": (
-            "SEARCH incidents SIMILAR TO 'out of memory hnsw_ef acorn' "
+            "QUERY 'out of memory hnsw_ef acorn' FROM incidents "
             "LIMIT 10 USING SPARSE"
         ),
         "setup": [],
@@ -46,7 +63,7 @@ EXAMPLES = [
     {
         "mode": "exact",
         "when": "Use when debugging recall and you need an exact KNN baseline.",
-        "query": "SEARCH articles SIMILAR TO 'attention mechanism' LIMIT 10 EXACT",
+        "query": "QUERY 'attention mechanism' FROM articles LIMIT 10 EXACT",
         "setup": [],
         "requires_index": [],
     },
@@ -54,8 +71,28 @@ EXAMPLES = [
         "mode": "with-hnsw-ef",
         "when": "Use when you want query-time recall tuning without changing collection config.",
         "query": (
-            "SEARCH articles SIMILAR TO 'transformer inference' "
-            "LIMIT 10 WITH { hnsw_ef: 256 }"
+            "QUERY 'transformer inference' FROM articles "
+            "LIMIT 10 WITH (hnsw_ef = 256)"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "score-threshold",
+        "when": "Use when you want to filter out low-relevance results at query time.",
+        "query": (
+            "QUERY 'vector database' FROM articles "
+            "LIMIT 10 SCORE THRESHOLD 0.5"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "offset",
+        "when": "Use when you need to paginate through flat search results.",
+        "query": (
+            "QUERY 'vector database' FROM articles "
+            "LIMIT 5 OFFSET 10"
         ),
         "setup": [],
         "requires_index": [],
@@ -64,8 +101,8 @@ EXAMPLES = [
         "mode": "hybrid-mmr",
         "when": "Use when hybrid search results are too redundant and you want semantic diversity on the dense leg before fusion.",
         "query": (
-            "SEARCH articles SIMILAR TO 'vector database performance tuning' "
-            "LIMIT 10 USING HYBRID WITH { mmr_diversity: 0.5, mmr_candidates: 25 }"
+            "QUERY 'vector database performance tuning' FROM articles "
+            "LIMIT 10 USING HYBRID WITH (mmr_diversity = 0.5, mmr_candidates: 25)"
         ),
         "setup": [],
         "requires_index": [],
@@ -77,7 +114,7 @@ EXAMPLES = [
             "CREATE INDEX ON COLLECTION articles FOR category TYPE keyword",
         ],
         "query": (
-            "SEARCH articles SIMILAR TO 'transformer inference' "
+            "QUERY 'transformer inference' FROM articles "
             "LIMIT 10 WHERE category = 'ml'"
         ),
         "requires_index": ["category"],
@@ -86,8 +123,8 @@ EXAMPLES = [
         "mode": "with-acorn",
         "when": "Use when filtered-query recall is the focus and ACORN should be tested.",
         "query": (
-            "SEARCH incidents SIMILAR TO 'retrieval recall regression' "
-            "LIMIT 10 WHERE team = 'search' WITH { acorn: true }"
+            "QUERY 'retrieval recall regression' FROM incidents "
+            "LIMIT 10 WHERE team = 'search' WITH (acorn = true)"
         ),
         "setup": [
             "CREATE INDEX ON COLLECTION incidents FOR team TYPE keyword",
@@ -98,12 +135,12 @@ EXAMPLES = [
         "mode": "tenant-aware-indexing",
         "when": "Use when a filter field acts like a tenant boundary and Qdrant should optimize for that grouping.",
         "query": (
-            "SEARCH tenant_docs SIMILAR TO 'stroke discharge summary' "
+            "QUERY 'stroke discharge summary' FROM tenant_docs "
             "LIMIT 5 WHERE tenant_id = 'tenant-a'"
         ),
         "setup": [
             "CREATE COLLECTION tenant_docs HYBRID WITH HNSW { payload_m: 16 }",
-            "CREATE INDEX ON COLLECTION tenant_docs FOR tenant_id TYPE keyword WITH { is_tenant: true, on_disk: true }",
+            "CREATE INDEX ON COLLECTION tenant_docs FOR tenant_id TYPE keyword WITH (is_tenant = true, on_disk: true)",
         ],
         "requires_index": ["tenant_id"],
     },
@@ -112,7 +149,7 @@ EXAMPLES = [
         "when": "Use when a text payload field needs explicit tokenization controls before phrase or keyword-heavy filtering.",
         "query": (
             "CREATE INDEX ON COLLECTION tenant_docs FOR title TYPE text "
-            "WITH { tokenizer: 'word', min_token_len: 2, max_token_len: 20, lowercase: true, phrase_matching: true }"
+            "WITH (tokenizer = 'word', min_token_len: 2, max_token_len: 20, lowercase: true, phrase_matching: true)"
         ),
         "setup": [],
         "requires_index": [],
@@ -121,7 +158,7 @@ EXAMPLES = [
         "mode": "grouped",
         "when": "Use when results should be grouped by a payload field instead of returned as one flat list.",
         "query": (
-            "SEARCH incidents SIMILAR TO 'retrieval recall regression' "
+            "QUERY 'retrieval recall regression' FROM incidents "
             "LIMIT 5 GROUP BY team GROUP_SIZE 2"
         ),
         "setup": [
@@ -133,8 +170,8 @@ EXAMPLES = [
         "mode": "grouped-hybrid",
         "when": "Use when grouped results still need hybrid recall and query-time tuning.",
         "query": (
-            "SEARCH incidents SIMILAR TO 'retrieval recall regression' "
-            "LIMIT 4 USING HYBRID WITH { hnsw_ef: 128, acorn: true } "
+            "QUERY 'retrieval recall regression' FROM incidents "
+            "LIMIT 4 USING HYBRID WITH (hnsw_ef = 128) "
             "GROUP BY team GROUP_SIZE 2"
         ),
         "setup": [
@@ -143,10 +180,97 @@ EXAMPLES = [
         "requires_index": ["team"],
     },
     {
+        "mode": "recommend",
+        "when": "Use when you have example point IDs and want to find similar items.",
+        "query": (
+            "QUERY RECOMMEND WITH (positive = ('uuid-1', 'uuid-2')) FROM articles LIMIT 5"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "recommend-with-strategy",
+        "when": "Use when you want to control how positive/negative examples are combined.",
+        "query": (
+            "QUERY RECOMMEND WITH (positive = ('uuid-1')), negative = ('uuid-2') "
+            "STRATEGY 'best_score' FROM articles LIMIT 5"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "context",
+        "when": "Use when you have pairwise relevance signals (this is better than that) and want context-aware search.",
+        "query": (
+            "QUERY CONTEXT PAIRS (('uuid-1', 'uuid-2'), ('uuid-3', 'uuid-4')) FROM docs LIMIT 10"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "discover",
+        "when": "Use when you have a target item and context pairs to explore an interesting region of the vector space.",
+        "query": (
+            "QUERY DISCOVER TARGET 'uuid-1' CONTEXT PAIRS (('uuid-2', 'uuid-3')) FROM docs LIMIT 10"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "prefetch-rrf",
+        "when": "Use when you need multi-stage retrieval with separate dense and sparse prefetches combined via RRF.",
+        "query": (
+            "WITH a AS (QUERY 'search query' USING dense LIMIT 100),\n"
+            "     b AS (QUERY 'search query' USING sparse LIMIT 100)\n"
+            "QUERY 'search query' FROM docs LIMIT 10\n"
+            "  PREFETCH (a, b)\n"
+            "  FUSION RRF"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "prefetch-rrf-per-filter",
+        "when": "Use when each prefetch leg needs its own filter and score threshold. Per-prefetch WHERE and SCORE THRESHOLD are pushed down to Qdrant — not post-filters.",
+        "query": (
+            "WITH a AS (QUERY 'search query' USING dense LIMIT 200 WHERE category = 'tech'),\n"
+            "     b AS (QUERY 'search query' USING sparse LIMIT 300)\n"
+            "QUERY 'search query' FROM docs LIMIT 10\n"
+            "  PREFETCH (a SCORE THRESHOLD 0.6, b SCORE THRESHOLD 0.3)\n"
+            "  FUSION RRF WITH (rrf_k = 20, rrf_weights = [0.6, 0.4])"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "prefetch-rrf-tiered",
+        "when": "Use when you want a broad first pass scoped by a narrower second pass — coarse-to-fine retrieval for RAG pipelines.",
+        "query": (
+            "WITH broad AS (QUERY 'emergency neurological' USING dense LIMIT 500 WHERE department = 'emergency'),\n"
+            "     narrow AS (QUERY 'emergency neurological' USING sparse LIMIT 100 PREFETCH (broad))\n"
+            "QUERY 'emergency neurological' FROM clinical_docs LIMIT 5\n"
+            "  PREFETCH (narrow)\n"
+            "  FUSION RRF"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "grouped-with-lookup",
+        "when": "Use when you search in one collection but group IDs live in a separate collection. WITH LOOKUP FROM resolves group IDs from the lookup collection.",
+        "query": (
+            "QUERY 'machine learning' FROM research_papers LIMIT 20\n"
+            "  GROUP BY 'author_id' GROUP_SIZE 5\n"
+            "  WITH LOOKUP FROM author_metadata"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
         "mode": "rerank",
         "when": "Use when recall is likely good but top-result ordering needs help. Requires Qdrant Cloud and a rerank-capable collection.",
         "query": (
-            "SEARCH papers SIMILAR TO 'late interaction retrieval' LIMIT 5 RERANK"
+            "QUERY 'late interaction retrieval' FROM papers LIMIT 5 RERANK"
         ),
         "setup": [],
         "requires_index": [],
@@ -156,7 +280,7 @@ EXAMPLES = [
         "mode": "hybrid-rerank",
         "when": "Use when both keyword recall and top-rank precision matter. Requires Qdrant Cloud and a rerank-capable collection.",
         "query": (
-            "SEARCH docs SIMILAR TO 'cross encoder ms marco minimlm' "
+            "QUERY 'cross encoder ms marco minimlm' FROM docs "
             "LIMIT 8 USING HYBRID RERANK"
         ),
         "setup": [],
@@ -167,7 +291,7 @@ EXAMPLES = [
         "mode": "sparse-rerank",
         "when": "Use when sparse recall is strong but the top ordering still needs rerank. Requires Qdrant Cloud and a rerank-capable collection.",
         "query": (
-            "SEARCH docs SIMILAR TO 'cross encoder ms marco minimlm' "
+            "QUERY 'cross encoder ms marco minimlm' FROM docs "
             "LIMIT 8 USING SPARSE RERANK"
         ),
         "setup": [],

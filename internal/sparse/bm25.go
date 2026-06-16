@@ -2,7 +2,9 @@ package sparse
 
 import (
 	"math"
-	"sort"
+	"slices"
+
+	"github.com/srimon12/qql-go/internal/config"
 )
 
 // Vector is a sparse vector with sorted indices and parallel values.
@@ -28,7 +30,7 @@ func BuildQuery(text string) Vector {
 	for idx := range counts {
 		indices = append(indices, idx)
 	}
-	sort.Slice(indices, func(i, j int) bool { return indices[i] < indices[j] })
+	slices.Sort(indices)
 
 	values := make([]float32, len(indices))
 	for i, idx := range indices {
@@ -38,8 +40,9 @@ func BuildQuery(text string) Vector {
 	return Vector{Indices: indices, Values: values}
 }
 
-// BuildDocument creates a sparse document vector using normalized TF weights.
+// BuildDocument creates a sparse document vector using BM25-saturated TF weights.
 // Qdrant's sparse IDF modifier supplies the collection-wide rarity signal.
+// Uses k1=1.2, b=0.75, avgdl=256 matching Qdrant FastEmbed defaults.
 func BuildDocument(text string) Vector {
 	tokens := Tokenize(text)
 	if len(tokens) == 0 {
@@ -51,17 +54,39 @@ func BuildDocument(text string) Vector {
 		counts[hashToken(token)]++
 	}
 
-	docLength := float32(len(tokens))
+	docLen := float64(len(tokens))
 	indices := make([]uint32, 0, len(counts))
 	for idx := range counts {
 		indices = append(indices, idx)
 	}
-	sort.Slice(indices, func(i, j int) bool { return indices[i] < indices[j] })
+	slices.Sort(indices)
 
 	values := make([]float32, len(indices))
 	for i, idx := range indices {
-		values[i] = counts[idx] / docLength
+		values[i] = bm25TF(float64(counts[idx]), docLen)
 	}
 
 	return Vector{Indices: indices, Values: values}
+}
+
+func bm25TF(tfCount, docLen float64) float32 {
+	cfg := config.GetConfig()
+	k1 := 1.2
+	b := 0.75
+	avgdl := 256.0
+
+	if cfg != nil {
+		if cfg.BM25K1 != nil {
+			k1 = *cfg.BM25K1
+		}
+		if cfg.BM25B != nil {
+			b = *cfg.BM25B
+		}
+		if cfg.BM25AvgDL != nil {
+			avgdl = *cfg.BM25AvgDL
+		}
+	}
+
+	denom := tfCount + k1*(1.0-b+b*docLen/avgdl)
+	return float32(tfCount * (k1 + 1) / denom)
 }
