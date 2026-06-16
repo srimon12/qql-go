@@ -88,11 +88,11 @@ func (p *Parser) parseQueryBody() (*ast.QueryStmt, error) {
 		if _, err := p.expect(lexer.TokenKindBy); err != nil {
 			return nil, err
 		}
-		fieldTok, err := p.expect(lexer.TokenKindIdentifier)
+		fieldTok, err := p.parseIdentifier()
 		if err != nil {
 			return nil, err
 		}
-		stmt.OrderByField = &fieldTok.Value
+		stmt.OrderByField = &fieldTok
 
 		tok := p.peek()
 		if tok.Kind == lexer.TokenKindAsc {
