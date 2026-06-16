@@ -21,11 +21,11 @@ jobs:
           set -euo pipefail
           tag_version="${GITHUB_REF_NAME#v}"
           file_version="$(cat VERSION | tr -d '[:space:]')"
-          cmd_version="$(grep -oP 'var Version = "\K[^"]+' internal/cli/commands/commands.go)"
+          cmd_version="$(grep -oP 'var Version = "\K[^"]+' internal/cli/commands/executor.go)"
 
           echo "Tag:       v${tag_version}"
           echo "VERSION:   ${file_version}"
-          echo "commands.go: ${cmd_version}"
+          echo "executor.go: ${cmd_version}"
 
           if [ "${tag_version}" != "${file_version}" ]; then
             echo "::error::VERSION file (${file_version}) does not match tag (v${tag_version})"
@@ -33,7 +33,7 @@ jobs:
           fi
 
           if [ "${tag_version}" != "${cmd_version}" ]; then
-            echo "::error::commands.go Version (${cmd_version}) does not match tag (v${tag_version})"
+            echo "::error::executor.go Version (${cmd_version}) does not match tag (v${tag_version})"
             exit 1
           fi
 
