@@ -35,6 +35,7 @@ Translate user intent directly into QQL syntax:
 - Diverse dense/hybrid results -> add `WITH (mmr_diversity = ..., mmr_candidates = ...)`
 - Better ordering (Cloud Only) -> add `RERANK`
 - Grouped top results by field -> add `GROUP BY <field> [GROUP_SIZE <n>]`
+- Cross-collection group lookup -> add `WITH LOOKUP FROM <collection>` on grouped queries
 - Exact point lookup -> `SELECT * FROM <collection> WHERE id = <id>`
 - Browse points -> `SCROLL FROM <collection> [AFTER <id>] LIMIT <n>`
 - Batch ingest -> `INSERT INTO <collection> VALUES {...}, {...}`
@@ -83,12 +84,12 @@ DELETE FROM <name> WHERE <filter_expression>
 ```sql
 QUERY ['<text>' | <id> | RECOMMEND WITH (positive = (...), negative = (...)) [STRATEGY '<strategy>'] | CONTEXT PAIRS (...) | DISCOVER TARGET <id> CONTEXT PAIRS (...) | ORDER BY <field> [ASC|DESC]]
 FROM <collection>
-  [PREFETCH ( <cte_name>, ... ) FUSION <RRF | DBSF>]
+  [PREFETCH ( <cte_name> [WHERE <filter>] [SCORE THRESHOLD <n>], ... ) FUSION <RRF | DBSF>]
   [LOOKUP FROM <collection> [VECTOR '<name>']]
   [USING [HYBRID [FUSION DBSF] | SPARSE | DENSE | '<vector_name>']]
   [WITH MODEL '<model>']
   [WHERE <filter_expression>]
-  [GROUP BY <field> [GROUP_SIZE <m>]]
+  [GROUP BY <field> [GROUP_SIZE <m>] [WITH LOOKUP FROM <collection>]]
   [WITH (hnsw_ef = <n>, exact = <bool>, acorn = <bool>, mmr_diversity = <f>, mmr_candidates = <n>, rrf_k = <n>, rrf_weights = [...])]
   [WITH PAYLOAD [true | false | (include = ['<field>', ...], exclude = ['<field>', ...])]]
   [WITH VECTORS [true | false | ('<name>', ...)]]
@@ -105,6 +106,7 @@ QUERY ... FROM <collection> PREFETCH (<name>, ...) FUSION RRF LIMIT <n>
 
 **Notes:**
 - `PREFETCH` references CTE names, not inline queries.
+- Each prefetch ref can have an inline `WHERE` filter and `SCORE THRESHOLD`.
 - `OFFSET` cannot be used with `GROUP BY`.
 - Filters use standard SQL operators: `=`, `!=`, `>`, `<`, `BETWEEN ... AND ...`, `IN (...)`, `IS NULL`, `IS EMPTY`, `AND`, `OR`, `NOT`.
 

@@ -8,7 +8,7 @@ Use this file when a request sounds reasonable in Qdrant terms but is still outs
 - formula / score boosting (payload-aware score shaping, geo decay, conditional scoring)
 - relevance feedback query
 - SAMPLE RANDOM (random point sampling)
-- per-prefetch `LookupFrom` (not yet supported on individual prefetch stages; filter and score threshold are done)
+- per-prefetch `LookupFrom` (not yet supported on individual prefetch stages; filter and score threshold are done; cross-collection group lookup via `WITH LOOKUP FROM` is done)
 - offset-style pagination for grouped search
 - MMR for `USING SPARSE` or `RECOMMEND`
 - custom vector on-disk toggles
@@ -37,11 +37,12 @@ Prefer plain language:
 - Need cross-collection lookup: use `QUERY ... LOOKUP FROM <collection> [VECTOR '<name>']`
 - Need keyword plus semantic retrieval: use `USING HYBRID`
 - Need parameterized RRF tuning: use `WITH (rrf_k = <n>, rrf_weights = [...])`
-- Need multi-stage retrieval with per-prefetch filters: use `WITH <name> AS (...) ... PREFETCH (name) FUSION RRF`
+- Need multi-stage retrieval with per-prefetch filters: use `WITH <name> AS (...) ... PREFETCH (name WHERE <filter> SCORE THRESHOLD <n>) FUSION RRF`
 - Need hybrid DBSF fusion: use `USING HYBRID FUSION DBSF`
 - Need better ordering: use `RERANK` (cloud only)
 - Need filtering: create an index first, then use `WHERE`
 - Need grouped top results by field: use `QUERY ... GROUP BY <field> [GROUP_SIZE <n>]`
+- Need cross-collection group lookup: use `QUERY ... GROUP BY <field> GROUP_SIZE <n> WITH LOOKUP FROM <collection>`
 - Need to patch metadata in place: use `UPDATE <collection> SET PAYLOAD = {...} WHERE ...`
 - Need to replace a stored vector: use `UPDATE <collection> SET VECTOR = [...] WHERE id = ...`
 - Need a runnable prototype: stay inside `CREATE`, `CREATE INDEX`, `INSERT`, `QUERY`, `DELETE`

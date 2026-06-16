@@ -220,26 +220,48 @@ EXAMPLES = [
         "mode": "prefetch-rrf",
         "when": "Use when you need multi-stage retrieval with separate dense and sparse prefetches combined via RRF.",
         "query": (
+            "WITH a AS (QUERY 'search query' USING dense LIMIT 100),\n"
+            "     b AS (QUERY 'search query' USING sparse LIMIT 100)\n"
             "QUERY 'search query' FROM docs LIMIT 10\n"
-            "  PREFETCH (\n"
-            "    QUERY 'search query' USING 'dense' LIMIT 100,\n"
-            "    QUERY 'search query' USING 'sparse' LIMIT 100\n"
-            "  )\n"
+            "  PREFETCH (a, b)\n"
             "  FUSION RRF"
         ),
         "setup": [],
         "requires_index": [],
     },
     {
-        "mode": "prefetch-rrf-params",
-        "when": "Use when you need per-prefetch filtering and parameterized RRF tuning.",
+        "mode": "prefetch-rrf-per-filter",
+        "when": "Use when each prefetch leg needs its own filter and score threshold. Per-prefetch WHERE and SCORE THRESHOLD are pushed down to Qdrant — not post-filters.",
         "query": (
+            "WITH a AS (QUERY 'search query' USING dense LIMIT 200 WHERE category = 'tech'),\n"
+            "     b AS (QUERY 'search query' USING sparse LIMIT 300)\n"
             "QUERY 'search query' FROM docs LIMIT 10\n"
-            "  PREFETCH (\n"
-            "    QUERY 'search query' USING 'dense' LIMIT 100 WHERE category = 'tech' SCORE THRESHOLD 0.8,\n"
-            "    QUERY 'search query' USING 'sparse' LIMIT 100 WITH (exact = true)\n"
-            "  )\n"
-            "  FUSION RRF WITH (rrf_k = 10, rrf_weights: [0.7, 0.3])"
+            "  PREFETCH (a SCORE THRESHOLD 0.6, b SCORE THRESHOLD 0.3)\n"
+            "  FUSION RRF WITH (rrf_k = 20, rrf_weights = [0.6, 0.4])"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "prefetch-rrf-tiered",
+        "when": "Use when you want a broad first pass scoped by a narrower second pass — coarse-to-fine retrieval for RAG pipelines.",
+        "query": (
+            "WITH broad AS (QUERY 'emergency neurological' USING dense LIMIT 500 WHERE department = 'emergency'),\n"
+            "     narrow AS (QUERY 'emergency neurological' USING sparse LIMIT 100 PREFETCH (broad))\n"
+            "QUERY 'emergency neurological' FROM clinical_docs LIMIT 5\n"
+            "  PREFETCH (narrow)\n"
+            "  FUSION RRF"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "grouped-with-lookup",
+        "when": "Use when you search in one collection but group IDs live in a separate collection. WITH LOOKUP FROM resolves group IDs from the lookup collection.",
+        "query": (
+            "QUERY 'machine learning' FROM research_papers LIMIT 20\n"
+            "  GROUP BY 'author_id' GROUP_SIZE 5\n"
+            "  WITH LOOKUP FROM author_metadata"
         ),
         "setup": [],
         "requires_index": [],

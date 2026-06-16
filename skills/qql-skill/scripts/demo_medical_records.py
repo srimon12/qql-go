@@ -121,6 +121,9 @@ def build_statements():
     stmts.append(("prefetch-rrf",
         f"""WITH a AS (QUERY 'emergency critical neurological' USING dense LIMIT 10), b AS (QUERY 'emergency critical neurological' USING sparse LIMIT 10)
 QUERY 'emergency critical neurological' FROM {COLLECTION} LIMIT 3 PREFETCH (a, b) FUSION RRF"""))
+    stmts.append(("prefetch-rrf-per-filter",
+        f"""WITH a AS (QUERY 'emergency critical neurological' USING dense LIMIT 20), b AS (QUERY 'emergency critical neurological' USING sparse LIMIT 20)
+QUERY 'emergency critical neurological' FROM {COLLECTION} LIMIT 3 PREFETCH (a WHERE priority = 'high' SCORE THRESHOLD 0.3, b SCORE THRESHOLD 0.1) FUSION RRF WITH (rrf_k = 20, rrf_weights = [0.6, 0.4])"""))
     stmts.append(("prefetch-rrf-params",
         f"""WITH a AS (QUERY 'emergency critical neurological' USING dense LIMIT 10 WHERE priority = 'high'), b AS (QUERY 'emergency critical neurological' USING sparse LIMIT 10)
 QUERY 'emergency critical neurological' FROM {COLLECTION} LIMIT 3 PREFETCH (a, b) FUSION RRF WITH (rrf_k = 10, rrf_weights = [0.7, 0.3])"""))
