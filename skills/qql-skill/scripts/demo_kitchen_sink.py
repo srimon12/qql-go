@@ -188,6 +188,18 @@ QUERY 'emergency critical neurological' FROM {COLLECTION} LIMIT 3 PREFETCH (a, b
     stmts.append(("scroll-filtered",
         f"SCROLL FROM {COLLECTION} WHERE priority = 'high' LIMIT 3"))
 
+    # --- ORDER BY — pagination without similarity score ---
+    stmts.append(("order-by-year",
+        f"QUERY ORDER BY year DESC FROM {COLLECTION} LIMIT 5"))
+    stmts.append(("order-by-score",
+        f"QUERY ORDER BY score ASC FROM {COLLECTION} LIMIT 5 WHERE priority = 'high'"))
+
+    # --- WITH PAYLOAD / WITH VECTORS — field selection ---
+    stmts.append(("payload-false",
+        f"QUERY 'acute stroke' FROM {COLLECTION} LIMIT 3 USING HYBRID WITH PAYLOAD false"))
+    stmts.append(("payload-include",
+        f"QUERY 'emergency' FROM {COLLECTION} LIMIT 3 USING HYBRID WITH PAYLOAD (include = ['diagnosis', 'specialty'])"))
+
     # --- Delete ---
     stmts.append(("delete-by-filter",
         f"DELETE FROM {COLLECTION} WHERE status = 'archived'"))
