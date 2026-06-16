@@ -96,7 +96,7 @@ var keywords = map[string]TokenKind{
 type Lexer struct{}
 
 func (l *Lexer) Tokenize(query string) ([]Token, error) {
-	tokens := make([]Token, 0)
+	tokens := make([]Token, 0, len(query)/8)
 	i := 0
 	n := len(query)
 

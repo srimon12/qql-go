@@ -117,7 +117,7 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 
 	finalOutput := header.String() + builder.String() + fmt.Sprintf("-- Written: %d\n-- Skipped: %d\n", written, skipped)
 
-	if err := os.WriteFile(outputPath, []byte(finalOutput), 0o644); err != nil {
+	if err := os.WriteFile(outputPath, []byte(finalOutput), 0o600); err != nil {
 		return written, skipped, fmt.Errorf("failed to write dump: %w", err)
 	}
 	return written, skipped, nil
@@ -165,14 +165,9 @@ func getVectorTopology(info *qdrant.CollectionInfo) (hybrid bool, denseName, spa
 }
 
 func payloadToMap(payload map[string]*qdrant.Value) map[string]any {
-	keys := make([]string, 0, len(payload))
-	for key := range payload {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
 	result := make(map[string]any, len(payload))
-	for _, key := range keys {
-		result[key] = payloadValue(payload[key])
+	for key, val := range payload {
+		result[key] = payloadValue(val)
 	}
 	return result
 }

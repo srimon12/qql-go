@@ -19,6 +19,21 @@ import (
 	"github.com/srimon12/qql-go/internal/sparse"
 )
 
+func parseQuery(query string) (ast.ASTNode, error) {
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(query)
+	if err != nil {
+		return nil, fmt.Errorf("parse error: %w", err)
+	}
+
+	p := parser.NewParser()
+	node, err := p.Parse(tokens)
+	if err != nil {
+		return nil, fmt.Errorf("parse error: %w", err)
+	}
+	return node, nil
+}
+
 func NewExecutor(client qdrantClient, cfg *config.Config) *Executor {
 	return &Executor{
 		client: client,
@@ -35,16 +50,9 @@ func (e *Executor) Execute(query string) (string, error) {
 }
 
 func (e *Executor) ExecuteResult(query string) (*ExecResponse, error) {
-	l := &lexer.Lexer{}
-	tokens, err := l.Tokenize(query)
+	node, err := parseQuery(query)
 	if err != nil {
-		return nil, fmt.Errorf("parse error: %w", err)
-	}
-
-	p := parser.NewParser()
-	node, err := p.Parse(tokens)
-	if err != nil {
-		return nil, fmt.Errorf("parse error: %w", err)
+		return nil, err
 	}
 
 	switch n := node.(type) {
@@ -499,16 +507,9 @@ func (e *Executor) Explain(query string) (string, error) {
 }
 
 func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
-	l := &lexer.Lexer{}
-	tokens, err := l.Tokenize(query)
+	node, err := parseQuery(query)
 	if err != nil {
-		return nil, fmt.Errorf("parse error: %w", err)
-	}
-
-	p := parser.NewParser()
-	node, err := p.Parse(tokens)
-	if err != nil {
-		return nil, fmt.Errorf("parse error: %w", err)
+		return nil, err
 	}
 
 	var plan strings.Builder

@@ -143,3 +143,11 @@ func TestSaveProfileValidatesInput(t *testing.T) {
 	require.EqualError(t, SaveProfile(nil), "profile is nil")
 	require.EqualError(t, SaveProfile(&Profile{}), "profile name is required")
 }
+
+func TestConfigPathReturnsDotQQL(t *testing.T) {
+	resetTestConfigState(t)
+
+	path, err := ConfigPath()
+	require.NoError(t, err)
+	require.Contains(t, path, ".qql")
+}
