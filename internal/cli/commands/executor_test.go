@@ -77,7 +77,7 @@ func TestExecutorExplainDocumentedQueries(t *testing.T) {
 			name:  "hybrid search rerank",
 			query: "QUERY NEAREST 'vector database' FROM docs LIMIT 5 USING HYBRID RERANK",
 			wants: []string{
-				"Statement: QUERY NEAREST docs LIMIT 5",
+				"Statement: QUERY NEAREST FROM docs LIMIT 5",
 				"Query: 'vector database'",
 				"Action: Universal Query",
 			},
@@ -86,7 +86,7 @@ func TestExecutorExplainDocumentedQueries(t *testing.T) {
 			name:  "search with with clause",
 			query: "QUERY NEAREST 'vector database' FROM docs LIMIT 5 WITH (hnsw_ef = 128, exact = true)",
 			wants: []string{
-				"Statement: QUERY NEAREST docs LIMIT 5",
+				"Statement: QUERY NEAREST FROM docs LIMIT 5",
 				"Query: 'vector database'",
 				"Action: Universal Query",
 			},
@@ -95,7 +95,7 @@ func TestExecutorExplainDocumentedQueries(t *testing.T) {
 			name:  "search with filter",
 			query: "QUERY NEAREST 'vector search' FROM notes LIMIT 5 USING HYBRID WHERE topic = 'search'",
 			wants: []string{
-				"Statement: QUERY NEAREST notes LIMIT 5",
+				"Statement: QUERY NEAREST FROM notes LIMIT 5",
 				"Query: 'vector search'",
 				"Action: Universal Query",
 			},
@@ -114,6 +114,45 @@ func TestExecutorExplainDocumentedQueries(t *testing.T) {
 			wants: []string{
 				"Statement: DELETE FROM notes WHERE status = 'archived'",
 				"Action: Delete points by filter",
+			},
+		},
+		{
+			name:  "sample random",
+			query: "QUERY SAMPLE FROM docs LIMIT 10",
+			wants: []string{
+				"Statement: QUERY SAMPLE FROM docs LIMIT 10",
+				"Action: Universal Query",
+			},
+		},
+		{
+			name:  "sample with filter",
+			query: "QUERY SAMPLE FROM docs LIMIT 5 WHERE category = 'tech'",
+			wants: []string{
+				"Statement: QUERY SAMPLE FROM docs LIMIT 5",
+				"Filter:",
+				"Action: Universal Query",
+			},
+		},
+		{
+			name:  "query with all fields",
+			query: "QUERY NEAREST 'search' FROM docs LIMIT 10 OFFSET 5 USING HYBRID SCORE THRESHOLD 0.5 WHERE topic = 'ai' RERANK MODEL 'reranker' STRATEGY 'best_score' WITH (hnsw_ef = 128, exact = true) WITH PAYLOAD (include = ['title']) WITH VECTORS true GROUP BY 'category' GROUP_SIZE 3 WITH LOOKUP FROM metadata",
+			wants: []string{
+				"Statement: QUERY NEAREST FROM docs LIMIT 10",
+				"Query: 'search'",
+				"Using: HYBRID",
+				"Exact: true",
+				"HNSW ef: 128",
+				"With payload include: [title]",
+				"With vectors: true",
+				"Filter:",
+				"Offset: 5",
+				"Score threshold: 0.5",
+				"Group by: category",
+				"Group size: 3",
+				"With lookup: metadata",
+				"Rerank: model 'reranker'",
+				"Strategy: best_score",
+				"Action: Universal Query",
 			},
 		},
 	}

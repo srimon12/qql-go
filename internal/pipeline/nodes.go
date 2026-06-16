@@ -423,3 +423,10 @@ func (n *OrderByNode) Execute(ctx context.Context, state *QueryState) error {
 	})
 	return nil
 }
+
+type SampleNode struct{}
+
+func (n *SampleNode) Execute(ctx context.Context, state *QueryState) error {
+	state.TargetQuery = qdrant.NewQuerySample(qdrant.Sample_Random)
+	return nil
+}

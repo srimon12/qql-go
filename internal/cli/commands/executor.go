@@ -604,7 +604,9 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		plan.WriteString("Action: Scroll (paginate) through points\n")
 
 	case *ast.QueryStmt:
-		if n.Mode == ast.QueryModeOrderBy {
+		// Statement line
+		switch n.Mode {
+		case ast.QueryModeOrderBy:
 			dir := "ASC"
 			if n.OrderByAsc != nil && !*n.OrderByAsc {
 				dir = "DESC"
@@ -614,14 +616,181 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 				field = *n.OrderByField
 			}
 			plan.WriteString(fmt.Sprintf("Statement: QUERY ORDER BY %s %s FROM %s LIMIT %v\n", field, dir, n.Collection, n.Limit))
-		} else {
-			plan.WriteString(fmt.Sprintf("Statement: QUERY %s %s LIMIT %v\n", string(n.Mode), n.Collection, n.Limit))
+		case ast.QueryModeSample:
+			plan.WriteString(fmt.Sprintf("Statement: QUERY SAMPLE FROM %s LIMIT %v\n", n.Collection, n.Limit))
+		default:
+			plan.WriteString(fmt.Sprintf("Statement: QUERY %s FROM %s LIMIT %v\n", string(n.Mode), n.Collection, n.Limit))
 		}
+
+		// Query text or ID
 		if n.QueryText != nil {
 			plan.WriteString(fmt.Sprintf("Query: '%s'\n", *n.QueryText))
 		} else if n.QueryID != nil {
 			plan.WriteString(fmt.Sprintf("Query ID: %v\n", n.QueryID))
 		}
+
+		// USING
+		if n.Type == ast.QueryTypeHybrid {
+			plan.WriteString("Using: HYBRID\n")
+		} else if n.Type == ast.QueryTypeSparse {
+			if n.Using != nil {
+				plan.WriteString(fmt.Sprintf("Using: SPARSE '%s'\n", *n.Using))
+			} else {
+				plan.WriteString("Using: SPARSE\n")
+			}
+		} else if n.Using != nil {
+			plan.WriteString(fmt.Sprintf("Using: '%s'\n", *n.Using))
+		}
+
+		// WITH MODEL
+		if n.Model != nil {
+			plan.WriteString(fmt.Sprintf("Model: %s\n", *n.Model))
+		}
+
+		// WITH { ... } params
+		if n.WithClause != nil {
+			if n.WithClause.HnswEf > 0 {
+				plan.WriteString(fmt.Sprintf("HNSW ef: %d\n", n.WithClause.HnswEf))
+			}
+			if n.WithClause.Exact {
+				plan.WriteString("Exact: true\n")
+			}
+			if n.WithClause.Acorn {
+				plan.WriteString("ACORN: true\n")
+			}
+			if n.WithClause.IndexedOnly {
+				plan.WriteString("Indexed only: true\n")
+			}
+			if n.WithClause.Quantization != nil {
+				plan.WriteString("Quantization: enabled\n")
+			}
+			if n.WithClause.MmrDiversity != nil {
+				plan.WriteString(fmt.Sprintf("MMR diversity: %v\n", *n.WithClause.MmrDiversity))
+			}
+			if n.WithClause.MmrCandidates != nil {
+				plan.WriteString(fmt.Sprintf("MMR candidates: %v\n", *n.WithClause.MmrCandidates))
+			}
+			if n.WithClause.RrfK != nil {
+				plan.WriteString(fmt.Sprintf("RRF K: %d\n", *n.WithClause.RrfK))
+			}
+			if len(n.WithClause.RrfWeights) > 0 {
+				plan.WriteString(fmt.Sprintf("RRF weights: %v\n", n.WithClause.RrfWeights))
+			}
+		}
+
+		// WITH PAYLOAD / WITH VECTORS
+		if n.WithPayload != nil {
+			if n.WithPayload.Enable != nil {
+				plan.WriteString(fmt.Sprintf("With payload: %v\n", *n.WithPayload.Enable))
+			} else if len(n.WithPayload.Include) > 0 {
+				plan.WriteString(fmt.Sprintf("With payload include: %v\n", n.WithPayload.Include))
+			} else if len(n.WithPayload.Exclude) > 0 {
+				plan.WriteString(fmt.Sprintf("With payload exclude: %v\n", n.WithPayload.Exclude))
+			}
+		}
+		if n.WithVectors != nil {
+			if n.WithVectors.Enable != nil {
+				plan.WriteString(fmt.Sprintf("With vectors: %v\n", *n.WithVectors.Enable))
+			} else if len(n.WithVectors.Vectors) > 0 {
+				plan.WriteString(fmt.Sprintf("With vectors: %v\n", n.WithVectors.Vectors))
+			}
+		}
+
+		// WHERE
+		if n.QueryFilter != nil {
+			plan.WriteString(fmt.Sprintf("Filter: %s\n", e.filterToString(n.QueryFilter)))
+		}
+
+		// OFFSET
+		if n.Offset > 0 {
+			plan.WriteString(fmt.Sprintf("Offset: %d\n", n.Offset))
+		}
+
+		// SCORE THRESHOLD
+		if n.ScoreThreshold != nil {
+			plan.WriteString(fmt.Sprintf("Score threshold: %v\n", *n.ScoreThreshold))
+		}
+
+		// LOOKUP FROM
+		if n.LookupFrom != "" {
+			vec := ""
+			if n.LookupVector != nil {
+				vec = fmt.Sprintf(" VECTOR '%s'", *n.LookupVector)
+			}
+			plan.WriteString(fmt.Sprintf("Lookup from: %s%s\n", n.LookupFrom, vec))
+		}
+
+		// GROUP BY / GROUP SIZE
+		if n.GroupBy != nil {
+			plan.WriteString(fmt.Sprintf("Group by: %s\n", *n.GroupBy))
+		}
+		if n.GroupSize != nil {
+			plan.WriteString(fmt.Sprintf("Group size: %d\n", *n.GroupSize))
+		}
+
+		// WITH LOOKUP
+		if n.WithLookupCollection != nil {
+			plan.WriteString(fmt.Sprintf("With lookup: %s\n", *n.WithLookupCollection))
+		}
+
+		// RERANK
+		if n.Rerank {
+			if n.RerankModel != nil {
+				plan.WriteString(fmt.Sprintf("Rerank: model '%s'\n", *n.RerankModel))
+			} else {
+				plan.WriteString("Rerank: enabled\n")
+			}
+		}
+
+		// STRATEGY
+		if n.Strategy != nil {
+			plan.WriteString(fmt.Sprintf("Strategy: %s\n", *n.Strategy))
+		}
+
+		// RECOMMEND mode details
+		if n.Mode == ast.QueryModeRecommend {
+			if len(n.PositiveIDs) > 0 {
+				plan.WriteString(fmt.Sprintf("Positive IDs: %v\n", n.PositiveIDs))
+			}
+			if len(n.NegativeIDs) > 0 {
+				plan.WriteString(fmt.Sprintf("Negative IDs: %v\n", n.NegativeIDs))
+			}
+		}
+
+		// CONTEXT mode details
+		if n.Mode == ast.QueryModeContext && len(n.ContextPairs) > 0 {
+			plan.WriteString(fmt.Sprintf("Context pairs: %d\n", len(n.ContextPairs)))
+		}
+
+		// DISCOVER mode details
+		if n.Mode == ast.QueryModeDiscover {
+			if n.Target != nil {
+				plan.WriteString(fmt.Sprintf("Target: %v\n", n.Target))
+			}
+			if len(n.ContextPairs) > 0 {
+				plan.WriteString(fmt.Sprintf("Context pairs: %d\n", len(n.ContextPairs)))
+			}
+		}
+
+		// CTEs
+		if len(n.CTEs) > 0 {
+			plan.WriteString(fmt.Sprintf("CTEs: %d defined\n", len(n.CTEs)))
+		}
+
+		// PREFETCH refs
+		if len(n.PrefetchRefs) > 0 {
+			refs := make([]string, len(n.PrefetchRefs))
+			for i, ref := range n.PrefetchRefs {
+				refs[i] = ref.CTEName
+			}
+			plan.WriteString(fmt.Sprintf("Prefetch: %v\n", refs))
+		}
+
+		// FUSION
+		if n.FusionType != nil {
+			plan.WriteString(fmt.Sprintf("Fusion: %s\n", *n.FusionType))
+		}
+
 		plan.WriteString("Action: Universal Query\n")
 	case *ast.DeleteStmt:
 		if n.Field != "" {

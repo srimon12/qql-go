@@ -554,9 +554,9 @@ func TestParseError(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "reject duplicate with clause",
+			name:    "merge duplicate with clause",
 			input:   "QUERY NEAREST 'text' FROM test LIMIT 10 WITH (exact = true) WITH (acorn = true)",
-			wantErr: true,
+			wantErr: false,
 		},
 	}
 

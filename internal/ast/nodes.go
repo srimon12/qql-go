@@ -154,6 +154,7 @@ const (
 	QueryModeDiscover  QueryMode = "DISCOVER"
 	QueryModeContext   QueryMode = "CONTEXT"
 	QueryModeOrderBy   QueryMode = "ORDER_BY"
+	QueryModeSample    QueryMode = "SAMPLE"
 )
 
 type ContextPair struct {

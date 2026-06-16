@@ -95,29 +95,35 @@ func (p *Parser) parseQueryBody() (*ast.QueryStmt, error) {
 		stmt.OrderByField = &fieldTok
 
 		tok := p.peek()
-		if tok.Kind == lexer.TokenKindAsc {
+		switch tok.Kind {
+		case lexer.TokenKindAsc:
 			p.advance()
 			asc := true
 			stmt.OrderByAsc = &asc
-		} else if tok.Kind == lexer.TokenKindDesc {
+		case lexer.TokenKindDesc:
 			p.advance()
 			asc := false
 			stmt.OrderByAsc = &asc
 		}
 
+	case lexer.TokenKindSample:
+		stmt.Mode = ast.QueryModeSample
+		p.advance()
+
 	default:
 		stmt.Mode = ast.QueryModeNearest
-		if tok.Kind == lexer.TokenKindString {
+		switch tok.Kind {
+		case lexer.TokenKindString:
 			text := tok.Value
 			stmt.QueryText = &text
 			p.advance()
-		} else if tok.Kind == lexer.TokenKindInteger {
+		case lexer.TokenKindInteger:
 			id, err := p.parsePointIDValue("QUERY")
 			if err != nil {
 				return nil, err
 			}
 			stmt.QueryID = id
-		} else {
+		default:
 			return nil, errors.NewQQLSyntaxError("Expected a string query, a point ID, or a query mode (RECOMMEND/DISCOVER/CONTEXT) after QUERY", tok.Pos)
 		}
 	}
@@ -212,19 +218,23 @@ func (p *Parser) parseCTEQuery() (*ast.QueryStmt, error) {
 			}
 			stmt.ContextPairs = p.parseContextPairs("DISCOVER")
 		}
+	case lexer.TokenKindSample:
+		stmt.Mode = ast.QueryModeSample
+		p.advance()
 	default:
 		stmt.Mode = ast.QueryModeNearest
-		if tok.Kind == lexer.TokenKindString {
+		switch tok.Kind {
+		case lexer.TokenKindString:
 			text := tok.Value
 			stmt.QueryText = &text
 			p.advance()
-		} else if tok.Kind == lexer.TokenKindInteger {
+		case lexer.TokenKindInteger:
 			id, err := p.parsePointIDValue("QUERY")
 			if err != nil {
 				return nil, err
 			}
 			stmt.QueryID = id
-		} else {
+		default:
 			return nil, errors.NewQQLSyntaxError("Expected string, integer, or query mode for CTE QUERY", tok.Pos)
 		}
 	}
@@ -319,7 +329,7 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 		stmt.Limit = 10
 	}
 
-	seenWhere, seenRerank, seenWith, seenGroup, seenGroupSize := false, false, false, false, false
+	seenWhere, seenRerank, seenGroup, seenGroupSize := false, false, false, false
 	seenExact, seenFusion, seenStrategy := false, false, false
 
 	for {
@@ -493,10 +503,6 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 			mergeSearchWith(&stmt.WithClause, &ast.SearchWith{Exact: true})
 
 		case lexer.TokenKindWith:
-			if seenWith {
-				return
-			}
-			seenWith = true
 			p.advance()
 			if p.peek().Kind == lexer.TokenKindModel {
 				p.advance()
@@ -512,7 +518,6 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 					return
 				}
 				stmt.WithPayload = parsed
-				seenWith = false // allow other WITH clauses
 			} else if p.peek().Kind == lexer.TokenKindVectors {
 				p.advance()
 				parsed, err := p.parseWithVectors()
@@ -520,7 +525,6 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 					return
 				}
 				stmt.WithVectors = parsed
-				seenWith = false // allow other WITH clauses
 			} else if p.peek().Kind == lexer.TokenKindLookup {
 				p.advance()
 				if _, err := p.expect(lexer.TokenKindFrom); err != nil {
@@ -531,7 +535,6 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 					return
 				}
 				stmt.WithLookupCollection = &collection
-				seenWith = false // allow other WITH clauses
 			} else {
 				parsed, err := p.parseWithClause()
 				if err != nil {
@@ -599,23 +602,4 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 			return
 		}
 	}
-}
-
-// nextIsWithClauseBody returns true if the WITH token is followed by a { or ( (a search-params block or model assignment),
-// i.e. NOT a CTE definition.
-func (p *Parser) nextIsWithClauseBody() bool {
-	pos := p.pos + 1
-	if pos >= len(p.tokens) {
-		return false
-	}
-	// WITH MODEL '...'
-	if p.tokens[pos].Kind == lexer.TokenKindModel {
-		return true
-	}
-	// WITH { ... } or WITH ( ... )
-	if p.tokens[pos].Kind == lexer.TokenKindLbrace || p.tokens[pos].Kind == lexer.TokenKindLparen {
-		return true
-	}
-	// WITH followed by an identifier that isn't AS → likely a CTE name
-	return false
 }

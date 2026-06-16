@@ -156,6 +156,8 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 			Field: *stmt.OrderByField,
 			Asc:   asc,
 		})
+	case ast.QueryModeSample:
+		execPipeline.Add(&pipeline.SampleNode{})
 	case ast.QueryModeNearest:
 		if stmt.QueryID != nil {
 			execPipeline.Add(&pipeline.RecommendNode{PositiveIDs: []any{stmt.QueryID}})

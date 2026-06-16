@@ -309,6 +309,43 @@ func TestParseQueryOrderBy(t *testing.T) {
 	assert.Equal(t, 100, stmt.Limit)
 }
 
+func TestParseQuerySample(t *testing.T) {
+	input := "QUERY SAMPLE FROM docs LIMIT 10"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	assert.Equal(t, ast.QueryModeSample, stmt.Mode)
+	assert.Equal(t, "docs", stmt.Collection)
+	assert.Equal(t, 10, stmt.Limit)
+}
+
+func TestParseQuerySampleWithFilter(t *testing.T) {
+	input := "QUERY SAMPLE FROM docs LIMIT 10 WHERE category = 'tech'"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	assert.Equal(t, ast.QueryModeSample, stmt.Mode)
+	assert.Equal(t, "docs", stmt.Collection)
+	assert.Equal(t, 10, stmt.Limit)
+	require.NotNil(t, stmt.QueryFilter)
+}
+
 func TestParseQueryWithPayloadAndVectors(t *testing.T) {
 	input := "QUERY 'search' FROM docs WITH PAYLOAD (include = ['title'], exclude = ['metadata']) WITH VECTORS true"
 	l := &lexer.Lexer{}
@@ -351,6 +388,33 @@ func TestParseQueryWithPayloadAndVectors(t *testing.T) {
 	require.NotNil(t, stmt2.WithVectors)
 	assert.Nil(t, stmt2.WithVectors.Enable)
 	assert.ElementsMatch(t, []string{"dense", "sparse"}, stmt2.WithVectors.Vectors)
+}
+
+func TestParseQueryMultipleWithClauses(t *testing.T) {
+	input := "QUERY 'search' FROM docs WITH MODEL 'foo' WITH PAYLOAD (include = ['title']) WITH VECTORS true WITH (exact = true)"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	require.NotNil(t, stmt.Model)
+	assert.Equal(t, "foo", *stmt.Model)
+
+	require.NotNil(t, stmt.WithPayload)
+	assert.ElementsMatch(t, []string{"title"}, stmt.WithPayload.Include)
+
+	require.NotNil(t, stmt.WithVectors)
+	require.NotNil(t, stmt.WithVectors.Enable)
+	assert.True(t, *stmt.WithVectors.Enable)
+
+	require.NotNil(t, stmt.WithClause)
+	assert.True(t, stmt.WithClause.Exact)
 }
 
 func TestParseQueryWithPayloadVectorsErrors(t *testing.T) {

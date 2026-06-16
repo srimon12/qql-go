@@ -106,6 +106,7 @@ const (
 	TokenKindLte
 	TokenKindPrefetch
 	TokenKindFusion
+	TokenKindSample
 	TokenKindEof
 )
 
@@ -213,6 +214,7 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindLte:         "LTE",
 	TokenKindPrefetch:    "PREFETCH",
 	TokenKindFusion:      "FUSION",
+	TokenKindSample:      "SAMPLE",
 	TokenKindEof:         "EOF",
 }
 
