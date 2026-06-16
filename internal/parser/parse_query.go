@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/srimon12/qql-go/internal/ast"
@@ -615,6 +616,47 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 				return
 			}
 			stmt.Limit = limit
+
+		case lexer.TokenKindBoost:
+			p.advance()
+			expr, err := p.parseFormulaExpr(precedenceLowest)
+			if err != nil {
+				return
+			}
+			stmt.Formula = expr
+
+		case lexer.TokenKindDefaults:
+			p.advance()
+			if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+				return
+			}
+			defaults := make(map[string]float64)
+			for p.peek().Kind != lexer.TokenKindRparen {
+				keyTok, err := p.expect(lexer.TokenKindIdentifier)
+				if err != nil {
+					return
+				}
+				if _, err := p.expect(lexer.TokenKindEquals); err != nil {
+					return
+				}
+				valTok := p.peek()
+				if valTok.Kind != lexer.TokenKindFloat && valTok.Kind != lexer.TokenKindInteger {
+					return
+				}
+				p.advance()
+				f, err := strconv.ParseFloat(valTok.Value, 64)
+				if err != nil {
+					return
+				}
+				defaults[keyTok.Value] = f
+				if p.peek().Kind == lexer.TokenKindComma {
+					p.advance()
+				} else {
+					break
+				}
+			}
+			p.expect(lexer.TokenKindRparen)
+			stmt.FormulaDefaults = defaults
 
 		default:
 			return

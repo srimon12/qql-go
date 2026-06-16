@@ -247,6 +247,9 @@ type QueryStmt struct {
 
 	Rerank      bool
 	RerankModel *string
+
+	Formula         FormulaExpr
+	FormulaDefaults map[string]float64
 }
 
 type DeleteStmt struct {

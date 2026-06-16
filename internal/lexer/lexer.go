@@ -7,6 +7,13 @@ import (
 )
 
 var keywords = map[string]TokenKind{
+	"BOOST":       TokenKindBoost,
+	"DEFAULTS":    TokenKindDefaults,
+	"CASE":        TokenKindCase,
+	"WHEN":        TokenKindWhen,
+	"THEN":        TokenKindThen,
+	"ELSE":        TokenKindElse,
+	"END":         TokenKindEnd,
 	"INSERT":      TokenKindInsert,
 	"INTO":        TokenKindInto,
 	"COLLECTION":  TokenKindCollection,
@@ -173,26 +180,27 @@ func (l *Lexer) Tokenize(query string) ([]Token, error) {
 			}
 			tokens = append(tokens, token)
 			i = endPos
+		case '+':
+			tokens = append(tokens, Token{Kind: TokenKindPlus, Value: "+", Pos: i})
+			i++
+		case '/':
+			tokens = append(tokens, Token{Kind: TokenKindSlash, Value: "/", Pos: i})
+			i++
 		case '-':
 			if i+1 < n && isDigit(query[i+1]) {
 				token := l.readNumber(query, i)
 				tokens = append(tokens, token)
 				i = token.Pos + len(token.Value)
-			} else if i+1 < n && (isAlpha(query[i+1]) || query[i+1] == '_') {
-				token := l.readIdentifier(query, i+1)
-				token.Value = "-" + token.Value
-				token.Pos = i
-				tokens = append(tokens, token)
-				i = token.Pos + len(token.Value)
 			} else {
-				return nil, errors.NewQQLSyntaxError("Unexpected character '-' (use quotes for UUIDs: '123e4567-e89b-...')", i)
+				tokens = append(tokens, Token{Kind: TokenKindMinus, Value: "-", Pos: i})
+				i++
 			}
 		default:
 			if isDigit(ch) {
 				token := l.readNumber(query, i)
 				tokens = append(tokens, token)
 				i = token.Pos + len(token.Value)
-			} else if isAlpha(ch) || ch == '_' {
+			} else if isAlpha(ch) || ch == '_' || ch == '$' {
 				token := l.readIdentifier(query, i)
 				tokens = append(tokens, token)
 				i = token.Pos + len(token.Value)
@@ -324,6 +332,9 @@ func isDigit(ch byte) bool {
 }
 
 func isAlpha(ch byte) bool {
+	if ch == '$' {
+		return true
+	}
 	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
 }
 

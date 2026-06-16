@@ -248,6 +248,13 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 		execPipeline.Add(&pipeline.RerankNode{Model: rerankModel})
 	}
 
+	if stmt.Formula != nil {
+		execPipeline.Add(&pipeline.FormulaNode{
+			Expr:     stmt.Formula,
+			Defaults: stmt.FormulaDefaults,
+		})
+	}
+
 	if err := execPipeline.Execute(ctx, state); err != nil {
 		return nil, err
 	}

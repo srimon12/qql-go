@@ -791,6 +791,18 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			plan.WriteString(fmt.Sprintf("Fusion: %s\n", *n.FusionType))
 		}
 
+		// FORMULA
+		if n.Formula != nil {
+			plan.WriteString(fmt.Sprintf("Formula: %s\n", ast.FormulaExprString(n.Formula)))
+		}
+		if len(n.FormulaDefaults) > 0 {
+			var defs []string
+			for k, v := range n.FormulaDefaults {
+				defs = append(defs, fmt.Sprintf("%s = %g", k, v))
+			}
+			plan.WriteString(fmt.Sprintf("Defaults: %s\n", strings.Join(defs, ", ")))
+		}
+
 		plan.WriteString("Action: Universal Query\n")
 	case *ast.DeleteStmt:
 		if n.Field != "" {
