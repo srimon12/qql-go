@@ -4,116 +4,56 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/srimon12/qql-go/internal/ast"
 )
 
 func convertFormulaQuery(input, collection string) ([]string, error) {
-	var req struct {
-		Prefetch interface{} `json:"prefetch"`
-		Query    struct {
-			Formula  interface{} `json:"formula"`
-			Nearest  interface{} `json:"nearest"`
-			Document interface{} `json:"document"`
-		} `json:"query"`
-		Limit    int         `json:"limit"`
-		Filter   interface{} `json:"filter"`
-		Defaults interface{} `json:"defaults"`
-	}
+	var req RESTQueryRequest
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid formula query JSON: %w", err)
 	}
 
-	var stmts []string
-	var cteNames []string
+	stmt, err := convertRESTQueryToAST(&req, collection)
+	if err != nil {
+		return nil, err
+	}
 
-	// Handle prefetches (single object or array)
-	if req.Prefetch != nil {
-		prefetches := normalizePrefetchArray(req.Prefetch)
-		for i, pf := range prefetches {
-			cteName := fmt.Sprintf("_pf%d", i)
-			cteNames = append(cteNames, cteName)
-			cteQQL, err := convertSinglePrefetch(pf, cteName, collection)
-			if err == nil {
-				stmts = append(stmts, cteQQL)
+	// Extract query text if present
+	if req.Query.Document != nil {
+		if docMap, ok := req.Query.Document.(map[string]interface{}); ok {
+			if text, ok := docMap["text"]; ok {
+				if s, ok := text.(string); ok {
+					stmt.QueryText = &s
+				}
+			}
+		}
+	} else if req.Query.Nearest != nil {
+		if nearestMap, ok := req.Query.Nearest.(map[string]interface{}); ok {
+			if doc, ok := nearestMap["document"]; ok {
+				if docMap, ok := doc.(map[string]interface{}); ok {
+					if text, ok := docMap["text"]; ok {
+						if s, ok := text.(string); ok {
+							stmt.QueryText = &s
+						}
+					}
+				}
 			}
 		}
 	}
 
-	// Build main query
-	var parts []string
-	parts = append(parts, fmt.Sprintf("QUERY '<query_text>' FROM %s", collection))
-
-	if req.Limit > 0 {
-		parts = append(parts, fmt.Sprintf("LIMIT %d", req.Limit))
-	}
-
-	// Convert formula expression
+	// Formula conversion
 	if req.Query.Formula != nil {
-		formulaStr, err := convertFormulaExpression(req.Query.Formula)
-		if err == nil && formulaStr != "" {
-			parts = append(parts, fmt.Sprintf("BOOST (%s)", formulaStr))
-		}
-	}
-
-	// Convert defaults
-	if req.Defaults != nil {
-		if defs, ok := req.Defaults.(map[string]interface{}); ok && len(defs) > 0 {
-			var entries []string
-			for k, v := range defs {
-				entries = append(entries, fmt.Sprintf("%s = %s", k, formatFormulaValue(v)))
+		var formulaObj interface{}
+		if err := json.Unmarshal(req.Query.Formula, &formulaObj); err == nil {
+			formulaStr, err := convertFormulaExpression(formulaObj)
+			if err == nil && formulaStr != "" {
+				stmt.Formula = ast.RawFormulaExpr{Expr: formulaStr}
 			}
-			parts = append(parts, fmt.Sprintf("DEFAULTS (%s)", strings.Join(entries, ", ")))
 		}
 	}
 
-	mainQQL := strings.Join(parts, " ")
-
-	// If we have CTEs, build WITH ... QUERY ... PREFETCH (...) syntax
-	if len(cteNames) > 0 {
-		var cteDefs []string
-		for i, name := range cteNames {
-			cteDefs = append(cteDefs, fmt.Sprintf("%s AS (%s)", name, stmts[i]))
-		}
-		withClause := "WITH " + strings.Join(cteDefs, ", ")
-		prefetchClause := fmt.Sprintf("PREFETCH (%s)", strings.Join(cteNames, ", "))
-		return []string{fmt.Sprintf("%s %s %s", withClause, mainQQL, prefetchClause)}, nil
-	}
-
-	return []string{mainQQL}, nil
-}
-
-func normalizePrefetchArray(input interface{}) []interface{} {
-	switch pf := input.(type) {
-	case []interface{}:
-		return pf
-	case map[string]interface{}:
-		return []interface{}{pf}
-	default:
-		return nil
-	}
-}
-
-func convertSinglePrefetch(pf interface{}, _, _ string) (string, error) {
-	pfMap, ok := pf.(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("invalid prefetch object")
-	}
-
-	// CTE bodies don't support FROM — use simplified QUERY syntax
-	var parts []string
-	parts = append(parts, "QUERY '<query_text>'")
-
-	if limit, ok := pfMap["limit"].(float64); ok && limit > 0 {
-		parts = append(parts, fmt.Sprintf("LIMIT %d", int(limit)))
-	}
-
-	if pfMap["filter"] != nil {
-		filterStr, err := convertFilter(pfMap["filter"])
-		if err == nil && filterStr != "" {
-			parts = append(parts, "WHERE "+filterStr)
-		}
-	}
-
-	return strings.Join(parts, " "), nil
+	return []string{ast.FormatQueryStmt(stmt)}, nil
 }
 
 func convertFormulaExpression(input interface{}) (string, error) {
@@ -180,19 +120,19 @@ func convertFormulaObject(expr map[string]interface{}) (string, error) {
 		inner, _ := convertFormulaExpression(exp)
 		return fmt.Sprintf("EXP(%s)", inner), nil
 	}
-	// Condition (match/key)
+	// Condition (match/key) - Qdrant formula inline condition
 	if key, ok := expr["key"]; ok {
 		if match, ok := expr["match"]; ok {
 			matchMap, ok := match.(map[string]interface{})
 			if ok {
 				if any, ok := matchMap["any"]; ok {
-					return convertMatchAnyCondition(fmt.Sprintf("%v", key), any), nil
+					return convertMatchFormulaCondition(fmt.Sprintf("%v", key), any), nil
 				}
 				if value, ok := matchMap["value"]; ok {
-					return fmt.Sprintf("%s = %s", key, formatValue(value)), nil
+					return fmt.Sprintf("MATCH(%s, %s)", key, formatFormulaValue(value)), nil
 				}
 				if keyword, ok := matchMap["keyword"]; ok {
-					return fmt.Sprintf("%s = %s", key, formatValue(keyword)), nil
+					return fmt.Sprintf("MATCH(%s, %s)", key, formatFormulaValue(keyword)), nil
 				}
 			}
 		}
@@ -238,16 +178,16 @@ func convertNaryOp(op string, input interface{}) (string, error) {
 	return "(" + strings.Join(parts, op) + ")", nil
 }
 
-func convertMatchAnyCondition(key string, any interface{}) string {
+func convertMatchFormulaCondition(field string, any interface{}) string {
 	values, ok := any.([]interface{})
 	if !ok {
-		return fmt.Sprintf("%s = %v", key, any)
+		return fmt.Sprintf("MATCH(%s, %s)", field, formatFormulaValue(any))
 	}
 	var vals []string
 	for _, v := range values {
-		vals = append(vals, formatValue(v))
+		vals = append(vals, formatFormulaValue(v))
 	}
-	return fmt.Sprintf("%s IN (%s)", key, strings.Join(vals, ", "))
+	return fmt.Sprintf("MATCH(%s, [%s])", field, strings.Join(vals, ", "))
 }
 
 func convertGeoDistanceExpr(input interface{}) (string, error) {
@@ -308,7 +248,7 @@ func convertMMRQuery(input, collection string) ([]string, error) {
 			} `json:"mmr"`
 		} `json:"query"`
 		Limit  int         `json:"limit"`
-		Filter interface{} `json:"filter"`
+		Filter *RESTFilter `json:"filter"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid MMR query JSON: %w", err)

@@ -145,7 +145,7 @@ func TestConvertFormulaScoreBoost(t *testing.T) {
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "BOOST")
 	assert.Contains(t, stmts[0], "$score")
-	assert.Contains(t, stmts[0], "tag IN ('h1', 'h2')")
+	assert.Contains(t, stmts[0], "MATCH(tag, ['h1', 'h2'])")
 	assert.Contains(t, stmts[0], "LIMIT 10")
 }
 
@@ -200,4 +200,44 @@ func TestConvertEndpointFormula(t *testing.T) {
 	assert.Contains(t, stmts[0], "FROM docs")
 	assert.Contains(t, stmts[0], "BOOST")
 	assert.Contains(t, stmts[0], "LIMIT 5")
+}
+
+func TestConvertFormulaMultiMatch(t *testing.T) {
+	input := `{
+		"prefetch": {"query": [0.2, 0.8, 0.3], "limit": 50},
+		"query": {
+			"formula": {
+				"sum": [
+					"$score",
+					{"mult": [0.5, {"key": "tag", "match": {"any": ["h1", "h2", "h3", "h4"]}}]},
+					{"mult": [0.25, {"key": "tag", "match": {"any": ["p", "li"]}}]}
+				]
+			}
+		},
+		"limit": 10
+	}`
+	stmts, err := JSONToQQL(input)
+	require.NoError(t, err)
+	require.Len(t, stmts, 1)
+	assert.Contains(t, stmts[0], "BOOST")
+	assert.Contains(t, stmts[0], "$score")
+	assert.Contains(t, stmts[0], "0.5 * MATCH(tag, ['h1', 'h2', 'h3', 'h4'])")
+	assert.Contains(t, stmts[0], "0.25 * MATCH(tag, ['p', 'li'])")
+	assert.Contains(t, stmts[0], "PREFETCH")
+	assert.Contains(t, stmts[0], "_pf0")
+	assert.Contains(t, stmts[0], "LIMIT 10")
+}
+
+func TestConvertFormulaWithDocumentPrefetch(t *testing.T) {
+	input := `{
+		"prefetch": {"document": {"text": "machine learning basics", "model": "all-MiniLM-L6-v2"}, "limit": 50},
+		"query": {"formula": {"mult": ["$score", 2.0]}},
+		"limit": 10
+	}`
+	stmts, err := JSONToQQL(input)
+	require.NoError(t, err)
+	require.Len(t, stmts, 1)
+	assert.Contains(t, stmts[0], "machine learning basics")
+	assert.Contains(t, stmts[0], "BOOST")
+	assert.Contains(t, stmts[0], "PREFETCH")
 }

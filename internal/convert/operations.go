@@ -45,7 +45,7 @@ func convertSearch(input, collection string) ([]string, error) {
 		Vector         interface{} `json:"vector"`
 		Limit          int         `json:"limit"`
 		Offset         int         `json:"offset"`
-		Filter         interface{} `json:"filter"`
+		Filter         *RESTFilter `json:"filter"`
 		WithPayload    interface{} `json:"with_payload"`
 		WithVector     interface{} `json:"with_vector"`
 		ScoreThreshold *float64    `json:"score_threshold"`
@@ -104,7 +104,7 @@ func convertRecommend(input, collection string) ([]string, error) {
 		Negative []interface{} `json:"negative"`
 		Limit    int           `json:"limit"`
 		Strategy string        `json:"strategy"`
-		Filter   interface{}   `json:"filter"`
+		Filter   *RESTFilter   `json:"filter"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid recommend JSON: %w", err)
@@ -145,7 +145,7 @@ func convertDiscover(input, collection string) ([]string, error) {
 			Negative interface{} `json:"negative"`
 		} `json:"context"`
 		Limit  int         `json:"limit"`
-		Filter interface{} `json:"filter"`
+		Filter *RESTFilter `json:"filter"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid discover JSON: %w", err)
@@ -180,7 +180,7 @@ func convertScroll(input, collection string) ([]string, error) {
 	var req struct {
 		Limit  int         `json:"limit"`
 		Offset interface{} `json:"offset"`
-		Filter interface{} `json:"filter"`
+		Filter *RESTFilter `json:"filter"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid scroll JSON: %w", err)
@@ -223,7 +223,7 @@ func convertGetPoints(input, collection string) ([]string, error) {
 func convertDeletePoints(input, collection string) ([]string, error) {
 	var req struct {
 		Points []interface{} `json:"points"`
-		Filter interface{}   `json:"filter"`
+		Filter *RESTFilter   `json:"filter"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid delete JSON: %w", err)
@@ -242,7 +242,7 @@ func convertDeletePoints(input, collection string) ([]string, error) {
 
 func convertDeleteByFilter(input, collection string) ([]string, error) {
 	var req struct {
-		Filter interface{} `json:"filter"`
+		Filter *RESTFilter `json:"filter"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid delete filter JSON: %w", err)
@@ -259,7 +259,7 @@ func convertSetPayload(input, collection string) ([]string, error) {
 	var req struct {
 		Payload map[string]interface{} `json:"payload"`
 		Points  []interface{}          `json:"points"`
-		Filter  interface{}            `json:"filter"`
+		Filter  *RESTFilter            `json:"filter"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid set payload JSON: %w", err)

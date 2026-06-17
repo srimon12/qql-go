@@ -732,7 +732,7 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 			if _, err := p.expect(lexer.TokenKindLparen); err != nil {
 				return
 			}
-			defaults := make(map[string]float64)
+			defaults := make(map[string]any)
 			for p.peek().Kind != lexer.TokenKindRparen {
 				key, err := p.parseIdentifier()
 				if err != nil {

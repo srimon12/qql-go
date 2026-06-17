@@ -101,59 +101,71 @@ func extractCollection(path string) string {
 }
 
 func convertByStructure(input string) ([]string, error) {
-	var raw map[string]json.RawMessage
+	var raw struct {
+		Query    json.RawMessage `json:"query"`
+		Prefetch json.RawMessage `json:"prefetch"`
+		Payload  json.RawMessage `json:"payload"`
+		Points   json.RawMessage `json:"points"`
+		Filter   json.RawMessage `json:"filter"`
+		Vector   json.RawMessage `json:"vector"`
+		Positive      json.RawMessage `json:"positive"`
+		Target        json.RawMessage `json:"target"`
+		Ids           json.RawMessage `json:"ids"`
+		Vectors       json.RawMessage `json:"vectors"`
+		VectorsConfig json.RawMessage `json:"vectors_config"`
+		FieldName     json.RawMessage `json:"field_name"`
+		Limit         json.RawMessage `json:"limit"`
+	}
 	if err := json.Unmarshal([]byte(input), &raw); err != nil {
 		return nil, fmt.Errorf("invalid JSON: %w", err)
 	}
 
 	// Check for query with formula/MMR/relevance_feedback (top-level "query" object)
-	if queryRaw, ok := raw["query"]; ok {
-		var queryObj map[string]json.RawMessage
-		if json.Unmarshal(queryRaw, &queryObj) == nil {
-			// Formula query
-			if _, hasFormula := queryObj["formula"]; hasFormula {
+	if len(raw.Query) > 0 {
+		var queryObj struct {
+			Formula           json.RawMessage `json:"formula"`
+			Nearest           json.RawMessage `json:"nearest"`
+			RelevanceFeedback json.RawMessage `json:"relevance_feedback"`
+		}
+		if json.Unmarshal(raw.Query, &queryObj) == nil {
+			if len(queryObj.Formula) > 0 {
 				return convertFormulaQuery(input, "collection")
 			}
-			// MMR query
-			if _, hasNearest := queryObj["nearest"]; hasNearest {
+			if len(queryObj.Nearest) > 0 {
 				return convertMMRQuery(input, "collection")
 			}
-			// Relevance feedback
-			if _, hasRF := queryObj["relevance_feedback"]; hasRF {
+			if len(queryObj.RelevanceFeedback) > 0 {
 				return convertRelevanceFeedback(input, "collection")
 			}
 		}
 	}
 
 	// Check for top-level prefetch (formula query with prefetch)
-	if _, ok := raw["prefetch"]; ok {
+	if len(raw.Prefetch) > 0 {
 		return convertFormulaQuery(input, "collection")
 	}
 
 	// Check for set payload first (has "payload" field with "points" or "filter")
-	if _, ok := raw["payload"]; ok {
-		if _, hasPoints := raw["points"]; hasPoints {
-			return convertSetPayload(input, "collection")
-		}
-		if _, hasFilter := raw["filter"]; hasFilter {
+	if len(raw.Payload) > 0 {
+		if len(raw.Points) > 0 || len(raw.Filter) > 0 {
 			return convertSetPayload(input, "collection")
 		}
 	}
 
 	// Detect by field presence
-	if _, ok := raw["points"]; ok {
+	if len(raw.Points) > 0 {
 		// Could be upsert or delete
 		var probe struct {
 			Points []json.RawMessage `json:"points"`
 		}
 		json.Unmarshal([]byte(input), &probe)
 		if len(probe.Points) > 0 {
-			var pointProbe map[string]json.RawMessage
+			var pointProbe struct {
+				Vector  json.RawMessage `json:"vector"`
+				Payload json.RawMessage `json:"payload"`
+			}
 			if json.Unmarshal(probe.Points[0], &pointProbe) == nil {
-				if _, hasVector := pointProbe["vector"]; hasVector {
-					return convertUpsert(input, "collection")
-				}
-				if _, hasPayload := pointProbe["payload"]; hasPayload {
+				if len(pointProbe.Vector) > 0 || len(pointProbe.Payload) > 0 {
 					return convertUpsert(input, "collection")
 				}
 			}
@@ -162,37 +174,33 @@ func convertByStructure(input string) ([]string, error) {
 		}
 	}
 
-	if _, ok := raw["vector"]; ok {
+	if len(raw.Vector) > 0 {
 		return convertSearch(input, "collection")
 	}
 
-	if _, ok := raw["positive"]; ok {
+	if len(raw.Positive) > 0 {
 		return convertRecommend(input, "collection")
 	}
 
-	if _, ok := raw["target"]; ok {
+	if len(raw.Target) > 0 {
 		return convertDiscover(input, "collection")
 	}
 
-	if _, ok := raw["ids"]; ok {
+	if len(raw.Ids) > 0 {
 		return convertGetPoints(input, "collection")
 	}
 
-	if _, ok := raw["vectors"]; ok {
+	if len(raw.Vectors) > 0 || len(raw.VectorsConfig) > 0 {
 		return convertCreateCollection(input, "collection")
 	}
 
-	if _, ok := raw["vectors_config"]; ok {
-		return convertCreateCollection(input, "collection")
-	}
-
-	if _, ok := raw["field_name"]; ok {
+	if len(raw.FieldName) > 0 {
 		return convertCreateIndex(input, "collection")
 	}
 
-	if _, ok := raw["filter"]; ok {
+	if len(raw.Filter) > 0 {
 		// Could be scroll or delete by filter
-		if _, hasLimit := raw["limit"]; hasLimit {
+		if len(raw.Limit) > 0 {
 			return convertScroll(input, "collection")
 		}
 		return convertDeleteByFilter(input, "collection")

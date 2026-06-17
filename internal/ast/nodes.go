@@ -271,7 +271,7 @@ type QueryStmt struct {
 	RerankModel *string
 
 	Formula         FormulaExpr
-	FormulaDefaults map[string]float64
+	FormulaDefaults map[string]any
 
 	// For RELEVANCE FEEDBACK
 	FeedbackTarget   any             // point ID or vector
