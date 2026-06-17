@@ -208,10 +208,9 @@ jobs:
 
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" dist/* --clobber
-            gh release edit "$tag" --title "$title" --notes-file "$notes_file" --latest
+            gh release edit "$tag" --title "$title" --notes-file "$notes_file"
           else
             gh release create "$tag" dist/* \
               --title "$title" \
-              --notes-file "$notes_file" \
-              --latest
+              --notes-file "$notes_file"
           fi
