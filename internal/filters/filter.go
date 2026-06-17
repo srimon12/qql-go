@@ -1,8 +1,6 @@
 package filters
 
 import (
-	"reflect"
-
 	"github.com/qdrant/go-client/qdrant"
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
@@ -114,20 +112,87 @@ func normalizeFilterExpr(expr ast.FilterExpr) (ast.FilterExpr, error) {
 	if expr == nil {
 		return nil, errors.NewQQLRuntimeError("unknown filter expression type")
 	}
+	if deref, ok := derefFilterExprPtr(expr); ok {
+		return deref, nil
+	}
+	return expr, nil
+}
 
-	value := reflect.ValueOf(expr)
-	if value.Kind() != reflect.Pointer {
-		return expr, nil
+func derefFilterExprPtr(expr ast.FilterExpr) (ast.FilterExpr, bool) {
+	switch p := expr.(type) {
+	case *ast.CompareExpr:
+		if p == nil {
+			return nil, false
+		}
+		return *p, true
+	case *ast.BetweenExpr:
+		if p == nil {
+			return nil, false
+		}
+		return *p, true
+	case *ast.InExpr:
+		if p == nil {
+			return nil, false
+		}
+		return *p, true
+	case *ast.NotInExpr:
+		if p == nil {
+			return nil, false
+		}
+		return *p, true
+	case *ast.IsNullExpr:
+		if p == nil {
+			return nil, false
+		}
+		return *p, true
+	case *ast.IsNotNullExpr:
+		if p == nil {
+			return nil, false
+		}
+		return *p, true
+	case *ast.IsEmptyExpr:
+		if p == nil {
+			return nil, false
+		}
+		return *p, true
+	case *ast.IsNotEmptyExpr:
+		if p == nil {
+			return nil, false
+		}
+		return *p, true
+	case *ast.MatchTextExpr:
+		if p == nil {
+			return nil, false
+		}
+		return *p, true
+	case *ast.MatchAnyExpr:
+		if p == nil {
+			return nil, false
+		}
+		return *p, true
+	case *ast.MatchPhraseExpr:
+		if p == nil {
+			return nil, false
+		}
+		return *p, true
+	case *ast.AndExpr:
+		if p == nil {
+			return nil, false
+		}
+		return *p, true
+	case *ast.OrExpr:
+		if p == nil {
+			return nil, false
+		}
+		return *p, true
+	case *ast.NotExpr:
+		if p == nil {
+			return nil, false
+		}
+		return *p, true
+	default:
+		return nil, false
 	}
-	if value.IsNil() {
-		return nil, errors.NewQQLRuntimeError("unknown filter expression type")
-	}
-
-	normalized, ok := value.Elem().Interface().(ast.FilterExpr)
-	if !ok {
-		return nil, errors.NewQQLRuntimeError("unknown filter expression type")
-	}
-	return normalized, nil
 }
 
 func (fc *FilterConverter) buildBetweenExpr(expr ast.BetweenExpr) (*qdrant.Condition, error) {

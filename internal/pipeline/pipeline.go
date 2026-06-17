@@ -31,6 +31,9 @@ type QueryState struct {
 	CloudModelOptions map[string]string
 	DenseModel        string
 
+	// --- Cached computed values ---
+	DocOptions map[string]*qdrant.Value
+
 	// --- Request assembly (set by executor before pipeline runs) ---
 	CollectionName string
 	VectorName     string
@@ -136,4 +139,23 @@ func groupSizePtr(n uint64) *uint64 {
 		return nil
 	}
 	return &n
+}
+
+// GetDocOptions returns the cached cloud model document options, computing them once if needed.
+func (s *QueryState) GetDocOptions() map[string]*qdrant.Value {
+	if s.DocOptions == nil && len(s.CloudModelOptions) > 0 {
+		s.DocOptions = buildDocumentOptions(s.CloudModelOptions)
+	}
+	return s.DocOptions
+}
+
+func buildDocumentOptions(opts map[string]string) map[string]*qdrant.Value {
+	if len(opts) == 0 {
+		return nil
+	}
+	out := make(map[string]*qdrant.Value, len(opts))
+	for k, v := range opts {
+		out[k] = qdrant.NewValueString(v)
+	}
+	return out
 }
