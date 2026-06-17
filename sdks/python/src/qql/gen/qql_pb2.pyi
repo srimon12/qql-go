@@ -6,6 +6,22 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class ConvertRequest(_message.Message):
+    __slots__ = ("json_payload",)
+    JSON_PAYLOAD_FIELD_NUMBER: _ClassVar[int]
+    json_payload: str
+    def __init__(self, json_payload: _Optional[str] = ...) -> None: ...
+
+class ConvertResponse(_message.Message):
+    __slots__ = ("ok", "statements", "error")
+    OK_FIELD_NUMBER: _ClassVar[int]
+    STATEMENTS_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    ok: bool
+    statements: _containers.RepeatedScalarFieldContainer[str]
+    error: str
+    def __init__(self, ok: _Optional[bool] = ..., statements: _Optional[_Iterable[str]] = ..., error: _Optional[str] = ...) -> None: ...
+
 class ExecRequest(_message.Message):
     __slots__ = ("query",)
     QUERY_FIELD_NUMBER: _ClassVar[int]

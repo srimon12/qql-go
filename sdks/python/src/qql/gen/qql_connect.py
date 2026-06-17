@@ -30,6 +30,9 @@ class QQL(Protocol):
     async def health(self, request: qql__pb2.HealthRequest, ctx: RequestContext) -> qql__pb2.HealthResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
+    async def convert(self, request: qql__pb2.ConvertRequest, ctx: RequestContext) -> qql__pb2.ConvertResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+
 
 class QQLASGIApplication(ConnectASGIApplication[QQL]):
     def __init__(self, service: QQL | AsyncGenerator[QQL], *, interceptors: Iterable[Interceptor]=(), read_max_bytes: int | None = None, compressions: Iterable[Compression] | None = None, codecs: Iterable[Codec] | None = None) -> None:
@@ -75,6 +78,16 @@ class QQLASGIApplication(ConnectASGIApplication[QQL]):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.health,
+                ),
+                "/qql.QQL/Convert": Endpoint.unary(
+                    method=MethodInfo(
+                        name="Convert",
+                        service_name="qql.QQL",
+                        input=qql__pb2.ConvertRequest,
+                        output=qql__pb2.ConvertResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.convert,
                 ),
             },
             interceptors=interceptors,
@@ -170,6 +183,26 @@ class QQLClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def convert(
+        self,
+        request: qql__pb2.ConvertRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> qql__pb2.ConvertResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="Convert",
+                service_name="qql.QQL",
+                input=qql__pb2.ConvertRequest,
+                output=qql__pb2.ConvertResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
 
 
 
@@ -182,6 +215,8 @@ class QQLSync(Protocol):
     def explain(self, request: qql__pb2.ExplainRequest, ctx: RequestContext) -> qql__pb2.ExplainResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
     def health(self, request: qql__pb2.HealthRequest, ctx: RequestContext) -> qql__pb2.HealthResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
+    def convert(self, request: qql__pb2.ConvertRequest, ctx: RequestContext) -> qql__pb2.ConvertResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
 
@@ -228,6 +263,16 @@ class QQLWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.health,
+                ),
+                "/qql.QQL/Convert": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="Convert",
+                        service_name="qql.QQL",
+                        input=qql__pb2.ConvertRequest,
+                        output=qql__pb2.ConvertResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.convert,
                 ),
             },
             interceptors=interceptors,
@@ -317,6 +362,26 @@ class QQLClientSync(ConnectClientSync):
                 service_name="qql.QQL",
                 input=qql__pb2.HealthRequest,
                 output=qql__pb2.HealthResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    def convert(
+        self,
+        request: qql__pb2.ConvertRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None,
+        timeout_ms: int | None = None,
+    ) -> qql__pb2.ConvertResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="Convert",
+                service_name="qql.QQL",
+                input=qql__pb2.ConvertRequest,
+                output=qql__pb2.ConvertResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

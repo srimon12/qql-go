@@ -165,3 +165,27 @@ func (h *Handler) Health(
 		QdrantStatus:    qdrantStatus,
 	}), nil
 }
+
+// Convert translates Qdrant REST JSON into QQL statements.
+func (h *Handler) Convert(
+	_ context.Context,
+	req *connect.Request[qqlpb.ConvertRequest],
+) (*connect.Response[qqlpb.ConvertResponse], error) {
+	jsonPayload := req.Msg.GetJsonPayload()
+	if jsonPayload == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("json_payload is required"))
+	}
+
+	statements, err := qql.ConvertJSONToQQL(jsonPayload)
+	if err != nil {
+		return connect.NewResponse(&qqlpb.ConvertResponse{
+			Ok:    false,
+			Error: err.Error(),
+		}), nil
+	}
+
+	return connect.NewResponse(&qqlpb.ConvertResponse{
+		Ok:         true,
+		Statements: statements,
+	}), nil
+}

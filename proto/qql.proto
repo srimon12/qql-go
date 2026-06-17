@@ -17,6 +17,19 @@ service QQL {
 
   // Health returns gateway and Qdrant connection status.
   rpc Health(HealthRequest) returns (HealthResponse);
+
+  // Convert translates Qdrant REST JSON into QQL statements.
+  rpc Convert(ConvertRequest) returns (ConvertResponse);
+}
+
+message ConvertRequest {
+  string json_payload = 1;
+}
+
+message ConvertResponse {
+  bool ok = 1;
+  repeated string statements = 2;
+  string error = 3;
 }
 
 message ExecRequest {

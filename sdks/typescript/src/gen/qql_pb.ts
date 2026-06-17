@@ -10,7 +10,51 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file qql.proto.
  */
 export const file_qql: GenFile = /*@__PURE__*/
-  fileDesc("CglxcWwucHJvdG8SA3FxbCIcCgtFeGVjUmVxdWVzdBINCgVxdWVyeRgBIAEoCSJMCgxFeGVjUmVzcG9uc2USCgoCb2sYASABKAgSEQoJb3BlcmF0aW9uGAIgASgJEg8KB21lc3NhZ2UYAyABKAkSDAoEZGF0YRgEIAEoDCJMChBFeGVjQmF0Y2hSZXF1ZXN0EiEKB3F1ZXJpZXMYASADKAsyEC5xcWwuRXhlY1JlcXVlc3QSFQoNc3RvcF9vbl9lcnJvchgCIAEoCCI3ChFFeGVjQmF0Y2hSZXNwb25zZRIiCgdyZXN1bHRzGAEgAygLMhEucXFsLkV4ZWNSZXNwb25zZSItCg5FeHBsYWluUmVxdWVzdBINCgVxdWVyeRgBIAEoCRIMCgRqc29uGAIgASgIIjoKD0V4cGxhaW5SZXNwb25zZRIKCgJvaxgBIAEoCBINCgVxdWVyeRgCIAEoCRIMCgRwbGFuGAMgASgJIg8KDUhlYWx0aFJlcXVlc3QiUgoOSGVhbHRoUmVzcG9uc2USDwoHdmVyc2lvbhgBIAEoCRIYChBxZHJhbnRfY29ubmVjdGVkGAIgASgIEhUKDXFkcmFudF9zdGF0dXMYAyABKAky1wEKA1FRTBIrCgRFeGVjEhAucXFsLkV4ZWNSZXF1ZXN0GhEucXFsLkV4ZWNSZXNwb25zZRI6CglFeGVjQmF0Y2gSFS5xcWwuRXhlY0JhdGNoUmVxdWVzdBoWLnFxbC5FeGVjQmF0Y2hSZXNwb25zZRI0CgdFeHBsYWluEhMucXFsLkV4cGxhaW5SZXF1ZXN0GhQucXFsLkV4cGxhaW5SZXNwb25zZRIxCgZIZWFsdGgSEi5xcWwuSGVhbHRoUmVxdWVzdBoTLnFxbC5IZWFsdGhSZXNwb25zZUImWiRnaXRodWIuY29tL3NyaW1vbjEyL3FxbC1nby9nZW4vcXFscGJiBnByb3RvMw");
+  fileDesc("CglxcWwucHJvdG8SA3FxbCImCg5Db252ZXJ0UmVxdWVzdBIUCgxqc29uX3BheWxvYWQYASABKAkiQAoPQ29udmVydFJlc3BvbnNlEgoKAm9rGAEgASgIEhIKCnN0YXRlbWVudHMYAiADKAkSDQoFZXJyb3IYAyABKAkiHAoLRXhlY1JlcXVlc3QSDQoFcXVlcnkYASABKAkiTAoMRXhlY1Jlc3BvbnNlEgoKAm9rGAEgASgIEhEKCW9wZXJhdGlvbhgCIAEoCRIPCgdtZXNzYWdlGAMgASgJEgwKBGRhdGEYBCABKAwiTAoQRXhlY0JhdGNoUmVxdWVzdBIhCgdxdWVyaWVzGAEgAygLMhAucXFsLkV4ZWNSZXF1ZXN0EhUKDXN0b3Bfb25fZXJyb3IYAiABKAgiNwoRRXhlY0JhdGNoUmVzcG9uc2USIgoHcmVzdWx0cxgBIAMoCzIRLnFxbC5FeGVjUmVzcG9uc2UiLQoORXhwbGFpblJlcXVlc3QSDQoFcXVlcnkYASABKAkSDAoEanNvbhgCIAEoCCI6Cg9FeHBsYWluUmVzcG9uc2USCgoCb2sYASABKAgSDQoFcXVlcnkYAiABKAkSDAoEcGxhbhgDIAEoCSIPCg1IZWFsdGhSZXF1ZXN0IlIKDkhlYWx0aFJlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkSGAoQcWRyYW50X2Nvbm5lY3RlZBgCIAEoCBIVCg1xZHJhbnRfc3RhdHVzGAMgASgJMo0CCgNRUUwSKwoERXhlYxIQLnFxbC5FeGVjUmVxdWVzdBoRLnFxbC5FeGVjUmVzcG9uc2USOgoJRXhlY0JhdGNoEhUucXFsLkV4ZWNCYXRjaFJlcXVlc3QaFi5xcWwuRXhlY0JhdGNoUmVzcG9uc2USNAoHRXhwbGFpbhITLnFxbC5FeHBsYWluUmVxdWVzdBoULnFxbC5FeHBsYWluUmVzcG9uc2USMQoGSGVhbHRoEhIucXFsLkhlYWx0aFJlcXVlc3QaEy5xcWwuSGVhbHRoUmVzcG9uc2USNAoHQ29udmVydBITLnFxbC5Db252ZXJ0UmVxdWVzdBoULnFxbC5Db252ZXJ0UmVzcG9uc2VCJlokZ2l0aHViLmNvbS9zcmltb24xMi9xcWwtZ28vZ2VuL3FxbHBiYgZwcm90bzM");
+
+/**
+ * @generated from message qql.ConvertRequest
+ */
+export type ConvertRequest = Message<"qql.ConvertRequest"> & {
+  /**
+   * @generated from field: string json_payload = 1;
+   */
+  jsonPayload: string;
+};
+
+/**
+ * Describes the message qql.ConvertRequest.
+ * Use `create(ConvertRequestSchema)` to create a new message.
+ */
+export const ConvertRequestSchema: GenMessage<ConvertRequest> = /*@__PURE__*/
+  messageDesc(file_qql, 0);
+
+/**
+ * @generated from message qql.ConvertResponse
+ */
+export type ConvertResponse = Message<"qql.ConvertResponse"> & {
+  /**
+   * @generated from field: bool ok = 1;
+   */
+  ok: boolean;
+
+  /**
+   * @generated from field: repeated string statements = 2;
+   */
+  statements: string[];
+
+  /**
+   * @generated from field: string error = 3;
+   */
+  error: string;
+};
+
+/**
+ * Describes the message qql.ConvertResponse.
+ * Use `create(ConvertResponseSchema)` to create a new message.
+ */
+export const ConvertResponseSchema: GenMessage<ConvertResponse> = /*@__PURE__*/
+  messageDesc(file_qql, 1);
 
 /**
  * @generated from message qql.ExecRequest
@@ -29,7 +73,7 @@ export type ExecRequest = Message<"qql.ExecRequest"> & {
  * Use `create(ExecRequestSchema)` to create a new message.
  */
 export const ExecRequestSchema: GenMessage<ExecRequest> = /*@__PURE__*/
-  messageDesc(file_qql, 0);
+  messageDesc(file_qql, 2);
 
 /**
  * @generated from message qql.ExecResponse
@@ -63,7 +107,7 @@ export type ExecResponse = Message<"qql.ExecResponse"> & {
  * Use `create(ExecResponseSchema)` to create a new message.
  */
 export const ExecResponseSchema: GenMessage<ExecResponse> = /*@__PURE__*/
-  messageDesc(file_qql, 1);
+  messageDesc(file_qql, 3);
 
 /**
  * @generated from message qql.ExecBatchRequest
@@ -87,7 +131,7 @@ export type ExecBatchRequest = Message<"qql.ExecBatchRequest"> & {
  * Use `create(ExecBatchRequestSchema)` to create a new message.
  */
 export const ExecBatchRequestSchema: GenMessage<ExecBatchRequest> = /*@__PURE__*/
-  messageDesc(file_qql, 2);
+  messageDesc(file_qql, 4);
 
 /**
  * @generated from message qql.ExecBatchResponse
@@ -104,7 +148,7 @@ export type ExecBatchResponse = Message<"qql.ExecBatchResponse"> & {
  * Use `create(ExecBatchResponseSchema)` to create a new message.
  */
 export const ExecBatchResponseSchema: GenMessage<ExecBatchResponse> = /*@__PURE__*/
-  messageDesc(file_qql, 3);
+  messageDesc(file_qql, 5);
 
 /**
  * @generated from message qql.ExplainRequest
@@ -128,7 +172,7 @@ export type ExplainRequest = Message<"qql.ExplainRequest"> & {
  * Use `create(ExplainRequestSchema)` to create a new message.
  */
 export const ExplainRequestSchema: GenMessage<ExplainRequest> = /*@__PURE__*/
-  messageDesc(file_qql, 4);
+  messageDesc(file_qql, 6);
 
 /**
  * @generated from message qql.ExplainResponse
@@ -155,7 +199,7 @@ export type ExplainResponse = Message<"qql.ExplainResponse"> & {
  * Use `create(ExplainResponseSchema)` to create a new message.
  */
 export const ExplainResponseSchema: GenMessage<ExplainResponse> = /*@__PURE__*/
-  messageDesc(file_qql, 5);
+  messageDesc(file_qql, 7);
 
 /**
  * @generated from message qql.HealthRequest
@@ -168,7 +212,7 @@ export type HealthRequest = Message<"qql.HealthRequest"> & {
  * Use `create(HealthRequestSchema)` to create a new message.
  */
 export const HealthRequestSchema: GenMessage<HealthRequest> = /*@__PURE__*/
-  messageDesc(file_qql, 6);
+  messageDesc(file_qql, 8);
 
 /**
  * @generated from message qql.HealthResponse
@@ -195,7 +239,7 @@ export type HealthResponse = Message<"qql.HealthResponse"> & {
  * Use `create(HealthResponseSchema)` to create a new message.
  */
 export const HealthResponseSchema: GenMessage<HealthResponse> = /*@__PURE__*/
-  messageDesc(file_qql, 7);
+  messageDesc(file_qql, 9);
 
 /**
  * QQL is the Connect RPC service for executing QQL queries against Qdrant.
@@ -242,6 +286,16 @@ export const QQL: GenService<{
     methodKind: "unary";
     input: typeof HealthRequestSchema;
     output: typeof HealthResponseSchema;
+  },
+  /**
+   * Convert translates Qdrant REST JSON into QQL statements.
+   *
+   * @generated from rpc qql.QQL.Convert
+   */
+  convert: {
+    methodKind: "unary";
+    input: typeof ConvertRequestSchema;
+    output: typeof ConvertResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_qql, 0);

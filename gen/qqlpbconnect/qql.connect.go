@@ -41,6 +41,8 @@ const (
 	QQLExplainProcedure = "/qql.QQL/Explain"
 	// QQLHealthProcedure is the fully-qualified name of the QQL's Health RPC.
 	QQLHealthProcedure = "/qql.QQL/Health"
+	// QQLConvertProcedure is the fully-qualified name of the QQL's Convert RPC.
+	QQLConvertProcedure = "/qql.QQL/Convert"
 )
 
 // QQLClient is a client for the qql.QQL service.
@@ -53,6 +55,8 @@ type QQLClient interface {
 	Explain(context.Context, *connect.Request[qqlpb.ExplainRequest]) (*connect.Response[qqlpb.ExplainResponse], error)
 	// Health returns gateway and Qdrant connection status.
 	Health(context.Context, *connect.Request[qqlpb.HealthRequest]) (*connect.Response[qqlpb.HealthResponse], error)
+	// Convert translates Qdrant REST JSON into QQL statements.
+	Convert(context.Context, *connect.Request[qqlpb.ConvertRequest]) (*connect.Response[qqlpb.ConvertResponse], error)
 }
 
 // NewQQLClient constructs a client for the qql.QQL service. By default, it uses the Connect
@@ -90,6 +94,12 @@ func NewQQLClient(httpClient connect.HTTPClient, baseURL string, opts ...connect
 			connect.WithSchema(qQLMethods.ByName("Health")),
 			connect.WithClientOptions(opts...),
 		),
+		convert: connect.NewClient[qqlpb.ConvertRequest, qqlpb.ConvertResponse](
+			httpClient,
+			baseURL+QQLConvertProcedure,
+			connect.WithSchema(qQLMethods.ByName("Convert")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -99,6 +109,7 @@ type qQLClient struct {
 	execBatch *connect.Client[qqlpb.ExecBatchRequest, qqlpb.ExecBatchResponse]
 	explain   *connect.Client[qqlpb.ExplainRequest, qqlpb.ExplainResponse]
 	health    *connect.Client[qqlpb.HealthRequest, qqlpb.HealthResponse]
+	convert   *connect.Client[qqlpb.ConvertRequest, qqlpb.ConvertResponse]
 }
 
 // Exec calls qql.QQL.Exec.
@@ -121,6 +132,11 @@ func (c *qQLClient) Health(ctx context.Context, req *connect.Request[qqlpb.Healt
 	return c.health.CallUnary(ctx, req)
 }
 
+// Convert calls qql.QQL.Convert.
+func (c *qQLClient) Convert(ctx context.Context, req *connect.Request[qqlpb.ConvertRequest]) (*connect.Response[qqlpb.ConvertResponse], error) {
+	return c.convert.CallUnary(ctx, req)
+}
+
 // QQLHandler is an implementation of the qql.QQL service.
 type QQLHandler interface {
 	// Exec parses and executes a single QQL query.
@@ -131,6 +147,8 @@ type QQLHandler interface {
 	Explain(context.Context, *connect.Request[qqlpb.ExplainRequest]) (*connect.Response[qqlpb.ExplainResponse], error)
 	// Health returns gateway and Qdrant connection status.
 	Health(context.Context, *connect.Request[qqlpb.HealthRequest]) (*connect.Response[qqlpb.HealthResponse], error)
+	// Convert translates Qdrant REST JSON into QQL statements.
+	Convert(context.Context, *connect.Request[qqlpb.ConvertRequest]) (*connect.Response[qqlpb.ConvertResponse], error)
 }
 
 // NewQQLHandler builds an HTTP handler from the service implementation. It returns the path on
@@ -164,6 +182,12 @@ func NewQQLHandler(svc QQLHandler, opts ...connect.HandlerOption) (string, http.
 		connect.WithSchema(qQLMethods.ByName("Health")),
 		connect.WithHandlerOptions(opts...),
 	)
+	qQLConvertHandler := connect.NewUnaryHandler(
+		QQLConvertProcedure,
+		svc.Convert,
+		connect.WithSchema(qQLMethods.ByName("Convert")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/qql.QQL/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case QQLExecProcedure:
@@ -174,6 +198,8 @@ func NewQQLHandler(svc QQLHandler, opts ...connect.HandlerOption) (string, http.
 			qQLExplainHandler.ServeHTTP(w, r)
 		case QQLHealthProcedure:
 			qQLHealthHandler.ServeHTTP(w, r)
+		case QQLConvertProcedure:
+			qQLConvertHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -197,4 +223,8 @@ func (UnimplementedQQLHandler) Explain(context.Context, *connect.Request[qqlpb.E
 
 func (UnimplementedQQLHandler) Health(context.Context, *connect.Request[qqlpb.HealthRequest]) (*connect.Response[qqlpb.HealthResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("qql.QQL.Health is not implemented"))
+}
+
+func (UnimplementedQQLHandler) Convert(context.Context, *connect.Request[qqlpb.ConvertRequest]) (*connect.Response[qqlpb.ConvertResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("qql.QQL.Convert is not implemented"))
 }
