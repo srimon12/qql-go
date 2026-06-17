@@ -84,7 +84,7 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 							return nil, err
 						}
 						hnsw = block.Hnsw
-					} else if p.peek().Kind == lexer.TokenKindQuantize || (p.peek().Kind == lexer.TokenKindIdentifier && strings.ToUpper(p.peek().Value) == "QUANTIZATION") {
+					} else if p.peek().Kind == lexer.TokenKindQuantize || (p.peek().Kind == lexer.TokenKindIdentifier && asciiEqual(p.peek().Value, "QUANTIZATION")) {
 						p.advance()
 						block, err := p.parseQuantizationConfigBlock()
 						if err != nil {
@@ -132,7 +132,7 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 		} else {
 			for p.peek().Kind == lexer.TokenKindDense || p.peek().Kind == lexer.TokenKindSparse {
 				mode := p.advance().Kind
-				if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && strings.ToUpper(p.peek().Value) == "VECTOR") {
+				if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && asciiEqual(p.peek().Value, "VECTOR")) {
 					p.advance()
 					v, err := p.parseStringPtr()
 					if err != nil {
@@ -266,7 +266,7 @@ func (p *Parser) parseCollectionConfigClause(forAlter bool) (*ast.CollectionConf
 		p.advance()
 		return p.parseCollectionParamsConfigBlock(forAlter)
 	}
-	if tok.Kind == lexer.TokenKindQuantize || (tok.Kind == lexer.TokenKindIdentifier && strings.ToUpper(tok.Value) == "QUANTIZATION") {
+	if tok.Kind == lexer.TokenKindQuantize || (tok.Kind == lexer.TokenKindIdentifier && asciiEqual(tok.Value, "QUANTIZATION")) {
 		p.advance()
 		return p.parseQuantizationConfigBlock()
 	}

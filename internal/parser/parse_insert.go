@@ -51,39 +51,3 @@ func (p *Parser) parseInsert() (ast.ASTNode, error) {
 		SparseVector: sparseVector,
 	}, nil
 }
-
-func extractInsertPointID(values map[string]any) (any, map[string]any) {
-	var matches []string
-	for key := range values {
-		if toLowerEqual(key, "id") {
-			matches = append(matches, key)
-		}
-	}
-	if len(matches) == 0 {
-		return nil, values
-	}
-	chosen := matches[0]
-	value := values[chosen]
-	delete(values, chosen)
-	return value, values
-}
-
-func toLowerEqual(a, b string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		ca := a[i]
-		cb := b[i]
-		if ca >= 'A' && ca <= 'Z' {
-			ca += 32
-		}
-		if cb >= 'A' && cb <= 'Z' {
-			cb += 32
-		}
-		if ca != cb {
-			return false
-		}
-	}
-	return true
-}

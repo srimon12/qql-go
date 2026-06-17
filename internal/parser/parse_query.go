@@ -2,7 +2,6 @@ package parser
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
@@ -256,18 +255,18 @@ func (p *Parser) parseRecommendWith(stmt *ast.QueryStmt) {
 			return
 		}
 		p.advance()
-		key := strings.ToLower(keyTok.Value)
+		key := keyTok.Value
 		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
 			return
 		}
-		switch key {
-		case "positive":
+		switch {
+		case asciiEqualLower(key, "positive"):
 			ids, err := p.parsePointIDList()
 			if err != nil {
 				return
 			}
 			stmt.PositiveIDs = ids
-		case "negative":
+		case asciiEqualLower(key, "negative"):
 			ids, err := p.parsePointIDList()
 			if err != nil {
 				return
@@ -370,7 +369,7 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 				return
 			}
 			stmt.LookupFrom = lookupFrom
-			if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && strings.ToUpper(p.peek().Value) == "VECTOR") {
+			if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && asciiEqual(p.peek().Value, "VECTOR")) {
 				p.advance()
 				lv, _ := p.parseStringPtr()
 				stmt.LookupVector = lv
@@ -458,7 +457,7 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 						return
 					}
 					ref.LookupFrom = lookupFrom
-					if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && strings.ToUpper(p.peek().Value) == "VECTOR") {
+					if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && asciiEqual(p.peek().Value, "VECTOR")) {
 						p.advance()
 						lv, _ := p.parseStringPtr()
 						ref.LookupVector = lv
@@ -482,11 +481,16 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 			seenFusion = true
 			p.advance()
 			fusionTok := p.peek()
-			if fusionTok.Kind != lexer.TokenKindIdentifier || (strings.ToUpper(fusionTok.Value) != "RRF" && strings.ToUpper(fusionTok.Value) != "DBSF") {
+			if fusionTok.Kind != lexer.TokenKindIdentifier || (!asciiEqual(fusionTok.Value, "RRF") && !asciiEqual(fusionTok.Value, "DBSF")) {
 				return
 			}
 			p.advance()
-			upper := strings.ToUpper(fusionTok.Value)
+			upper := fusionTok.Value
+			if asciiEqual(fusionTok.Value, "RRF") {
+				upper = "RRF"
+			} else {
+				upper = "DBSF"
+			}
 			stmt.FusionType = &upper
 
 		case lexer.TokenKindWhere:

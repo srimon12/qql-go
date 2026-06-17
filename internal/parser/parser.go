@@ -3,7 +3,6 @@ package parser
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
@@ -246,14 +245,13 @@ func (p *Parser) parseValue() (any, error) {
 		return nil, nil
 	case lexer.TokenKindIdentifier:
 		p.advance()
-		upper := strings.ToUpper(tok.Value)
-		if upper == "TRUE" {
+		if asciiEqual(tok.Value, "TRUE") {
 			return true, nil
 		}
-		if upper == "FALSE" {
+		if asciiEqual(tok.Value, "FALSE") {
 			return false, nil
 		}
-		if upper == "NULL" {
+		if asciiEqual(tok.Value, "NULL") {
 			return nil, nil
 		}
 		return tok.Value, nil
@@ -269,11 +267,10 @@ func (p *Parser) parseBool() (bool, error) {
 	tok := p.peek()
 	if tok.Kind == lexer.TokenKindIdentifier {
 		p.advance()
-		upper := strings.ToUpper(tok.Value)
-		if upper == "TRUE" {
+		if asciiEqual(tok.Value, "TRUE") {
 			return true, nil
 		}
-		if upper == "FALSE" {
+		if asciiEqual(tok.Value, "FALSE") {
 			return false, nil
 		}
 	}
@@ -436,9 +433,43 @@ func (p *Parser) parseNumericLiteral() (float64, error) {
 
 func (p *Parser) parseOptionalVectorString() (*string, error) {
 	tok := p.peek()
-	if tok.Kind == lexer.TokenKindVector || (tok.Kind == lexer.TokenKindIdentifier && strings.ToUpper(tok.Value) == "VECTOR") {
+	if tok.Kind == lexer.TokenKindVector || (tok.Kind == lexer.TokenKindIdentifier && asciiEqual(tok.Value, "VECTOR")) {
 		p.advance()
 		return p.parseStringPtr()
 	}
 	return nil, nil
+}
+
+// asciiEqual performs case-insensitive ASCII comparison without allocation.
+func asciiEqual(s, upper string) bool {
+	if len(s) != len(upper) {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'a' && c <= 'z' {
+			c -= 32
+		}
+		if c != upper[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// asciiEqualLower performs case-insensitive ASCII comparison against a lowercase string.
+func asciiEqualLower(s, lower string) bool {
+	if len(s) != len(lower) {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 32
+		}
+		if c != lower[i] {
+			return false
+		}
+	}
+	return true
 }

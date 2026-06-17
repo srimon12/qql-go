@@ -37,7 +37,7 @@ func (n *DenseEmbedNode) Execute(ctx context.Context, state *QueryState) error {
 		doc := &qdrant.Document{
 			Text:    state.QueryText,
 			Model:   n.Model,
-			Options: buildDocumentOptions(state.CloudModelOptions),
+			Options: state.GetDocOptions(),
 		}
 		query = qdrant.NewQueryDocument(doc)
 		if state.HasMMR {
@@ -92,7 +92,7 @@ func (n *SparseEmbedNode) Execute(ctx context.Context, state *QueryState) error 
 		doc := &qdrant.Document{
 			Text:    state.QueryText,
 			Model:   n.Model,
-			Options: buildDocumentOptions(state.CloudModelOptions),
+			Options: state.GetDocOptions(),
 		}
 		query = qdrant.NewQueryDocument(doc)
 	}
@@ -143,22 +143,9 @@ func (n *RerankNode) Execute(ctx context.Context, state *QueryState) error {
 	state.TargetQuery = qdrant.NewQueryDocument(&qdrant.Document{
 		Text:    state.QueryText,
 		Model:   n.Model,
-		Options: buildDocumentOptions(state.CloudModelOptions),
+		Options: state.GetDocOptions(),
 	})
 	return nil
-}
-
-// buildDocumentOptions converts the string-map from config into the *qdrant.Value map
-// expected by the qdrant-go gRPC client for cloud inference provider API keys.
-func buildDocumentOptions(opts map[string]string) map[string]*qdrant.Value {
-	if len(opts) == 0 {
-		return nil
-	}
-	out := make(map[string]*qdrant.Value, len(opts))
-	for k, v := range opts {
-		out[k] = qdrant.NewValueString(v)
-	}
-	return out
 }
 
 // RecommendNode handles building a QueryRecommend
@@ -358,7 +345,7 @@ func buildVectorInput(ctx context.Context, state *QueryState, val any) (*qdrant.
 			return qdrant.NewVectorInputDocument(&qdrant.Document{
 				Text:    s,
 				Model:   state.DenseModel,
-				Options: buildDocumentOptions(state.CloudModelOptions),
+				Options: state.GetDocOptions(),
 			}), nil
 		}
 	}
