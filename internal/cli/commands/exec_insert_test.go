@@ -151,3 +151,53 @@ func TestBuildInsertVectorsLocalModeRejectsRerank(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "rerank vectors are not implemented yet")
 }
+
+func TestInsertPointIDAndPayloadRejectsMissingID(t *testing.T) {
+	_, _, err := insertPointIDAndPayload(map[string]any{"text": "hello"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "requires an 'id' field")
+}
+
+func TestInsertPointIDAndPayloadRejectsNegativeIntID(t *testing.T) {
+	_, _, err := insertPointIDAndPayload(map[string]any{"id": -1, "text": "hello"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsigned integer")
+}
+
+func TestInsertPointIDAndPayloadRejectsInvalidStringID(t *testing.T) {
+	_, _, err := insertPointIDAndPayload(map[string]any{"id": "not-a-uuid", "text": "hello"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsigned integer or UUID")
+}
+
+func TestInsertPointIDAndPayloadAcceptsNumericStringID(t *testing.T) {
+	id, payload, err := insertPointIDAndPayload(map[string]any{"id": "42", "text": "hello"})
+	require.NoError(t, err)
+	require.Equal(t, uint64(42), id)
+	require.Equal(t, map[string]any{"text": "hello"}, payload)
+}
+
+func TestInsertPointIDAndPayloadRejectsUnsupportedIDType(t *testing.T) {
+	_, _, err := insertPointIDAndPayload(map[string]any{"id": 3.14, "text": "hello"})
+	require.Error(t, err)
+}
+
+func TestDoInsertRejectsEmptyText(t *testing.T) {
+	exec := NewExecutor(newFakeQdrantClient(), &config.Config{InferenceMode: "cloud"})
+	_, err := exec.doInsert(&ast.InsertStmt{
+		Collection:   "docs",
+		ValuesList:   []map[string]any{{"id": "550e8400-e29b-41d4-a716-446655440000"}},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "requires a 'text' field")
+}
+
+func TestDoInsertRejectsNonStringText(t *testing.T) {
+	exec := NewExecutor(newFakeQdrantClient(), &config.Config{InferenceMode: "cloud"})
+	_, err := exec.doInsert(&ast.InsertStmt{
+		Collection:   "docs",
+		ValuesList:   []map[string]any{{"id": "550e8400-e29b-41d4-a716-446655440000", "text": 123}},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must be a string")
+}

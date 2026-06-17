@@ -70,8 +70,46 @@ func TestResultDataJSON(t *testing.T) {
 	assert.Contains(t, string(data), "score")
 }
 
+func TestResultDataJSON_NilData(t *testing.T) {
+	r := &Result{}
+	data, err := r.DataJSON()
+	assert.NoError(t, err)
+	assert.Nil(t, data)
+}
+
 func TestErrorResult(t *testing.T) {
 	r := ErrorResult(assert.AnError)
 	assert.False(t, r.OK)
 	assert.NotEmpty(t, r.Message)
+}
+
+func TestExecBatchWithEmptyQueries(t *testing.T) {
+	results, err := ExecBatch(nil, nil, nil, true)
+	require.NoError(t, err)
+	assert.Empty(t, results)
+}
+
+func TestBatchQueryWithEmptyQueries(t *testing.T) {
+	_, err := BatchQuery(nil, nil, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "at least one query")
+}
+
+func TestParseAllStatementTypes(t *testing.T) {
+	queries := []string{
+		"SHOW COLLECTIONS",
+		"SHOW COLLECTION docs",
+		"QUERY 'test' FROM docs LIMIT 1",
+		"INSERT INTO docs VALUES {'id': 1, 'text': 'hello'}",
+		"DELETE FROM docs WHERE id = 1",
+		"UPDATE docs SET PAYLOAD = {'k': 'v'} WHERE id = 1",
+		"SELECT * FROM docs WHERE id = 1",
+		"SCROLL FROM docs LIMIT 10",
+	}
+	for _, q := range queries {
+		t.Run(q, func(t *testing.T) {
+			_, err := Parse(q)
+			require.NoError(t, err, "failed to parse: %s", q)
+		})
+	}
 }
