@@ -111,7 +111,7 @@ func isContextualFieldName(kind lexer.TokenKind) bool {
 	return isContextualIdentifier(kind)
 }
 
-func (p *Parser) parseDict() (map[string]any, error) {
+func (p *Parser) parsePayloadDict() (map[string]any, error) {
 	if _, err := p.expect(lexer.TokenKindLbrace); err != nil {
 		return nil, err
 	}
@@ -145,6 +145,48 @@ func (p *Parser) parseDict() (map[string]any, error) {
 		}
 	}
 	if _, err := p.expect(lexer.TokenKindRbrace); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (p *Parser) parseConfigBlock() (map[string]any, error) {
+	if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+		return nil, err
+	}
+	result := make(map[string]any)
+	if p.peek().Kind == lexer.TokenKindRparen {
+		p.advance()
+		return result, nil
+	}
+	for {
+		keyTok := p.peek()
+		switch keyTok.Kind {
+		case lexer.TokenKindLparen, lexer.TokenKindRparen, lexer.TokenKindEquals, lexer.TokenKindComma, lexer.TokenKindEof:
+			return nil, errors.NewQQLSyntaxError("Expected configuration key, got '"+keyTok.Value+"'", keyTok.Pos)
+		}
+		p.advance()
+		key := keyTok.Value
+
+		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
+			return nil, err
+		}
+		value, err := p.parseValue()
+		if err != nil {
+			return nil, err
+		}
+		result[key] = value
+
+		if p.peek().Kind == lexer.TokenKindComma {
+			p.advance()
+			if p.peek().Kind == lexer.TokenKindRparen {
+				break
+			}
+		} else {
+			break
+		}
+	}
+	if _, err := p.expect(lexer.TokenKindRparen); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -209,7 +251,7 @@ func (p *Parser) parseValue() (any, error) {
 		}
 		return tok.Value, nil
 	case lexer.TokenKindLbrace:
-		return p.parseDict()
+		return p.parsePayloadDict()
 	case lexer.TokenKindLbracket:
 		return p.parseList()
 	}

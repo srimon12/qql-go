@@ -11,7 +11,7 @@ import (
 
 func TestParseCreateRejectsAlterOnlyParamsCaseInsensitive(t *testing.T) {
 	l := &lexer.Lexer{}
-	tokens, err := l.Tokenize("CREATE COLLECTION docs WITH PARAMS { Read_Fan_Out_Factor: 4 }")
+	tokens, err := l.Tokenize("CREATE COLLECTION docs WITH PARAMS ( Read_Fan_Out_Factor = 4 )")
 	require.NoError(t, err)
 
 	p := NewParser()

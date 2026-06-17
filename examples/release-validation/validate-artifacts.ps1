@@ -1,9 +1,9 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [Parameter(Mandatory=$true)] [string]$SuitePath,
     [Parameter(Mandatory=$true)] [string]$Artifacts
 )
+
+$ErrorActionPreference = "Stop"
 
 function Assert-True {
     param(
@@ -46,7 +46,7 @@ foreach ($check in $suite.checks) {
     }
 
     if ($null -ne $check.expect.min_results) {
-        Assert-True (($artifact.data.count) -ge $check.expect.min_results) "step '$($check.id)' should return at least $($check.expect.min_results) results"
+        Assert-True (($artifact.data.Count) -ge $check.expect.min_results) "step '$($check.id)' should return at least $($check.expect.min_results) results"
     }
     if ($null -ne $check.expect.hybrid) {
         Assert-True (($artifact.data.hybrid) -eq $check.expect.hybrid) "step '$($check.id)' hybrid flag should be $($check.expect.hybrid)"
@@ -59,7 +59,7 @@ foreach ($check in $suite.checks) {
     }
 
     for ($i = 0; $i -lt $check.expect.top_ids.Count; $i++) {
-        Assert-True ($artifact.data.results[$i].id -eq $check.expect.top_ids[$i]) "step '$($check.id)' result[$i] should be '$($check.expect.top_ids[$i])'"
+        Assert-True ($artifact.data[$i].id -eq $check.expect.top_ids[$i]) "step '$($check.id)' result[$i] should be '$($check.expect.top_ids[$i])'"
     }
 }
 

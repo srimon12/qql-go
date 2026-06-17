@@ -19,6 +19,21 @@ import (
 	"github.com/srimon12/qql-go/internal/sparse"
 )
 
+func parseQuery(query string) (ast.ASTNode, error) {
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(query)
+	if err != nil {
+		return nil, fmt.Errorf("parse error: %w", err)
+	}
+
+	p := parser.NewParser()
+	node, err := p.Parse(tokens)
+	if err != nil {
+		return nil, fmt.Errorf("parse error: %w", err)
+	}
+	return node, nil
+}
+
 func NewExecutor(client qdrantClient, cfg *config.Config) *Executor {
 	return &Executor{
 		client: client,
@@ -35,16 +50,9 @@ func (e *Executor) Execute(query string) (string, error) {
 }
 
 func (e *Executor) ExecuteResult(query string) (*ExecResponse, error) {
-	l := &lexer.Lexer{}
-	tokens, err := l.Tokenize(query)
+	node, err := parseQuery(query)
 	if err != nil {
-		return nil, fmt.Errorf("parse error: %w", err)
-	}
-
-	p := parser.NewParser()
-	node, err := p.Parse(tokens)
-	if err != nil {
-		return nil, fmt.Errorf("parse error: %w", err)
+		return nil, err
 	}
 
 	switch n := node.(type) {
@@ -499,16 +507,9 @@ func (e *Executor) Explain(query string) (string, error) {
 }
 
 func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
-	l := &lexer.Lexer{}
-	tokens, err := l.Tokenize(query)
+	node, err := parseQuery(query)
 	if err != nil {
-		return nil, fmt.Errorf("parse error: %w", err)
-	}
-
-	p := parser.NewParser()
-	node, err := p.Parse(tokens)
-	if err != nil {
-		return nil, fmt.Errorf("parse error: %w", err)
+		return nil, err
 	}
 
 	var plan strings.Builder
@@ -530,15 +531,15 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 				plan.WriteString(fmt.Sprintf("HNSW payload_m: %d\n", *n.Config.Hnsw.PayloadM))
 			}
 		}
-		if n.Quantization != nil {
-			plan.WriteString(fmt.Sprintf("Quantization: %s\n", n.Quantization.Type))
-			if n.Quantization.Quantile != nil {
-				plan.WriteString(fmt.Sprintf("Quantile: %.4f\n", *n.Quantization.Quantile))
+		if n.Config != nil && n.Config.Quantization != nil {
+			plan.WriteString(fmt.Sprintf("Quantization: %s\n", n.Config.Quantization.Type))
+			if n.Config.Quantization.Quantile != nil {
+				plan.WriteString(fmt.Sprintf("Quantile: %.4f\n", *n.Config.Quantization.Quantile))
 			}
-			if n.Quantization.TurboBits != nil {
-				plan.WriteString(fmt.Sprintf("Turbo bits: %g\n", *n.Quantization.TurboBits))
+			if n.Config.Quantization.TurboBits != nil {
+				plan.WriteString(fmt.Sprintf("Turbo bits: %g\n", *n.Config.Quantization.TurboBits))
 			}
-			if n.Quantization.AlwaysRAM {
+			if n.Config.Quantization.AlwaysRAM {
 				plan.WriteString("Quantization storage: ALWAYS RAM\n")
 			}
 		}
@@ -566,11 +567,11 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 				plan.WriteString("Alteration: Params config\n")
 			}
 		}
-		if n.Quantization != nil {
-			if n.Quantization.Disabled {
+		if n.Config != nil && n.Config.QuantizationUpdate != nil {
+			if n.Config.QuantizationUpdate.Disabled {
 				plan.WriteString("Alteration: Disable quantization\n")
 			} else {
-				plan.WriteString(fmt.Sprintf("Alteration: %s quantization\n", n.Quantization.Config.Type))
+				plan.WriteString(fmt.Sprintf("Alteration: %s quantization\n", n.Config.QuantizationUpdate.Config.Type))
 			}
 		}
 		plan.WriteString("Action: Alter existing collection\n")
@@ -603,7 +604,9 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		plan.WriteString("Action: Scroll (paginate) through points\n")
 
 	case *ast.QueryStmt:
-		if n.Mode == ast.QueryModeOrderBy {
+		// Statement line
+		switch n.Mode {
+		case ast.QueryModeOrderBy:
 			dir := "ASC"
 			if n.OrderByAsc != nil && !*n.OrderByAsc {
 				dir = "DESC"
@@ -613,14 +616,193 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 				field = *n.OrderByField
 			}
 			plan.WriteString(fmt.Sprintf("Statement: QUERY ORDER BY %s %s FROM %s LIMIT %v\n", field, dir, n.Collection, n.Limit))
-		} else {
-			plan.WriteString(fmt.Sprintf("Statement: QUERY %s %s LIMIT %v\n", string(n.Mode), n.Collection, n.Limit))
+		case ast.QueryModeSample:
+			plan.WriteString(fmt.Sprintf("Statement: QUERY SAMPLE FROM %s LIMIT %v\n", n.Collection, n.Limit))
+		default:
+			plan.WriteString(fmt.Sprintf("Statement: QUERY %s FROM %s LIMIT %v\n", string(n.Mode), n.Collection, n.Limit))
 		}
+
+		// Query text or ID
 		if n.QueryText != nil {
 			plan.WriteString(fmt.Sprintf("Query: '%s'\n", *n.QueryText))
 		} else if n.QueryID != nil {
 			plan.WriteString(fmt.Sprintf("Query ID: %v\n", n.QueryID))
 		}
+
+		// USING
+		if n.Type == ast.QueryTypeHybrid {
+			plan.WriteString("Using: HYBRID\n")
+		} else if n.Type == ast.QueryTypeSparse {
+			if n.Using != nil {
+				plan.WriteString(fmt.Sprintf("Using: SPARSE '%s'\n", *n.Using))
+			} else {
+				plan.WriteString("Using: SPARSE\n")
+			}
+		} else if n.Using != nil {
+			plan.WriteString(fmt.Sprintf("Using: '%s'\n", *n.Using))
+		}
+
+		// WITH MODEL
+		if n.Model != nil {
+			plan.WriteString(fmt.Sprintf("Model: %s\n", *n.Model))
+		}
+
+		// WITH { ... } params
+		if n.WithClause != nil {
+			if n.WithClause.HnswEf > 0 {
+				plan.WriteString(fmt.Sprintf("HNSW ef: %d\n", n.WithClause.HnswEf))
+			}
+			if n.WithClause.Exact {
+				plan.WriteString("Exact: true\n")
+			}
+			if n.WithClause.Acorn {
+				plan.WriteString("ACORN: true\n")
+			}
+			if n.WithClause.IndexedOnly {
+				plan.WriteString("Indexed only: true\n")
+			}
+			if n.WithClause.Quantization != nil {
+				plan.WriteString("Quantization: enabled\n")
+			}
+			if n.WithClause.MmrDiversity != nil {
+				plan.WriteString(fmt.Sprintf("MMR diversity: %v\n", *n.WithClause.MmrDiversity))
+			}
+			if n.WithClause.MmrCandidates != nil {
+				plan.WriteString(fmt.Sprintf("MMR candidates: %v\n", *n.WithClause.MmrCandidates))
+			}
+			if n.WithClause.RrfK != nil {
+				plan.WriteString(fmt.Sprintf("RRF K: %d\n", *n.WithClause.RrfK))
+			}
+			if len(n.WithClause.RrfWeights) > 0 {
+				plan.WriteString(fmt.Sprintf("RRF weights: %v\n", n.WithClause.RrfWeights))
+			}
+		}
+
+		// WITH PAYLOAD / WITH VECTORS
+		if n.WithPayload != nil {
+			if n.WithPayload.Enable != nil {
+				plan.WriteString(fmt.Sprintf("With payload: %v\n", *n.WithPayload.Enable))
+			} else if len(n.WithPayload.Include) > 0 {
+				plan.WriteString(fmt.Sprintf("With payload include: %v\n", n.WithPayload.Include))
+			} else if len(n.WithPayload.Exclude) > 0 {
+				plan.WriteString(fmt.Sprintf("With payload exclude: %v\n", n.WithPayload.Exclude))
+			}
+		}
+		if n.WithVectors != nil {
+			if n.WithVectors.Enable != nil {
+				plan.WriteString(fmt.Sprintf("With vectors: %v\n", *n.WithVectors.Enable))
+			} else if len(n.WithVectors.Vectors) > 0 {
+				plan.WriteString(fmt.Sprintf("With vectors: %v\n", n.WithVectors.Vectors))
+			}
+		}
+
+		// WHERE
+		if n.QueryFilter != nil {
+			plan.WriteString(fmt.Sprintf("Filter: %s\n", e.filterToString(n.QueryFilter)))
+		}
+
+		// OFFSET
+		if n.Offset > 0 {
+			plan.WriteString(fmt.Sprintf("Offset: %d\n", n.Offset))
+		}
+
+		// SCORE THRESHOLD
+		if n.ScoreThreshold != nil {
+			plan.WriteString(fmt.Sprintf("Score threshold: %v\n", *n.ScoreThreshold))
+		}
+
+		// LOOKUP FROM
+		if n.LookupFrom != "" {
+			vec := ""
+			if n.LookupVector != nil {
+				vec = fmt.Sprintf(" VECTOR '%s'", *n.LookupVector)
+			}
+			plan.WriteString(fmt.Sprintf("Lookup from: %s%s\n", n.LookupFrom, vec))
+		}
+
+		// GROUP BY / GROUP SIZE
+		if n.GroupBy != nil {
+			plan.WriteString(fmt.Sprintf("Group by: %s\n", *n.GroupBy))
+		}
+		if n.GroupSize != nil {
+			plan.WriteString(fmt.Sprintf("Group size: %d\n", *n.GroupSize))
+		}
+
+		// WITH LOOKUP
+		if n.WithLookupCollection != nil {
+			plan.WriteString(fmt.Sprintf("With lookup: %s\n", *n.WithLookupCollection))
+		}
+
+		// RERANK
+		if n.Rerank {
+			if n.RerankModel != nil {
+				plan.WriteString(fmt.Sprintf("Rerank: model '%s'\n", *n.RerankModel))
+			} else {
+				plan.WriteString("Rerank: enabled\n")
+			}
+		}
+
+		// STRATEGY
+		if n.Strategy != nil {
+			plan.WriteString(fmt.Sprintf("Strategy: %s\n", *n.Strategy))
+		}
+
+		// RECOMMEND mode details
+		if n.Mode == ast.QueryModeRecommend {
+			if len(n.PositiveIDs) > 0 {
+				plan.WriteString(fmt.Sprintf("Positive IDs: %v\n", n.PositiveIDs))
+			}
+			if len(n.NegativeIDs) > 0 {
+				plan.WriteString(fmt.Sprintf("Negative IDs: %v\n", n.NegativeIDs))
+			}
+		}
+
+		// CONTEXT mode details
+		if n.Mode == ast.QueryModeContext && len(n.ContextPairs) > 0 {
+			plan.WriteString(fmt.Sprintf("Context pairs: %d\n", len(n.ContextPairs)))
+		}
+
+		// DISCOVER mode details
+		if n.Mode == ast.QueryModeDiscover {
+			if n.Target != nil {
+				plan.WriteString(fmt.Sprintf("Target: %v\n", n.Target))
+			}
+			if len(n.ContextPairs) > 0 {
+				plan.WriteString(fmt.Sprintf("Context pairs: %d\n", len(n.ContextPairs)))
+			}
+		}
+
+		// CTEs
+		if len(n.CTEs) > 0 {
+			plan.WriteString(fmt.Sprintf("CTEs: %d defined\n", len(n.CTEs)))
+		}
+
+		// PREFETCH refs
+		if len(n.PrefetchRefs) > 0 {
+			refs := make([]string, len(n.PrefetchRefs))
+			for i, ref := range n.PrefetchRefs {
+				refs[i] = ref.CTEName
+			}
+			plan.WriteString(fmt.Sprintf("Prefetch: %v\n", refs))
+		}
+
+		// FUSION
+		if n.FusionType != nil {
+			plan.WriteString(fmt.Sprintf("Fusion: %s\n", *n.FusionType))
+		}
+
+		// FORMULA
+		if n.Formula != nil {
+			plan.WriteString(fmt.Sprintf("Formula: %s\n", ast.FormulaExprString(n.Formula)))
+		}
+		if len(n.FormulaDefaults) > 0 {
+			var defs []string
+			for k, v := range n.FormulaDefaults {
+				defs = append(defs, fmt.Sprintf("%s = %g", k, v))
+			}
+			plan.WriteString(fmt.Sprintf("Defaults: %s\n", strings.Join(defs, ", ")))
+		}
+
 		plan.WriteString("Action: Universal Query\n")
 	case *ast.DeleteStmt:
 		if n.Field != "" {
@@ -1107,10 +1289,21 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 			case ast.DistanceManhattan:
 				qDist = qdrant.Distance_Manhattan
 			}
-			paramsMap[v.Name] = &qdrant.VectorParams{
+			vp := &qdrant.VectorParams{
 				Size:     v.Size,
 				Distance: qDist,
 			}
+			if v.Hnsw != nil {
+				vp.HnswConfig = buildHnswConfigDiff(v.Hnsw)
+			}
+			if v.Quantization != nil {
+				cfg, err := buildQuantizationConfig(v.Quantization)
+				if err != nil {
+					return nil, err
+				}
+				vp.QuantizationConfig = cfg
+			}
+			paramsMap[v.Name] = vp
 		}
 		vectorsConfig = qdrant.NewVectorsConfigMap(paramsMap)
 	} else {
@@ -1141,8 +1334,8 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 			applyCollectionParamsCreate(n.Config.Params, collection)
 		}
 	}
-	if n.Quantization != nil {
-		collection.QuantizationConfig, err = buildQuantizationConfig(n.Quantization)
+	if n.Config != nil && n.Config.Quantization != nil {
+		collection.QuantizationConfig, err = buildQuantizationConfig(n.Config.Quantization)
 		if err != nil {
 			return nil, err
 		}
@@ -1183,8 +1376,8 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 		message += " (multi-vector schema)"
 	}
 
-	if n.Quantization != nil {
-		message = strings.TrimSuffix(message, ")") + fmt.Sprintf(", %s quantization)", n.Quantization.Type)
+	if n.Config != nil && n.Config.Quantization != nil {
+		message = strings.TrimSuffix(message, ")") + fmt.Sprintf(", %s quantization)", n.Config.Quantization.Type)
 	}
 	return &ExecResponse{
 		OK:        true,
@@ -1261,9 +1454,9 @@ func (e *Executor) doAlterCollection(n *ast.AlterCollectionStmt) (*ExecResponse,
 			req.Params = buildCollectionParamsDiff(n.Config.Params)
 		}
 	}
-	if n.Quantization != nil {
+	if n.Config != nil && n.Config.QuantizationUpdate != nil {
 		var err error
-		req.QuantizationConfig, err = buildAlterQuantizationConfig(n.Quantization)
+		req.QuantizationConfig, err = buildAlterQuantizationConfig(n.Config.QuantizationUpdate)
 		if err != nil {
 			return nil, err
 		}

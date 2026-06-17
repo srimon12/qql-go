@@ -6,7 +6,37 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 ## [Unreleased]
 
-- No unreleased changes yet.
+- **Formula / Score Boosting (`BOOST`)** — `BOOST (<expression>)` enables payload-aware score shaping with a full SQL-native expression algebra. Supports arithmetic operators (`+`, `-`, `*`, `/`), mathematical functions (`ABS`, `SQRT`, `LOG`, `LN`, `EXP`, `POW`), geo-distance (`GEO_DISTANCE`), decay functions (`EXP_DECAY`, `GAUSS_DECAY`, `LIN_DECAY`), and conditional logic via `CASE WHEN <filter> THEN <expr> ELSE <expr> END`. Variables use `$score` for the current score and bare names for payload fields. Optional `DEFAULTS (key = value, ...)` provides fallback variable values.
+- **`QUERY SAMPLE`** — `QUERY SAMPLE FROM <collection> LIMIT <n>` for random point sampling via Qdrant's `Sample_Random` query variant.
+- **Unified config syntax** — All configuration blocks (`WITH HNSW`, `WITH OPTIMIZERS`, `WITH PARAMS`, `WITH VECTORS`, `WITH QUANTIZATION`) now use SQL-native `(key = value)` syntax instead of JSON-like `{key: value}`. Example: `WITH HNSW (m = 32, ef_construct = 100)`.
+- **`WITH QUANTIZATION`** — Replaces the fluent `QUANTIZE SCALAR ALWAYS RAM` chain with `WITH QUANTIZATION (type = 'scalar', always_ram = true)`. Supports `type`, `quantile`, `always_ram`, `bits`, and `disabled` keys.
+- **Per-vector `WITH QUANTIZATION`** — Vector definitions now support per-vector quantization: `dense VECTOR(384, COSINE) WITH QUANTIZATION (type = 'scalar', always_ram = true)`.
+- **Comprehensive ExplainResult for QueryStmt** — `EXPLAIN` now shows all parsed fields: USING, WITH MODEL, WITH params, WITH PAYLOAD, WITH VECTORS, WHERE filter, OFFSET, SCORE THRESHOLD, LOOKUP FROM, GROUP BY/GROUP SIZE, WITH LOOKUP, RERANK, STRATEGY, RECOMMEND IDs, CONTEXT pairs, DISCOVER target, CTEs, PREFETCH refs, FUSION type, and BOOST formula.
+
+### Changed
+
+- **BREAKING:** `QUANTIZE SCALAR [QUANTILE <f>] [ALWAYS RAM]` syntax is removed. Use `WITH QUANTIZATION (type = 'scalar', quantile = <f>, always_ram = true)` instead.
+- **BREAKING:** `WITH HNSW { m: 16 }` syntax is removed. Use `WITH HNSW (m = 16)` instead.
+- **BREAKING:** `WITH OPTIMIZERS { ... }` syntax is removed. Use `WITH OPTIMIZERS (...)` instead.
+- **BREAKING:** `WITH PARAMS { ... }` syntax is removed. Use `WITH PARAMS (...)` instead.
+- **BREAKING:** `WITH VECTORS { on_disk: true }` syntax is removed. Use `WITH VECTORS (on_disk = true)` instead.
+- **BREAKING:** `CREATE INDEX ... WITH { is_tenant: true }` syntax is removed. Use `CREATE INDEX ... WITH (is_tenant = true)` instead.
+- **BREAKING:** `QUANTIZE DISABLED` syntax is removed. Use `WITH QUANTIZATION (disabled = true)` instead.
+- `CollectionConfig` AST now embeds `Quantization` and `QuantizationUpdate` directly instead of separate fields on `CreateCollectionStmt` and `AlterCollectionStmt`.
+- Dump output now uses the unified `(key = value)` syntax for all generated `CREATE COLLECTION` statements.
+- Multiple `WITH` clauses now merge correctly (e.g., `WITH (exact = true) WITH PAYLOAD (include = ['title']) WITH VECTORS true`).
+- Lexer now tokenizes `+`, `-`, `*`, `/` as arithmetic operators and `$` as a valid identifier character.
+- `parseDict` renamed to `parsePayloadDict` — only used for `UPDATE SET PAYLOAD = { ... }` (JSON data, not config).
+- `FormulaNode` pushes existing `TargetQuery` into `Prefetches` before setting Formula as the new `TargetQuery`, as required by Qdrant's Formula API.
+
+### Fixed
+
+- Dump output now uses unified `(key = value)` syntax instead of old `{key: value}` for HNSW, OPTIMIZERS, PARAMS, and VECTORS.
+- Dump output now uses `WITH QUANTIZATION (type = '...')` instead of `QUANTIZE SCALAR` chain syntax.
+- Stale comments referencing old `parseDict` and `parseQuantizeClause` removed.
+- Error message for `WITH PARAMS` restricted fields now uses new syntax.
+- Formula subtraction implemented as `Sum(left, Neg(right))` — mathematically correct since Qdrant has no native subtraction expression.
+- Formula conditional (`CASE WHEN cond THEN a ELSE b`) implemented as `Sum(Mult(Condition(cond), a), Mult(Condition(NOT cond), b))` — exploits Qdrant's boolean condition evaluation.
 
 ## [0.3.0] - 2026-06-17
 

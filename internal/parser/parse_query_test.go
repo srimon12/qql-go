@@ -287,6 +287,27 @@ QUERY 'search' FROM docs LIMIT 10 PREFETCH (a WHERE priority = 'high' SCORE THRE
 	assert.InDelta(t, 0.8, *stmt.PrefetchRefs[0].ScoreThreshold, 1e-6)
 }
 
+func TestParseQueryPrefetchPerRefLookup(t *testing.T) {
+	input := `WITH a AS (QUERY 'search' USING dense LIMIT 100)
+QUERY 'search' FROM docs LIMIT 10 PREFETCH (a LOOKUP FROM external_col VECTOR 'dense_vec') FUSION RRF`
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	require.Len(t, stmt.PrefetchRefs, 1)
+	assert.Equal(t, "a", stmt.PrefetchRefs[0].CTEName)
+	assert.Equal(t, "external_col", stmt.PrefetchRefs[0].LookupFrom)
+	require.NotNil(t, stmt.PrefetchRefs[0].LookupVector)
+	assert.Equal(t, "dense_vec", *stmt.PrefetchRefs[0].LookupVector)
+}
+
 func TestParseQueryOrderBy(t *testing.T) {
 	input := "QUERY ORDER BY timestamp ASC FROM logs LIMIT 100"
 	l := &lexer.Lexer{}
@@ -307,6 +328,43 @@ func TestParseQueryOrderBy(t *testing.T) {
 	assert.True(t, *stmt.OrderByAsc)
 	assert.Equal(t, "logs", stmt.Collection)
 	assert.Equal(t, 100, stmt.Limit)
+}
+
+func TestParseQuerySample(t *testing.T) {
+	input := "QUERY SAMPLE FROM docs LIMIT 10"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	assert.Equal(t, ast.QueryModeSample, stmt.Mode)
+	assert.Equal(t, "docs", stmt.Collection)
+	assert.Equal(t, 10, stmt.Limit)
+}
+
+func TestParseQuerySampleWithFilter(t *testing.T) {
+	input := "QUERY SAMPLE FROM docs LIMIT 10 WHERE category = 'tech'"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	assert.Equal(t, ast.QueryModeSample, stmt.Mode)
+	assert.Equal(t, "docs", stmt.Collection)
+	assert.Equal(t, 10, stmt.Limit)
+	require.NotNil(t, stmt.QueryFilter)
 }
 
 func TestParseQueryWithPayloadAndVectors(t *testing.T) {
@@ -351,6 +409,33 @@ func TestParseQueryWithPayloadAndVectors(t *testing.T) {
 	require.NotNil(t, stmt2.WithVectors)
 	assert.Nil(t, stmt2.WithVectors.Enable)
 	assert.ElementsMatch(t, []string{"dense", "sparse"}, stmt2.WithVectors.Vectors)
+}
+
+func TestParseQueryMultipleWithClauses(t *testing.T) {
+	input := "QUERY 'search' FROM docs WITH MODEL 'foo' WITH PAYLOAD (include = ['title']) WITH VECTORS true WITH (exact = true)"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	require.NotNil(t, stmt.Model)
+	assert.Equal(t, "foo", *stmt.Model)
+
+	require.NotNil(t, stmt.WithPayload)
+	assert.ElementsMatch(t, []string{"title"}, stmt.WithPayload.Include)
+
+	require.NotNil(t, stmt.WithVectors)
+	require.NotNil(t, stmt.WithVectors.Enable)
+	assert.True(t, *stmt.WithVectors.Enable)
+
+	require.NotNil(t, stmt.WithClause)
+	assert.True(t, stmt.WithClause.Exact)
 }
 
 func TestParseQueryWithPayloadVectorsErrors(t *testing.T) {

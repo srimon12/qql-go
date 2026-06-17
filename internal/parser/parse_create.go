@@ -71,10 +71,37 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 				if _, err := p.expect(lexer.TokenKindRparen); err != nil {
 					return nil, err
 				}
+
+				var hnsw *ast.HnswRuntimeConfig
+				var quant *ast.QuantizationConfig
+
+				for p.peek().Kind == lexer.TokenKindWith {
+					p.advance()
+					if p.peek().Kind == lexer.TokenKindHnsw {
+						p.advance()
+						block, err := p.parseHnswConfigBlock()
+						if err != nil {
+							return nil, err
+						}
+						hnsw = block.Hnsw
+					} else if p.peek().Kind == lexer.TokenKindQuantize || (p.peek().Kind == lexer.TokenKindIdentifier && strings.ToUpper(p.peek().Value) == "QUANTIZATION") {
+						p.advance()
+						block, err := p.parseQuantizationConfigBlock()
+						if err != nil {
+							return nil, err
+						}
+						quant = block.Quantization
+					} else {
+						return nil, errors.NewQQLSyntaxError("Expected HNSW or QUANTIZATION after WITH for vector configuration", p.peek().Pos)
+					}
+				}
+
 				explicitVectors = append(explicitVectors, ast.VectorDef{
-					Name:     nameTok.Value,
-					Size:     uint64(size),
-					Distance: distance,
+					Name:         nameTok.Value,
+					Size:         uint64(size),
+					Distance:     distance,
+					Hnsw:         hnsw,
+					Quantization: quant,
 				})
 			} else if p.peek().Kind == lexer.TokenKindSparse {
 				p.advance()
@@ -148,17 +175,11 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 	if err != nil {
 		return nil, err
 	}
-	quantization, err := p.parseOptionalCreateQuantization()
-	if err != nil {
-		return nil, err
-	}
-
 	return &ast.CreateCollectionStmt{
 		Collection:    collection,
 		Hybrid:        hybrid,
 		Rerank:        rerank,
 		Model:         model,
-		Quantization:  quantization,
 		Config:        config,
 		DenseVector:   denseVector,
 		SparseVector:  sparseVector,
@@ -187,30 +208,6 @@ func (p *Parser) parseCollectionConfigBlocks(forAlter bool) (*ast.CollectionConf
 	return config, nil
 }
 
-func (p *Parser) parseOptionalCreateQuantization() (*ast.QuantizationConfig, error) {
-	if p.peek().Kind != lexer.TokenKindQuantize {
-		return nil, nil
-	}
-	p.advance()
-	return p.parseQuantizeClause()
-}
-
-func (p *Parser) parseOptionalAlterQuantization() (*ast.QuantizationUpdate, error) {
-	if p.peek().Kind != lexer.TokenKindQuantize {
-		return nil, nil
-	}
-	p.advance()
-	if p.peek().Kind == lexer.TokenKindDisabled {
-		p.advance()
-		return &ast.QuantizationUpdate{Disabled: true}, nil
-	}
-	config, err := p.parseQuantizeClause()
-	if err != nil {
-		return nil, err
-	}
-	return &ast.QuantizationUpdate{Config: config}, nil
-}
-
 func mergeCollectionConfig(current, new *ast.CollectionConfig, pos int) (*ast.CollectionConfig, error) {
 	if new.Vectors != nil {
 		if current.Vectors != nil {
@@ -236,6 +233,18 @@ func mergeCollectionConfig(current, new *ast.CollectionConfig, pos int) (*ast.Co
 		}
 		current.Params = new.Params
 	}
+	if new.Quantization != nil {
+		if current.Quantization != nil {
+			return nil, errors.NewQQLSyntaxError("QUANTIZATION clause may only appear once", pos)
+		}
+		current.Quantization = new.Quantization
+	}
+	if new.QuantizationUpdate != nil {
+		if current.QuantizationUpdate != nil {
+			return nil, errors.NewQQLSyntaxError("QUANTIZATION clause may only appear once", pos)
+		}
+		current.QuantizationUpdate = new.QuantizationUpdate
+	}
 	return current, nil
 }
 
@@ -257,14 +266,18 @@ func (p *Parser) parseCollectionConfigClause(forAlter bool) (*ast.CollectionConf
 		p.advance()
 		return p.parseCollectionParamsConfigBlock(forAlter)
 	}
+	if tok.Kind == lexer.TokenKindQuantize || (tok.Kind == lexer.TokenKindIdentifier && strings.ToUpper(tok.Value) == "QUANTIZATION") {
+		p.advance()
+		return p.parseQuantizationConfigBlock()
+	}
 	return nil, errors.NewQQLSyntaxError(
-		"Expected HNSW, VECTORS, OPTIMIZERS, or PARAMS after WITH, got '"+tok.Value+"'",
+		"Expected HNSW, VECTORS, OPTIMIZERS, PARAMS, or QUANTIZATION after WITH, got '"+tok.Value+"'",
 		tok.Pos,
 	)
 }
 
 func (p *Parser) parseHnswConfigBlock() (*ast.CollectionConfig, error) {
-	config, err := p.parseDict()
+	config, err := p.parseConfigBlock()
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +332,7 @@ func (p *Parser) parseHnswConfigBlock() (*ast.CollectionConfig, error) {
 }
 
 func (p *Parser) parseVectorsConfigBlock() (*ast.CollectionConfig, error) {
-	config, err := p.parseDict()
+	config, err := p.parseConfigBlock()
 	if err != nil {
 		return nil, err
 	}
@@ -341,7 +354,7 @@ func (p *Parser) parseVectorsConfigBlock() (*ast.CollectionConfig, error) {
 }
 
 func (p *Parser) parseOptimizersConfigBlock() (*ast.CollectionConfig, error) {
-	config, err := p.parseDict()
+	config, err := p.parseConfigBlock()
 	if err != nil {
 		return nil, err
 	}
@@ -427,7 +440,7 @@ func (p *Parser) parseOptimizersConfigBlock() (*ast.CollectionConfig, error) {
 }
 
 func (p *Parser) parseCollectionParamsConfigBlock(forAlter bool) (*ast.CollectionConfig, error) {
-	config, err := p.parseDict()
+	config, err := p.parseConfigBlock()
 	if err != nil {
 		return nil, err
 	}
@@ -447,7 +460,7 @@ func (p *Parser) parseCollectionParamsConfigBlock(forAlter bool) (*ast.Collectio
 	}
 	if !forAlter {
 		if configHasKey(config, "read_fan_out_factor") || configHasKey(config, "read_fan_out_delay_ms") {
-			return nil, errors.NewQQLSyntaxError("WITH PARAMS { read_fan_out_factor, read_fan_out_delay_ms } is supported only for ALTER COLLECTION", p.peek().Pos)
+			return nil, errors.NewQQLSyntaxError("WITH PARAMS (read_fan_out_factor, read_fan_out_delay_ms) is supported only for ALTER COLLECTION", p.peek().Pos)
 		}
 	}
 	replicationFactor, err := collectionPositiveUint64(config, "replication_factor", p.peek().Pos)
@@ -485,7 +498,6 @@ func collectionBool(config map[string]any, key string) *bool {
 	if b, ok := v.(bool); ok {
 		return &b
 	}
-	// This shouldn't happen at runtime since parseDict validates types
 	return nil
 }
 
@@ -656,97 +668,88 @@ func (p *Parser) validateParamsValue(key string, raw any) error {
 	return nil
 }
 
-func (p *Parser) parseQuantizeClause() (*ast.QuantizationConfig, error) {
-	tok := p.peek()
-
-	switch tok.Kind {
-	case lexer.TokenKindScalar:
-		p.advance()
-		var quantile *float64
-		alwaysRAM := false
-		if p.peek().Kind == lexer.TokenKindQuantile {
-			p.advance()
-			valueTok := p.peek()
-			value, err := p.parseNumericLiteral()
-			if err != nil {
-				return nil, err
-			}
-			if value < 0 || value > 1 {
-				return nil, errors.NewQQLSyntaxError("QUANTILE must be between 0 and 1 inclusive, got '"+valueTok.Value+"'", valueTok.Pos)
-			}
-			quantile = &value
-		}
-		if p.peek().Kind == lexer.TokenKindAlways {
-			p.advance()
-			if _, err := p.expect(lexer.TokenKindRam); err != nil {
-				return nil, err
-			}
-			alwaysRAM = true
-		}
-		return &ast.QuantizationConfig{
-			Type:      ast.QuantizationTypeScalar,
-			Quantile:  quantile,
-			AlwaysRAM: alwaysRAM,
-		}, nil
-	case lexer.TokenKindBinary:
-		p.advance()
-		alwaysRAM := false
-		if p.peek().Kind == lexer.TokenKindAlways {
-			p.advance()
-			if _, err := p.expect(lexer.TokenKindRam); err != nil {
-				return nil, err
-			}
-			alwaysRAM = true
-		}
-		return &ast.QuantizationConfig{
-			Type:      ast.QuantizationTypeBinary,
-			AlwaysRAM: alwaysRAM,
-		}, nil
-	case lexer.TokenKindProduct:
-		p.advance()
-		alwaysRAM := false
-		if p.peek().Kind == lexer.TokenKindAlways {
-			p.advance()
-			if _, err := p.expect(lexer.TokenKindRam); err != nil {
-				return nil, err
-			}
-			alwaysRAM = true
-		}
-		return &ast.QuantizationConfig{
-			Type:      ast.QuantizationTypeProduct,
-			AlwaysRAM: alwaysRAM,
-		}, nil
-	case lexer.TokenKindTurbo:
-		p.advance()
-		var turboBits *float64
-		alwaysRAM := false
-		if p.peek().Kind == lexer.TokenKindBits {
-			p.advance()
-			bitsTok := p.peek()
-			raw, err := p.parseNumericLiteral()
-			if err != nil {
-				return nil, err
-			}
-			if raw != 1.0 && raw != 1.5 && raw != 2.0 && raw != 4.0 {
-				return nil, errors.NewQQLSyntaxError("BITS must be one of 1, 1.5, 2, or 4 for TURBO quantization, got '"+bitsTok.Value+"'", bitsTok.Pos)
-			}
-			turboBits = &raw
-		}
-		if p.peek().Kind == lexer.TokenKindAlways {
-			p.advance()
-			if _, err := p.expect(lexer.TokenKindRam); err != nil {
-				return nil, err
-			}
-			alwaysRAM = true
-		}
-		return &ast.QuantizationConfig{
-			Type:      ast.QuantizationTypeTurbo,
-			TurboBits: turboBits,
-			AlwaysRAM: alwaysRAM,
-		}, nil
-	default:
-		return nil, errors.NewQQLSyntaxError("Expected SCALAR, BINARY, PRODUCT, or TURBO after QUANTIZE, got '"+tok.Value+"'", tok.Pos)
+func (p *Parser) parseQuantizationConfigBlock() (*ast.CollectionConfig, error) {
+	config, err := p.parseConfigBlock()
+	if err != nil {
+		return nil, err
 	}
+
+	if configHasKey(config, "disabled") {
+		if collectionBool(config, "disabled") != nil && *collectionBool(config, "disabled") {
+			return &ast.CollectionConfig{
+				QuantizationUpdate: &ast.QuantizationUpdate{Disabled: true},
+			}, nil
+		}
+	}
+
+	typeRaw, ok := collectionValue(config, "type")
+	if !ok {
+		return nil, errors.NewQQLSyntaxError("QUANTIZATION config requires a 'type' (scalar, binary, product, turbo)", p.peek().Pos)
+	}
+
+	typeStr, ok := typeRaw.(string)
+	if !ok {
+		return nil, errors.NewQQLSyntaxError("QUANTIZATION 'type' must be a string", p.peek().Pos)
+	}
+
+	typeStr = strings.ToLower(typeStr)
+
+	var qType ast.QuantizationType
+	switch typeStr {
+	case "scalar":
+		qType = ast.QuantizationTypeScalar
+	case "binary":
+		qType = ast.QuantizationTypeBinary
+	case "product":
+		qType = ast.QuantizationTypeProduct
+	case "turbo":
+		qType = ast.QuantizationTypeTurbo
+	default:
+		return nil, errors.NewQQLSyntaxError("Unknown QUANTIZATION type '"+typeStr+"'. Expected scalar, binary, product, turbo", p.peek().Pos)
+	}
+
+	var alwaysRAM bool
+	if val := collectionBool(config, "always_ram"); val != nil {
+		alwaysRAM = *val
+	}
+
+	var quantile *float64
+	if qType == ast.QuantizationTypeScalar {
+		if configHasKey(config, "quantile") {
+			quantile = collectionFloatRange(config, "quantile", 0.0, 1.0)
+			if quantile == nil {
+				return nil, errors.NewQQLSyntaxError("quantile must be between 0.0 and 1.0", p.peek().Pos)
+			}
+		}
+	}
+
+	var turboBits *float64
+	if qType == ast.QuantizationTypeTurbo {
+		if v, ok := collectionValue(config, "bits"); ok {
+			switch typed := v.(type) {
+			case int:
+				f := float64(typed)
+				turboBits = &f
+			case float64:
+				turboBits = &typed
+			}
+			if turboBits != nil && *turboBits != 1.0 && *turboBits != 1.5 && *turboBits != 2.0 && *turboBits != 4.0 {
+				return nil, errors.NewQQLSyntaxError("bits must be one of 1, 1.5, 2, or 4 for TURBO quantization", p.peek().Pos)
+			}
+		}
+	}
+
+	qConfig := &ast.QuantizationConfig{
+		Type:      qType,
+		AlwaysRAM: alwaysRAM,
+		Quantile:  quantile,
+		TurboBits: turboBits,
+	}
+
+	return &ast.CollectionConfig{
+		Quantization:       qConfig,
+		QuantizationUpdate: &ast.QuantizationUpdate{Config: qConfig},
+	}, nil
 }
 
 func (p *Parser) parseCreateIndex() (*ast.CreateIndexStmt, error) {
@@ -780,7 +783,7 @@ func (p *Parser) parseCreateIndex() (*ast.CreateIndexStmt, error) {
 	var options map[string]any
 	if p.peek().Kind == lexer.TokenKindWith {
 		p.advance()
-		dict, err := p.parseDict()
+		dict, err := p.parseConfigBlock()
 		if err != nil {
 			return nil, err
 		}

@@ -306,7 +306,7 @@ Release date: %s
 
 ## Highlights
 
-- TODO: summarize the most important user-facing changes for this release.
+Edit this section with the most important user-facing changes for this release.
 
 ## Packaging
 

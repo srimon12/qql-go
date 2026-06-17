@@ -116,7 +116,7 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 				return nil, fmt.Errorf("unknown CTE referenced in prefetch: '%s'", ref.CTEName)
 			}
 			// Apply per-prefetch overrides
-			if ref.Filter != nil || ref.ScoreThreshold != nil {
+			if ref.Filter != nil || ref.ScoreThreshold != nil || ref.LookupFrom != "" {
 				clone := &qdrant.PrefetchQuery{
 					Prefetch:   pq.Prefetch,
 					Query:      pq.Query,
@@ -135,6 +135,14 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 				}
 				if ref.ScoreThreshold != nil {
 					clone.ScoreThreshold = qdrant.PtrOf(float32(*ref.ScoreThreshold))
+				}
+				if ref.LookupFrom != "" {
+					clone.LookupFrom = &qdrant.LookupLocation{
+						CollectionName: ref.LookupFrom,
+					}
+					if ref.LookupVector != nil {
+						clone.LookupFrom.VectorName = qdrant.PtrOf(*ref.LookupVector)
+					}
 				}
 				state.ManualPrefetches = append(state.ManualPrefetches, clone)
 			} else {
@@ -156,6 +164,8 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 			Field: *stmt.OrderByField,
 			Asc:   asc,
 		})
+	case ast.QueryModeSample:
+		execPipeline.Add(&pipeline.SampleNode{})
 	case ast.QueryModeNearest:
 		if stmt.QueryID != nil {
 			execPipeline.Add(&pipeline.RecommendNode{PositiveIDs: []any{stmt.QueryID}})
@@ -236,6 +246,13 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 			rerankModel = *stmt.RerankModel
 		}
 		execPipeline.Add(&pipeline.RerankNode{Model: rerankModel})
+	}
+
+	if stmt.Formula != nil {
+		execPipeline.Add(&pipeline.FormulaNode{
+			Expr:     stmt.Formula,
+			Defaults: stmt.FormulaDefaults,
+		})
 	}
 
 	if err := execPipeline.Execute(ctx, state); err != nil {

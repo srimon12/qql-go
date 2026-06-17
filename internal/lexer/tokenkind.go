@@ -106,6 +106,17 @@ const (
 	TokenKindLte
 	TokenKindPrefetch
 	TokenKindFusion
+	TokenKindSample
+	TokenKindBoost
+	TokenKindDefaults
+	TokenKindCase
+	TokenKindWhen
+	TokenKindThen
+	TokenKindElse
+	TokenKindEnd
+	TokenKindPlus
+	TokenKindMinus
+	TokenKindSlash
 	TokenKindEof
 )
 
@@ -213,6 +224,17 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindLte:         "LTE",
 	TokenKindPrefetch:    "PREFETCH",
 	TokenKindFusion:      "FUSION",
+	TokenKindSample:      "SAMPLE",
+	TokenKindBoost:       "BOOST",
+	TokenKindDefaults:    "DEFAULTS",
+	TokenKindCase:        "CASE",
+	TokenKindWhen:        "WHEN",
+	TokenKindThen:        "THEN",
+	TokenKindElse:        "ELSE",
+	TokenKindEnd:         "END",
+	TokenKindPlus:        "PLUS",
+	TokenKindMinus:       "MINUS",
+	TokenKindSlash:       "SLASH",
 	TokenKindEof:         "EOF",
 }
 

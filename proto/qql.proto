@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package qql;
+
+option go_package = "github.com/srimon12/qql-go/gen/qqlpb";
+
+// QQL is the Connect RPC service for executing QQL queries against Qdrant.
+service QQL {
+  // Exec parses and executes a single QQL query.
+  rpc Exec(ExecRequest) returns (ExecResponse);
+
+  // ExecBatch executes multiple queries in one round-trip.
+  rpc ExecBatch(ExecBatchRequest) returns (ExecBatchResponse);
+
+  // Explain returns the execution plan without running the query.
+  rpc Explain(ExplainRequest) returns (ExplainResponse);
+
+  // Health returns gateway and Qdrant connection status.
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message ExecRequest {
+  // The QQL query string, e.g. "QUERY 'search' FROM docs LIMIT 5 USING HYBRID"
+  string query = 1;
+}
+
+message ExecResponse {
+  bool ok = 1;
+  string operation = 2;
+  string message = 3;
+  // JSON-encoded result data. Clients decode based on operation type.
+  bytes data = 4;
+}
+
+message ExecBatchRequest {
+  repeated ExecRequest queries = 1;
+  // If true, stop executing remaining queries on first error.
+  bool stop_on_error = 2;
+}
+
+message ExecBatchResponse {
+  repeated ExecResponse results = 1;
+}
+
+message ExplainRequest {
+  string query = 1;
+  // If true, return structured JSON plan instead of text.
+  bool json = 2;
+}
+
+message ExplainResponse {
+  bool ok = 1;
+  string query = 2;
+  string plan = 3;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string version = 1;
+  bool qdrant_connected = 2;
+  string qdrant_status = 3;
+}

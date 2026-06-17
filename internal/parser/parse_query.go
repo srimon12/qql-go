@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/srimon12/qql-go/internal/ast"
@@ -95,29 +96,35 @@ func (p *Parser) parseQueryBody() (*ast.QueryStmt, error) {
 		stmt.OrderByField = &fieldTok
 
 		tok := p.peek()
-		if tok.Kind == lexer.TokenKindAsc {
+		switch tok.Kind {
+		case lexer.TokenKindAsc:
 			p.advance()
 			asc := true
 			stmt.OrderByAsc = &asc
-		} else if tok.Kind == lexer.TokenKindDesc {
+		case lexer.TokenKindDesc:
 			p.advance()
 			asc := false
 			stmt.OrderByAsc = &asc
 		}
 
+	case lexer.TokenKindSample:
+		stmt.Mode = ast.QueryModeSample
+		p.advance()
+
 	default:
 		stmt.Mode = ast.QueryModeNearest
-		if tok.Kind == lexer.TokenKindString {
+		switch tok.Kind {
+		case lexer.TokenKindString:
 			text := tok.Value
 			stmt.QueryText = &text
 			p.advance()
-		} else if tok.Kind == lexer.TokenKindInteger {
+		case lexer.TokenKindInteger:
 			id, err := p.parsePointIDValue("QUERY")
 			if err != nil {
 				return nil, err
 			}
 			stmt.QueryID = id
-		} else {
+		default:
 			return nil, errors.NewQQLSyntaxError("Expected a string query, a point ID, or a query mode (RECOMMEND/DISCOVER/CONTEXT) after QUERY", tok.Pos)
 		}
 	}
@@ -212,19 +219,23 @@ func (p *Parser) parseCTEQuery() (*ast.QueryStmt, error) {
 			}
 			stmt.ContextPairs = p.parseContextPairs("DISCOVER")
 		}
+	case lexer.TokenKindSample:
+		stmt.Mode = ast.QueryModeSample
+		p.advance()
 	default:
 		stmt.Mode = ast.QueryModeNearest
-		if tok.Kind == lexer.TokenKindString {
+		switch tok.Kind {
+		case lexer.TokenKindString:
 			text := tok.Value
 			stmt.QueryText = &text
 			p.advance()
-		} else if tok.Kind == lexer.TokenKindInteger {
+		case lexer.TokenKindInteger:
 			id, err := p.parsePointIDValue("QUERY")
 			if err != nil {
 				return nil, err
 			}
 			stmt.QueryID = id
-		} else {
+		default:
 			return nil, errors.NewQQLSyntaxError("Expected string, integer, or query mode for CTE QUERY", tok.Pos)
 		}
 	}
@@ -319,7 +330,7 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 		stmt.Limit = 10
 	}
 
-	seenWhere, seenRerank, seenWith, seenGroup, seenGroupSize := false, false, false, false, false
+	seenWhere, seenRerank, seenGroup, seenGroupSize := false, false, false, false
 	seenExact, seenFusion, seenStrategy := false, false, false
 
 	for {
@@ -436,6 +447,24 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 					}
 				}
 
+				// Optional per-prefetch LOOKUP FROM
+				if p.peek().Kind == lexer.TokenKindLookup {
+					p.advance()
+					if _, err := p.expect(lexer.TokenKindFrom); err != nil {
+						return
+					}
+					lookupFrom, err := p.parseIdentifier()
+					if err != nil {
+						return
+					}
+					ref.LookupFrom = lookupFrom
+					if p.peek().Kind == lexer.TokenKindVector || (p.peek().Kind == lexer.TokenKindIdentifier && strings.ToUpper(p.peek().Value) == "VECTOR") {
+						p.advance()
+						lv, _ := p.parseStringPtr()
+						ref.LookupVector = lv
+					}
+				}
+
 				stmt.PrefetchRefs = append(stmt.PrefetchRefs, ref)
 
 				if p.peek().Kind == lexer.TokenKindComma {
@@ -493,10 +522,6 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 			mergeSearchWith(&stmt.WithClause, &ast.SearchWith{Exact: true})
 
 		case lexer.TokenKindWith:
-			if seenWith {
-				return
-			}
-			seenWith = true
 			p.advance()
 			if p.peek().Kind == lexer.TokenKindModel {
 				p.advance()
@@ -512,7 +537,6 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 					return
 				}
 				stmt.WithPayload = parsed
-				seenWith = false // allow other WITH clauses
 			} else if p.peek().Kind == lexer.TokenKindVectors {
 				p.advance()
 				parsed, err := p.parseWithVectors()
@@ -520,7 +544,6 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 					return
 				}
 				stmt.WithVectors = parsed
-				seenWith = false // allow other WITH clauses
 			} else if p.peek().Kind == lexer.TokenKindLookup {
 				p.advance()
 				if _, err := p.expect(lexer.TokenKindFrom); err != nil {
@@ -531,7 +554,6 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 					return
 				}
 				stmt.WithLookupCollection = &collection
-				seenWith = false // allow other WITH clauses
 			} else {
 				parsed, err := p.parseWithClause()
 				if err != nil {
@@ -595,27 +617,49 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 			}
 			stmt.Limit = limit
 
+		case lexer.TokenKindBoost:
+			p.advance()
+			expr, err := p.parseFormulaExpr(precedenceLowest)
+			if err != nil {
+				return
+			}
+			stmt.Formula = expr
+
+		case lexer.TokenKindDefaults:
+			p.advance()
+			if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+				return
+			}
+			defaults := make(map[string]float64)
+			for p.peek().Kind != lexer.TokenKindRparen {
+				key, err := p.parseIdentifier()
+				if err != nil {
+					return
+				}
+				if _, err := p.expect(lexer.TokenKindEquals); err != nil {
+					return
+				}
+				valTok := p.peek()
+				if valTok.Kind != lexer.TokenKindFloat && valTok.Kind != lexer.TokenKindInteger {
+					return
+				}
+				p.advance()
+				f, err := strconv.ParseFloat(valTok.Value, 64)
+				if err != nil {
+					return
+				}
+				defaults[key] = f
+				if p.peek().Kind == lexer.TokenKindComma {
+					p.advance()
+				} else {
+					break
+				}
+			}
+			p.expect(lexer.TokenKindRparen)
+			stmt.FormulaDefaults = defaults
+
 		default:
 			return
 		}
 	}
-}
-
-// nextIsWithClauseBody returns true if the WITH token is followed by a { or ( (a search-params block or model assignment),
-// i.e. NOT a CTE definition.
-func (p *Parser) nextIsWithClauseBody() bool {
-	pos := p.pos + 1
-	if pos >= len(p.tokens) {
-		return false
-	}
-	// WITH MODEL '...'
-	if p.tokens[pos].Kind == lexer.TokenKindModel {
-		return true
-	}
-	// WITH { ... } or WITH ( ... )
-	if p.tokens[pos].Kind == lexer.TokenKindLbrace || p.tokens[pos].Kind == lexer.TokenKindLparen {
-		return true
-	}
-	// WITH followed by an identifier that isn't AS → likely a CTE name
-	return false
 }
