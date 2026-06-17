@@ -372,11 +372,21 @@ func NewDumpCmd(out *output.Outputter) *cobra.Command {
 			if batchSize <= 0 {
 				return commandError(out, mode, "dump", strings.Join(args, " "), fmt.Errorf("--batch-size must be greater than 0"))
 			}
-			_, client, err := loadSavedConfigAndClient()
+			cfg, client, err := loadSavedConfigAndClient()
 			if err != nil {
 				return commandError(out, mode, "dump", strings.Join(args, " "), err)
 			}
-			written, skipped, err := dump.Collection(context.Background(), client, args[0], args[1], batchSize)
+			denseModel := ""
+			sparseModel := ""
+			if cfg != nil {
+				if cfg.EmbeddingModel != "" {
+					denseModel = cfg.EmbeddingModel
+				} else if cfg.InferenceModel != "" {
+					denseModel = cfg.InferenceModel
+				}
+				sparseModel = cfg.SparseInferenceModel
+			}
+			written, skipped, err := dump.CollectionWithModel(context.Background(), client, args[0], args[1], batchSize, denseModel, sparseModel)
 			if err != nil {
 				return commandError(out, mode, "dump", strings.Join(args, " "), err)
 			}
