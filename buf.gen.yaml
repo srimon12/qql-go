@@ -4,5 +4,18 @@ plugins:
     out: gen/qqlpb
     opt: paths=source_relative
   - remote: buf.build/connectrpc/go
-    out: gen/qqlpbconnect
+    out: gen
     opt: paths=source_relative
+  
+  # Python
+  - remote: buf.build/protocolbuffers/python
+    out: sdks/python/src/qql/gen
+  - remote: buf.build/protocolbuffers/pyi
+    out: sdks/python/src/qql/gen
+  - remote: buf.build/connectrpc/python
+    out: sdks/python/src/qql/gen
+
+  # TypeScript
+  - remote: buf.build/bufbuild/es:v2.2.0
+    out: sdks/typescript/src/gen
+    opt: target=ts

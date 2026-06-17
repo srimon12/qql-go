@@ -5,3 +5,8 @@ build-release/
 dist/
 skills/qql-skill/scripts/__pycache__/
 qdrant_storage
+
+.venv
+node_modules
+*__pycache__
+package-lock.json
