@@ -64,7 +64,8 @@ func TestResultDataJSON(t *testing.T) {
 		Message:   "Found 5 results",
 		Data:      []map[string]any{{"id": "1", "score": 0.9}},
 	}
-	data := r.DataJSON()
+	data, err := r.DataJSON()
+	assert.NoError(t, err)
 	assert.NotEmpty(t, data)
 	assert.Contains(t, string(data), "score")
 }

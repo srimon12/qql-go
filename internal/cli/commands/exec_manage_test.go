@@ -380,6 +380,7 @@ func TestBuildClientConfigNormalizesSchemeAndPort(t *testing.T) {
 		wantHost string
 		wantPort int
 		wantTLS  bool
+		wantErr  bool
 	}{
 		{
 			name:     "host only",
@@ -388,10 +389,9 @@ func TestBuildClientConfigNormalizesSchemeAndPort(t *testing.T) {
 			wantPort: 6334,
 		},
 		{
-			name:     "http with default rest port",
-			input:    "http://localhost:6333",
-			wantHost: "localhost",
-			wantPort: 6334,
+			name:    "http with default rest port",
+			input:   "http://localhost:6333",
+			wantErr: true,
 		},
 		{
 			name:     "https with trailing slash",
@@ -411,6 +411,10 @@ func TestBuildClientConfigNormalizesSchemeAndPort(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg, err := buildClientConfig(tt.input, "api-key", false, "")
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
 			require.NoError(t, err)
 			require.Equal(t, tt.wantHost, cfg.Host)
 			require.Equal(t, tt.wantPort, cfg.Port)

@@ -81,10 +81,14 @@ func SplitStatements(text string) ([]string, error) {
 		case lexer.TokenKindLbrace, lexer.TokenKindLbracket, lexer.TokenKindLparen:
 			depth++
 		case lexer.TokenKindRbrace, lexer.TokenKindRbracket, lexer.TokenKindRparen:
-			if depth > 0 {
-				depth--
+			depth--
+			if depth < 0 {
+				return nil, fmt.Errorf("unexpected '%s' at position %d (unmatched closing delimiter)", tok.Value, tok.Pos)
 			}
 		}
+	}
+	if depth > 0 {
+		return nil, fmt.Errorf("unexpected end of input: %d unclosed delimiter(s)", depth)
 	}
 
 	if len(starts) == 0 {

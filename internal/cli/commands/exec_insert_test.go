@@ -57,7 +57,7 @@ func TestInsertAutoCreatesMissingCollection(t *testing.T) {
 
 	resp, err := exec.doInsert(&ast.InsertStmt{
 		Collection: "docs",
-		ValuesList: []map[string]any{{"text": "hello"}},
+		ValuesList: []map[string]any{{"id": "550e8400-e29b-41d4-a716-446655440000", "text": "hello"}},
 	})
 	require.NoError(t, err)
 	require.True(t, resp.OK)
@@ -86,7 +86,7 @@ func TestInsertPreservesHybridAutodetectionOnExistingCollection(t *testing.T) {
 	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 	resp, err := exec.doInsert(&ast.InsertStmt{
 		Collection: "docs",
-		ValuesList: []map[string]any{{"text": "hello"}},
+		ValuesList: []map[string]any{{"id": "550e8400-e29b-41d4-a716-446655440001", "text": "hello"}},
 	})
 	require.NoError(t, err)
 	require.True(t, resp.OK)

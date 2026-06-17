@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -39,7 +40,7 @@ func NewClient(cfg Config) (*Client, error) {
 
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
-		httpClient = http.DefaultClient
+		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
 
 	return &Client{

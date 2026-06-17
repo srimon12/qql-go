@@ -8,17 +8,27 @@ import (
 	"connectrpc.com/connect"
 	"github.com/srimon12/qql-go/gen/qqlpb"
 	"github.com/srimon12/qql-go/internal/ast"
+	"github.com/srimon12/qql-go/internal/config"
 	"github.com/srimon12/qql-go/pkg/qql"
 )
 
 // Handler implements the qql.QQL Connect RPC service.
 type Handler struct {
 	client qql.QdrantClient
+	config *config.Config
 }
 
 // NewHandler creates a new QQL Connect RPC handler.
 func NewHandler(client qql.QdrantClient) *Handler {
-	return &Handler{client: client}
+	return &Handler{client: client, config: &config.Config{}}
+}
+
+// NewHandlerWithConfig creates a new QQL Connect RPC handler with config for model resolution.
+func NewHandlerWithConfig(client qql.QdrantClient, cfg *config.Config) *Handler {
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
+	return &Handler{client: client, config: cfg}
 }
 
 // Exec parses and executes a single QQL query.
@@ -31,12 +41,15 @@ func (h *Handler) Exec(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("query is required"))
 	}
 
-	result, err := qql.Exec(ctx, h.client, query)
+	result, err := qql.ExecWithConfig(ctx, h.client, query, h.config)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	data, _ := json.Marshal(result.Data)
+	data, err := json.Marshal(result.Data)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal result data: %w", err))
+	}
 
 	return connect.NewResponse(&qqlpb.ExecResponse{
 		Ok:        result.OK,
@@ -61,7 +74,6 @@ func (h *Handler) ExecBatch(
 		queries[i] = q.GetQuery()
 	}
 
-	// Try native batch first for pure QUERY batches
 	allQuery := true
 	for _, q := range queries {
 		node, err := qql.Parse(q)
@@ -79,11 +91,9 @@ func (h *Handler) ExecBatch(
 	var err error
 
 	if allQuery && len(queries) > 1 {
-		// Use native Qdrant QueryBatch for pure query batches
-		results, err = qql.BatchQuery(ctx, h.client, queries)
+		results, err = qql.BatchQueryWithConfig(ctx, h.client, queries, h.config)
 	} else {
-		// Fall back to sequential execution for mixed statements
-		results, err = qql.ExecBatch(ctx, h.client, queries, batchReq.GetStopOnError())
+		results, err = qql.ExecBatchWithConfig(ctx, h.client, queries, batchReq.GetStopOnError(), h.config)
 	}
 
 	if err != nil {
@@ -92,7 +102,10 @@ func (h *Handler) ExecBatch(
 
 	batchResults := make([]*qqlpb.ExecResponse, len(results))
 	for i, r := range results {
-		data, _ := json.Marshal(r.Data)
+		data, err := json.Marshal(r.Data)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal batch result %d: %w", i, err))
+		}
 		batchResults[i] = &qqlpb.ExecResponse{
 			Ok:        r.OK,
 			Operation: r.Operation,

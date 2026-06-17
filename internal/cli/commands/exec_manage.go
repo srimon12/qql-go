@@ -14,21 +14,9 @@ func (e *Executor) doCreateIndex(n *ast.CreateIndexStmt) (*ExecResponse, error) 
 	ctx, cancel := e.defaultContext()
 	defer cancel()
 
-	fieldType := qdrant.FieldType_FieldTypeKeyword
-	if n.FieldType == "integer" {
-		fieldType = qdrant.FieldType_FieldTypeInteger
-	} else if n.FieldType == "float" {
-		fieldType = qdrant.FieldType_FieldTypeFloat
-	} else if n.FieldType == "bool" {
-		fieldType = qdrant.FieldType_FieldTypeBool
-	} else if n.FieldType == "text" {
-		fieldType = qdrant.FieldType_FieldTypeText
-	} else if n.FieldType == "geo" {
-		fieldType = qdrant.FieldType_FieldTypeGeo
-	} else if n.FieldType == "datetime" {
-		fieldType = qdrant.FieldType_FieldTypeDatetime
-	} else if n.FieldType == "uuid" {
-		fieldType = qdrant.FieldType_FieldTypeUuid
+	fieldType, err := parseFieldType(n.FieldType)
+	if err != nil {
+		return nil, err
 	}
 
 	fieldIndexParams, err := buildPayloadIndexParams(n.FieldType, n.Options)
@@ -513,5 +501,28 @@ func waitForCollectionReady(
 			return fmt.Errorf("collection '%s' did not become visible within %s", collection, timeout)
 		case <-timer.C:
 		}
+	}
+}
+
+func parseFieldType(s string) (qdrant.FieldType, error) {
+	switch s {
+	case "keyword":
+		return qdrant.FieldType_FieldTypeKeyword, nil
+	case "integer":
+		return qdrant.FieldType_FieldTypeInteger, nil
+	case "float":
+		return qdrant.FieldType_FieldTypeFloat, nil
+	case "bool":
+		return qdrant.FieldType_FieldTypeBool, nil
+	case "text":
+		return qdrant.FieldType_FieldTypeText, nil
+	case "geo":
+		return qdrant.FieldType_FieldTypeGeo, nil
+	case "datetime":
+		return qdrant.FieldType_FieldTypeDatetime, nil
+	case "uuid":
+		return qdrant.FieldType_FieldTypeUuid, nil
+	default:
+		return 0, fmt.Errorf("unknown field type '%s'; expected one of: keyword, integer, float, bool, text, geo, datetime, uuid", s)
 	}
 }
