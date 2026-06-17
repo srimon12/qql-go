@@ -32,7 +32,8 @@ type QueryState struct {
 	DenseModel        string
 
 	// --- Cached computed values ---
-	DocOptions map[string]*qdrant.Value
+	DocOptions     map[string]*qdrant.Value
+	RequestTimeout *uint64
 
 	// --- Request assembly (set by executor before pipeline runs) ---
 	CollectionName string
@@ -96,6 +97,7 @@ func (p *QueryPipeline) BuildFlatRequest(state *QueryState) *qdrant.QueryPoints 
 		Filter:         state.QdrantFilter,
 		WithPayload:    state.WithPayload,
 		WithVectors:    state.WithVectors,
+		Timeout:        state.RequestTimeout,
 	}
 	if state.VectorName != "" {
 		req.Using = qdrant.PtrOf(state.VectorName)

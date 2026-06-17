@@ -57,6 +57,7 @@ func (e *Executor) doQuery(stmt *ast.QueryStmt) (*ExecResponse, error) {
 		Limit:             uint64(stmt.Limit),
 		Offset:            uint64(stmt.Offset),
 		QdrantFilter:      qdrantFilter,
+		RequestTimeout:    e.requestTimeout(),
 	}
 	if stmt.WithClause != nil {
 		if stmt.WithClause.RrfK != nil || len(stmt.WithClause.RrfWeights) > 0 {
@@ -546,6 +547,7 @@ func (e *Executor) BuildQueryPoints(query string) (*qdrant.QueryPoints, error) {
 		Limit:             uint64(stmt.Limit),
 		Offset:            uint64(stmt.Offset),
 		QdrantFilter:      qdrantFilter,
+		RequestTimeout:    e.requestTimeout(),
 	}
 
 	if stmt.WithClause != nil {

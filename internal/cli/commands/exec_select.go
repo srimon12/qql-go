@@ -27,6 +27,7 @@ func (e *Executor) doSelect(n *ast.SelectStmt) (*ExecResponse, error) {
 		Ids:            []*qdrant.PointId{pointID},
 		WithPayload:    qdrant.NewWithPayload(true),
 		WithVectors:    qdrant.NewWithVectors(false),
+		Timeout:        e.requestTimeout(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve point: %w", err)
@@ -67,6 +68,7 @@ func (e *Executor) doScroll(n *ast.ScrollStmt) (*ExecResponse, error) {
 		Limit:          qdrant.PtrOf(uint32(n.Limit)),
 		WithPayload:    qdrant.NewWithPayload(true),
 		WithVectors:    qdrant.NewWithVectors(false),
+		Timeout:        e.requestTimeout(),
 	}
 	if n.After != nil {
 		pID, err := newPointID(n.After)

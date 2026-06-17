@@ -93,6 +93,7 @@ func (e *Executor) doInsert(n *ast.InsertStmt) (*ExecResponse, error) {
 		CollectionName: n.Collection,
 		Points:         points,
 		Wait:           qdrant.PtrOf(true),
+		Timeout:        e.requestTimeout(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert: %w", err)
