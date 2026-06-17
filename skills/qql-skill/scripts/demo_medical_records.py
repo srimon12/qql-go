@@ -27,12 +27,12 @@ def build_statements():
 
     # Schema
     stmts.append(("create-collection",
-        f"CREATE COLLECTION {COLLECTION} HYBRID WITH HNSW {{ payload_m: 16 }} QUANTIZE SCALAR QUANTILE 0.99 ALWAYS RAM"))
+        f"CREATE COLLECTION {COLLECTION} HYBRID WITH HNSW (payload_m = 16) WITH QUANTIZATION (type = 'scalar', quantile = 0.99, always_ram = true)"))
 
     for field, ftype in [
         ("specialty", "keyword"), ("priority", "keyword"), ("status", "keyword"),
         ("year", "integer"), ("patient_id", "keyword"),
-        ("diagnosis", "text WITH { tokenizer: 'word', min_token_len: 2, max_token_len: 20, lowercase: true, phrase_matching: true }"),
+        ("diagnosis", "text WITH (tokenizer = 'word', min_token_len = 2, max_token_len = 20, lowercase = true, phrase_matching = true)"),
     ]:
         stmts.append((f"index-{field}",
             f"CREATE INDEX ON COLLECTION {COLLECTION} FOR {field} TYPE {ftype}"))
@@ -150,6 +150,16 @@ QUERY 'emergency critical neurological' FROM {COLLECTION} LIMIT 3 PREFETCH (a, b
     stmts.append(("payload-exclude",
         f"QUERY 'acute stroke' FROM {COLLECTION} LIMIT 3 USING HYBRID WITH PAYLOAD (exclude = ['patient_id', 'diagnosis'])"))
 
+    # SAMPLE — random point sampling
+    stmts.append(("sample-random",
+        f"QUERY SAMPLE FROM {COLLECTION} LIMIT 5"))
+
+    # BOOST — score boosting with formula
+    stmts.append(("boost-arithmetic",
+        f"QUERY 'emergency critical' FROM {COLLECTION} LIMIT 5 BOOST (year * 0.001)"))
+    stmts.append(("boost-conditional",
+        f"QUERY 'patient treatment' FROM {COLLECTION} LIMIT 5 BOOST (CASE WHEN priority = 'high' THEN 2.0 ELSE 1.0 END)"))
+
     # Delete
     stmts.append(("delete-by-filter",
         f"DELETE FROM {COLLECTION} WHERE status = 'archived'"))
@@ -172,7 +182,7 @@ def main() -> None:
 
     if args.rerank:
         statements.insert(0, ("create-collection",
-            f"CREATE COLLECTION {COLLECTION} HYBRID RERANK WITH HNSW {{ payload_m: 16 }} QUANTIZE SCALAR QUANTILE 0.99 ALWAYS RAM"))
+            f"CREATE COLLECTION {COLLECTION} HYBRID RERANK WITH HNSW (payload_m = 16) WITH QUANTIZATION (type = 'scalar', quantile = 0.99, always_ram = true)"))
         statements.insert(len(statements) - 2, ("search-hybrid-rerank",
             f"QUERY 'acute stroke weakness slurred speech' FROM {COLLECTION} LIMIT 3 USING HYBRID RERANK"))
         statements.insert(len(statements) - 2, ("search-sparse-rerank",

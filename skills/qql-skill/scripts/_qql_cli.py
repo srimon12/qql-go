@@ -79,7 +79,15 @@ def drop_collection_if_exists(name: str) -> None:
 def print_result(label: str, result: Result, limit: int = 5) -> None:
     print(f"[{label}] {result.message}")
     data = result.data
-    if isinstance(data, dict):
+    if isinstance(data, list):
+        for hit in data[:limit]:
+            if isinstance(hit, dict):
+                score = hit.get("score")
+                hit_id = hit.get("id")
+                print(f"  score={score} id={hit_id}")
+            else:
+                print(f"  {hit}")
+    elif isinstance(data, dict):
         results = data.get("results")
         if isinstance(results, list):
             for hit in results[:limit]:
@@ -88,6 +96,4 @@ def print_result(label: str, result: Result, limit: int = 5) -> None:
                 print(f"  score={score} id={hit_id}")
         elif data:
             print(f"  {data}")
-    elif isinstance(data, list):
-        print(f"  {data}")
     print()

@@ -632,7 +632,7 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 			}
 			defaults := make(map[string]float64)
 			for p.peek().Kind != lexer.TokenKindRparen {
-				keyTok, err := p.expect(lexer.TokenKindIdentifier)
+				key, err := p.parseIdentifier()
 				if err != nil {
 					return
 				}
@@ -648,7 +648,7 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 				if err != nil {
 					return
 				}
-				defaults[keyTok.Value] = f
+				defaults[key] = f
 				if p.peek().Kind == lexer.TokenKindComma {
 					p.advance()
 				} else {

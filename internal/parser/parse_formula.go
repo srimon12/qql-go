@@ -63,7 +63,7 @@ func (p *Parser) parseFormulaExpr(precedence int) (ast.FormulaExpr, error) {
 
 func (p *Parser) formulaPrefixParseFn(kind lexer.TokenKind) prefixParseFn {
 	switch kind {
-	case lexer.TokenKindIdentifier:
+	case lexer.TokenKindIdentifier, lexer.TokenKindScore, lexer.TokenKindOffset, lexer.TokenKindThreshold, lexer.TokenKindLookup:
 		return p.parseFormulaIdentifierOrFunc
 	case lexer.TokenKindInteger, lexer.TokenKindFloat:
 		return p.parseFormulaConstant

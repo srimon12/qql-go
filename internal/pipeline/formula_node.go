@@ -36,9 +36,13 @@ func (n *FormulaNode) Execute(ctx context.Context, state *QueryState) error {
 	}
 
 	if state.TargetQuery != nil {
-		state.Prefetches = append(state.Prefetches, &qdrant.PrefetchQuery{
+		pq := &qdrant.PrefetchQuery{
 			Query: state.TargetQuery,
-		})
+		}
+		if state.VectorName != "" {
+			pq.Using = qdrant.PtrOf(state.VectorName)
+		}
+		state.Prefetches = append(state.Prefetches, pq)
 	}
 
 	state.TargetQuery = qdrant.NewQueryFormula(formula)
