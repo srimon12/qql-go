@@ -237,15 +237,21 @@ func (p *Parser) parseFormulaFunctionCall(funcName string, pos int) (ast.Formula
 
 			var lat, lon float64
 			switch v := latVal.(type) {
-			case float64: lat = v
-			case int: lat = float64(v)
-			default: return nil, errors.NewQQLSyntaxError("geo_distance lat must be a number", pos)
+			case float64:
+				lat = v
+			case int:
+				lat = float64(v)
+			default:
+				return nil, errors.NewQQLSyntaxError("geo_distance lat must be a number", pos)
 			}
 
 			switch v := lonVal.(type) {
-			case float64: lon = v
-			case int: lon = float64(v)
-			default: return nil, errors.NewQQLSyntaxError("geo_distance lon must be a number", pos)
+			case float64:
+				lon = v
+			case int:
+				lon = float64(v)
+			default:
+				return nil, errors.NewQQLSyntaxError("geo_distance lon must be a number", pos)
 			}
 
 			return ast.FormulaGeoDistance{Lat: lat, Lon: lon, Field: fieldTok.Value}, nil

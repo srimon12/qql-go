@@ -6,39 +6,58 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 ## [Unreleased]
 
-- **Native Batch Query API (`BatchQuery`)** — Uses Qdrant's `QueryBatch` API for single round-trip batch execution. All queries are sent in one `QueryBatchPoints` call instead of looping one-by-one. `ExecBatch` still handles mixed statement types (INSERT, CREATE, QUERY) sequentially.
-- **`BuildQueryPoints`** — New executor method that parses QQL and returns `*qdrant.QueryPoints` without executing. Used by `BatchQuery` for native batch operations.
-- **Formula / Score Boosting (`BOOST`)** — `BOOST (<expression>)` enables payload-aware score shaping with a full SQL-native expression algebra. Supports arithmetic operators (`+`, `-`, `*`, `/`), mathematical functions (`ABS`, `SQRT`, `LOG`, `LN`, `EXP`, `POW`), geo-distance (`GEO_DISTANCE` with dict or positional args), decay functions (`EXP_DECAY`, `GAUSS_DECAY`, `LIN_DECAY` with positional and keyword arguments), datetime expressions (`datetime('...')`, `datetime_key('...')`), and conditional logic via `CASE WHEN <filter> THEN <expr> ELSE <expr> END`. Variables use `$score` for the current score and bare names for payload fields. Optional `DEFAULTS (key = value, ...)` provides fallback variable values.
-- **`QUERY SAMPLE`** — `QUERY SAMPLE FROM <collection> LIMIT <n>` for random point sampling via Qdrant's `Sample_Random` query variant.
-- **Unified config syntax** — All configuration blocks (`WITH HNSW`, `WITH OPTIMIZERS`, `WITH PARAMS`, `WITH VECTORS`, `WITH QUANTIZATION`) now use SQL-native `(key = value)` syntax instead of JSON-like `{key: value}`. Example: `WITH HNSW (m = 32, ef_construct = 100)`.
-- **`WITH QUANTIZATION`** — Replaces the fluent `QUANTIZE SCALAR ALWAYS RAM` chain with `WITH QUANTIZATION (type = 'scalar', always_ram = true)`. Supports `type`, `quantile`, `always_ram`, `bits`, and `disabled` keys.
-- **Per-vector `WITH QUANTIZATION`** — Vector definitions now support per-vector quantization: `dense VECTOR(384, COSINE) WITH QUANTIZATION (type = 'scalar', always_ram = true)`.
-- **Comprehensive ExplainResult for QueryStmt** — `EXPLAIN` now shows all parsed fields: USING, WITH MODEL, WITH params, WITH PAYLOAD, WITH VECTORS, WHERE filter, OFFSET, SCORE THRESHOLD, LOOKUP FROM, GROUP BY/GROUP SIZE, WITH LOOKUP, RERANK, STRATEGY, RECOMMEND IDs, CONTEXT pairs, DISCOVER target, CTEs, PREFETCH refs, FUSION type, and BOOST formula.
+- No unreleased changes yet.
+
+## [0.4.0] - 2026-06-18
+
+### Added
+
+- **Connect RPC Gateway** — `qql-go gateway` starts a standalone gRPC-compatible server exposing `Exec`, `ExecBatch`, `Explain`, and `Health` via Connect RPC (gRPC + gRPC-Web + HTTP/1.1). Auto-detects pure QUERY batches and routes to Qdrant's native `QueryBatch` API.
+- **Go SDK (`pkg/qql`)** — Public library with `Parse`, `Exec`, `ExecWithConfig`, `Explain`, `ExecBatch`, `BatchQuery`, `BatchQueryWithConfig`. Accepts `QdrantClient` interface and `*config.Config`.
+- **Python SDK (`sdks/python/`)** — Connect RPC client with `QQLClient` wrapper, `exec()`, `exec_batch()`, `explain()`, `health()`.
+- **TypeScript SDK (`sdks/typescript/`)** — Connect RPC client with `QQLClient` wrapper, dual CJS/ESM build.
+- **Formula / Score Boosting (`BOOST`)** — Pratt parser expression engine for Qdrant's Score Builder API. All 19 Qdrant Expression variants covered: arithmetic (`+`, `-`, `*`, `/`), math functions (`ABS`, `SQRT`, `LOG`, `LN`, `EXP`, `POW`), geo-distance with dict syntax, decay functions (`EXP_DECAY`, `GAUSS_DECAY`, `LIN_DECAY`) with keyword arguments, datetime expressions (`datetime('...')`, `datetime_key('...')`), and `CASE WHEN <filter> THEN <expr> ELSE <expr> END` conditionals. `DEFAULTS (key = value, ...)` for fallback variables.
+- **`QUERY SAMPLE`** — `QUERY SAMPLE FROM <collection> LIMIT <n>` for random point sampling via `Sample_Random`.
+- **Unified config syntax** — All `WITH` blocks (`HNSW`, `OPTIMIZERS`, `PARAMS`, `VECTORS`, `QUANTIZATION`) use `(key = value)` instead of `{key: value}`.
+- **`WITH QUANTIZATION`** — Replaces `QUANTIZE SCALAR` chain. Supports `type`, `quantile`, `always_ram`, `bits`, `disabled`. Per-vector quantization on vector definitions.
+- **Per-prefetch lookup overrides** — `PREFETCH (cte LOOKUP FROM col VECTOR 'vec')`.
+- **Per-vector HNSW config** — `dense VECTOR(384, COSINE) WITH QUANTIZATION (type = 'scalar')`.
+- **Qdrant-native per-request timeout** — `Config.RequestTimeout` (seconds) sets `Timeout` on all Qdrant request types and controls Go context deadline.
+- **`ExecWithConfig`, `ExecBatchWithConfig`, `BatchQueryWithConfig`** — SDK functions accepting explicit `*config.Config`.
+- **Error chain support** — `QQLSyntaxError` and `QQLRuntimeError` implement `Unwrap()` with `Err error` field. Added `WrapQQLSyntaxError` and `WrapQQLRuntimeError`.
+- **Comprehensive ExplainResult** — `EXPLAIN` shows all parsed fields: USING, MODEL, WITH params, PAYLOAD, VECTORS, WHERE, OFFSET, SCORE THRESHOLD, LOOKUP FROM, GROUP BY/SIZE, WITH LOOKUP, RERANK, STRATEGY, RECOMMEND IDs, CONTEXT pairs, DISCOVER target, CTEs, PREFETCH refs, FUSION, BOOST formula.
 
 ### Changed
 
-- **BREAKING:** `QUANTIZE SCALAR [QUANTILE <f>] [ALWAYS RAM]` syntax is removed. Use `WITH QUANTIZATION (type = 'scalar', quantile = <f>, always_ram = true)` instead.
-- **BREAKING:** `WITH HNSW { m: 16 }` syntax is removed. Use `WITH HNSW (m = 16)` instead.
-- **BREAKING:** `WITH OPTIMIZERS { ... }` syntax is removed. Use `WITH OPTIMIZERS (...)` instead.
-- **BREAKING:** `WITH PARAMS { ... }` syntax is removed. Use `WITH PARAMS (...)` instead.
-- **BREAKING:** `WITH VECTORS { on_disk: true }` syntax is removed. Use `WITH VECTORS (on_disk = true)` instead.
-- **BREAKING:** `CREATE INDEX ... WITH { is_tenant: true }` syntax is removed. Use `CREATE INDEX ... WITH (is_tenant = true)` instead.
-- **BREAKING:** `QUANTIZE DISABLED` syntax is removed. Use `WITH QUANTIZATION (disabled = true)` instead.
-- `CollectionConfig` AST now embeds `Quantization` and `QuantizationUpdate` directly instead of separate fields on `CreateCollectionStmt` and `AlterCollectionStmt`.
-- Dump output now uses the unified `(key = value)` syntax for all generated `CREATE COLLECTION` statements.
-- Multiple `WITH` clauses now merge correctly (e.g., `WITH (exact = true) WITH PAYLOAD (include = ['title']) WITH VECTORS true`).
-- Lexer now tokenizes `+`, `-`, `*`, `/` as arithmetic operators and `$` as a valid identifier character.
-- `parseDict` renamed to `parsePayloadDict` — only used for `UPDATE SET PAYLOAD = { ... }` (JSON data, not config).
-- `FormulaNode` pushes existing `TargetQuery` into `Prefetches` before setting Formula as the new `TargetQuery`, as required by Qdrant's Formula API.
+- **BREAKING:** `QUANTIZE SCALAR [QUANTILE <f>] [ALWAYS RAM]` removed. Use `WITH QUANTIZATION (type = 'scalar', ...)`.
+- **BREAKING:** `WITH HNSW { m: 16 }` removed. Use `WITH HNSW (m = 16)`.
+- **BREAKING:** `WITH OPTIMIZERS { ... }` removed. Use `WITH OPTIMIZERS (...)`.
+- **BREAKING:** `WITH PARAMS { ... }` removed. Use `WITH PARAMS (...)`.
+- **BREAKING:** `WITH VECTORS { on_disk: true }` removed. Use `WITH VECTORS (on_disk = true)`.
+- **BREAKING:** `CREATE INDEX ... WITH { ... }` removed. Use `CREATE INDEX ... WITH (...)`.
+- **BREAKING:** `QUANTIZE DISABLED` removed. Use `WITH QUANTIZATION (disabled = true)`.
+- **BREAKING:** `Result.DataJSON()` returns `([]byte, error)` instead of `[]byte`.
+- **BREAKING:** Port 6333 rejected with error. Use port 6334 or omit.
+- **BREAKING:** `INSERT` without `id` field errors instead of generating UUID.
+- **Performance:** Lexer O(1) stack-buffer keyword lookup (~8x). Parser zero-allocation `asciiEqual`/`asciiEqualLower`. Filters removed `reflect`. Sparse byte-level ASCII fast path. BM25 params cached with `atomic.Pointer`. Pipeline cached `buildDocumentOptions`.
+- `doQuery`/`BuildQueryPoints` deduplicated into `buildQueryStateAndPipeline`. CTE resolution shared. `BuildQueryPoints` accepts `context.Context`.
+- Handler passes server config to SDK execution functions.
+- Embedding client uses `http.Client{Timeout: 30s}` instead of `http.DefaultClient`.
+- `CollectionConfig` AST embeds `Quantization` directly.
+- Dump output uses unified `(key = value)` syntax.
+- Multiple `WITH` clauses merge correctly.
+- `FormulaNode` pushes `TargetQuery` into `Prefetches` before setting Formula.
 
 ### Fixed
 
-- Dump output now uses unified `(key = value)` syntax instead of old `{key: value}` for HNSW, OPTIMIZERS, PARAMS, and VECTORS.
-- Dump output now uses `WITH QUANTIZATION (type = '...')` instead of `QUANTIZE SCALAR` chain syntax.
-- Stale comments referencing old `parseDict` and `parseQuantizeClause` removed.
-- Error message for `WITH PARAMS` restricted fields now uses new syntax.
-- Formula subtraction implemented as `Sum(left, Neg(right))` — mathematically correct since Qdrant has no native subtraction expression.
-- Formula conditional (`CASE WHEN cond THEN a ELSE b`) implemented as `Sum(Mult(Condition(cond), a), Mult(Condition(NOT cond), b))` — exploits Qdrant's boolean condition evaluation.
+- `BatchQuery` panicked on empty queries slice.
+- Cross-collection `BatchQuery` silently sent all queries to first collection. Now groups by collection.
+- SDK `Exec`/`BatchQuery` used empty `config.Config{}`, breaking model resolution.
+- Server handler swallowed `json.Marshal` errors.
+- `CREATE INDEX ... TYPE typo` silently created keyword index. Now errors.
+- Script runner did not detect unmatched delimiters.
+- Dump output used old `{key: value}` and `QUANTIZE SCALAR` syntax.
+- Formula subtraction and conditional logic corrected for Qdrant's expression model.
 
 ## [0.3.0] - 2026-06-17
 

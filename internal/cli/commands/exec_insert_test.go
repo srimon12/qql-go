@@ -185,8 +185,8 @@ func TestInsertPointIDAndPayloadRejectsUnsupportedIDType(t *testing.T) {
 func TestDoInsertRejectsEmptyText(t *testing.T) {
 	exec := NewExecutor(newFakeQdrantClient(), &config.Config{InferenceMode: "cloud"})
 	_, err := exec.doInsert(&ast.InsertStmt{
-		Collection:   "docs",
-		ValuesList:   []map[string]any{{"id": "550e8400-e29b-41d4-a716-446655440000"}},
+		Collection: "docs",
+		ValuesList: []map[string]any{{"id": "550e8400-e29b-41d4-a716-446655440000"}},
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "requires a 'text' field")
@@ -195,8 +195,8 @@ func TestDoInsertRejectsEmptyText(t *testing.T) {
 func TestDoInsertRejectsNonStringText(t *testing.T) {
 	exec := NewExecutor(newFakeQdrantClient(), &config.Config{InferenceMode: "cloud"})
 	_, err := exec.doInsert(&ast.InsertStmt{
-		Collection:   "docs",
-		ValuesList:   []map[string]any{{"id": "550e8400-e29b-41d4-a716-446655440000", "text": 123}},
+		Collection: "docs",
+		ValuesList: []map[string]any{{"id": "550e8400-e29b-41d4-a716-446655440000", "text": 123}},
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "must be a string")
