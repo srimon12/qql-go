@@ -12,7 +12,7 @@ Treat QQL as a query language and execution surface, not as a retrieval strategy
 
 Read these reference documents **ONLY** when you need details on their specific topics:
 - [references/qql-install.md](references/qql-install.md) — Read if `qql-go` is not installed or for `local`/`external` mode setup.
-- [references/qql-gaps.md](references/qql-gaps.md) — Read if a user asks for unsupported features (formula, ORDER BY, score boosting).
+- [references/qql-gaps.md](references/qql-gaps.md) — Read if a user asks for unsupported features (ReadConsistency, Timeout, ShardKeySelector).
 - [references/qql-examples.md](references/qql-examples.md) — Read for advanced examples (CTEs, MMR, Context patterns).
 
 For runnable demo scripts, see `scripts/demo_retrieval_modes.py`, `scripts/demo_medical_records.py`, and `scripts/demo_kitchen_sink.py`.
@@ -29,6 +29,9 @@ Translate user intent directly into QQL syntax:
 - Recommendation by example -> `QUERY RECOMMEND WITH (positive = (...), negative = (...))`
 - Context-aware search -> `QUERY CONTEXT PAIRS (...)`
 - Exploration search -> `QUERY DISCOVER TARGET <id> CONTEXT PAIRS (...)`
+- Random sampling -> `QUERY SAMPLE FROM <collection> LIMIT <n>`
+- Browse by field -> `QUERY ORDER BY <field> [ASC|DESC] FROM <collection>`
+- Score boosting -> `BOOST ($score + 0.3 * popularity)` or `BOOST (CASE WHEN ... THEN ... ELSE ... END)`
 - Recall debugging -> add `EXACT`
 - Query-time recall tuning -> add `WITH (hnsw_ef = ...)`
 - Filtered recall concern -> add `WITH (acorn = true)`
@@ -47,13 +50,13 @@ Use the following bracketed syntax. Elements in `[]` are optional. Elements sepa
 ### Collection Management
 ```sql
 CREATE COLLECTION <name> [HYBRID [RERANK]]
-  [WITH HNSW { payload_m: <n> }]
-  [WITH OPTIMIZERS { deleted_threshold: <f>, ... }]
-  [WITH PARAMS { replication_factor: <n>, ... }]
+  [WITH HNSW (m = <n>, ef_construct = <n>, ...)]
+  [WITH OPTIMIZERS (deleted_threshold = <f>, ...)]
+  [WITH PARAMS (replication_factor = <n>, ...)]
+  [WITH QUANTIZATION (type = 'scalar'|'binary'|'product'|'turbo', ...)]
   [USING MODEL '<model>' | USING HYBRID [DENSE MODEL '<model>']]
-  [QUANTIZE [SCALAR [QUANTILE <f>] | BINARY | PRODUCT | TURBO [BITS <n>]] [ALWAYS RAM]]
 
-ALTER COLLECTION <name> ... -- Supports WITH VECTORS, WITH HNSW, WITH OPTIMIZERS, WITH PARAMS, QUANTIZE
+ALTER COLLECTION <name> ... -- Supports WITH HNSW, WITH OPTIMIZERS, WITH PARAMS, WITH QUANTIZATION (disabled = true)
 SHOW COLLECTIONS
 SHOW COLLECTION <name>
 DROP COLLECTION <name>
@@ -63,11 +66,11 @@ DROP COLLECTION <name>
 Always index fields before using them in `WHERE` filters.
 ```sql
 CREATE INDEX ON COLLECTION <name> FOR <field> TYPE <keyword|integer|float|bool|uuid|text>
-  [WITH {
-    is_tenant: bool, on_disk: bool, enable_hnsw: bool,
-    tokenizer: 'word|whitespace|prefix|multilingual', min_token_len: <n>, max_token_len: <n>,
-    lowercase: bool, ascii_folding: bool, phrase_matching: bool, stopwords: ['en', ...]
-  }]
+  [WITH (
+    is_tenant = bool, on_disk = bool, enable_hnsw = bool,
+    tokenizer = 'word|whitespace|prefix|multilingual', min_token_len = <n>, max_token_len = <n>,
+    lowercase = bool, ascii_folding = bool, phrase_matching = bool, stopwords = ['en', ...]
+  )]
 ```
 
 ### Insert & Update
@@ -82,7 +85,7 @@ DELETE FROM <name> WHERE <filter_expression>
 
 ### Query
 ```sql
-QUERY ['<text>' | <id> | RECOMMEND WITH (positive = (...), negative = (...)) [STRATEGY '<strategy>'] | CONTEXT PAIRS (...) | DISCOVER TARGET <id> CONTEXT PAIRS (...) | ORDER BY <field> [ASC|DESC]]
+QUERY ['<text>' | <id> | RECOMMEND WITH (positive = (...), negative = (...)) [STRATEGY '<strategy>'] | CONTEXT PAIRS (...) | DISCOVER TARGET <id> CONTEXT PAIRS (...) | ORDER BY <field> [ASC|DESC] | SAMPLE]
 FROM <collection>
   [PREFETCH ( <cte_name> [WHERE <filter>] [SCORE THRESHOLD <n>], ... ) FUSION <RRF | DBSF>]
   [LOOKUP FROM <collection> [VECTOR '<name>']]
@@ -93,9 +96,29 @@ FROM <collection>
   [WITH (hnsw_ef = <n>, exact = <bool>, acorn = <bool>, mmr_diversity = <f>, mmr_candidates = <n>, rrf_k = <n>, rrf_weights = [...])]
   [WITH PAYLOAD [true | false | (include = ['<field>', ...], exclude = ['<field>', ...])]]
   [WITH VECTORS [true | false | ('<name>', ...)]]
+  [BOOST (<expression>)]
+  [DEFAULTS (<variable> = <float>, ...)]
   [RERANK [MODEL '<model>']]
   [EXACT]
   [LIMIT <n>] [OFFSET <n>] [SCORE THRESHOLD <float>]
+```
+
+### BOOST Formula Expressions
+The `BOOST` clause applies a mathematical expression to modify search scores.
+- **Variables:** `$score` (current score), bare names for payload fields (e.g., `popularity`, `freshness`)
+- **Operators:** `+`, `-`, `*`, `/` with standard precedence (`*` and `/` before `+` and `-`)
+- **Functions:** `ABS(x)`, `SQRT(x)`, `LOG(x)`, `LN(x)`, `EXP(x)`, `POW(base, exp)`
+- **Geo:** `GEO_DISTANCE(lat, lon, field)` — distance in meters
+- **Decay:** `GAUSS_DECAY(x, target, scale, midpoint)`, `EXP_DECAY(...)`, `LIN_DECAY(...)`
+- **Conditional:** `CASE WHEN <filter> THEN <expr> ELSE <expr> END`
+- **Defaults:** `DEFAULTS (var1 = 1.0, var2 = 0.0)` — fallback values for missing payload fields
+
+Examples:
+```sql
+BOOST ($score + 0.3 * popularity)
+BOOST (CASE WHEN category = 'premium' THEN $score * 2.0 ELSE $score END)
+BOOST ($score * GAUSS_DECAY(GEO_DISTANCE(48.85, 2.35, location), 0, 5000, 0.5))
+BOOST (SQRT($score) * LOG(citation_count + 1)) DEFAULTS (citation_count = 0)
 ```
 
 ### CTEs (Common Table Expressions)

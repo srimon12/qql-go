@@ -5,16 +5,14 @@ Use this file when a request sounds reasonable in Qdrant terms but is still outs
 ## Not Supported Yet
 
 - local/external rerank (`RERANK` is cloud-only)
-- formula / score boosting (payload-aware score shaping, geo decay, conditional scoring)
 - relevance feedback query
-- SAMPLE RANDOM (random point sampling)
-- per-prefetch `LookupFrom` (not yet supported on individual prefetch stages; filter and score threshold are done; cross-collection group lookup via `WITH LOOKUP FROM` is done)
 - offset-style pagination for grouped search
 - MMR for `USING SPARSE` or `RECOMMEND`
 - custom vector on-disk toggles
 - ReadConsistency / ShardKeySelector / Timeout controls
 - Go programmatic API (`qql.Parse()` + `qql.Execute()`)
 - batch query / mutation surfaces
+- Datetime / DatetimeKey formula expressions (rare)
 
 ## What To Say
 
@@ -49,7 +47,11 @@ Prefer plain language:
 - Need batch insert: use comma-separated `INSERT INTO <name> VALUES {...}, {...}`
 - Need script round-trip: use `qql-go execute` and `qql-go dump [--batch-size N]`
 - Need local inference without cloud: use `qql-go connect --inference-mode local`
-- Need score boosting or formula: use raw Qdrant SDK
+- Need score boosting: use `BOOST ($score + 0.3 * popularity)` or `BOOST (CASE WHEN ... THEN ... ELSE ... END)`
+- Need random sampling: use `QUERY SAMPLE FROM <collection> LIMIT <n>`
+- Need geo-distance decay: use `BOOST ($score * GAUSS_DECAY(GEO_DISTANCE(lat, lon, field), 0, 5000, 0.5))`
+- Need conditional scoring: use `BOOST (CASE WHEN <filter> THEN <expr> ELSE <expr> END)`
+- Need mathematical score shaping: use `BOOST (SQRT($score) * LOG(citations + 1))`
 
 ## Reminder
 
