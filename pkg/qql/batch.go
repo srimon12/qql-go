@@ -64,7 +64,7 @@ func BatchQueryWithConfig(ctx context.Context, client QdrantClient, queries []st
 	var orderedKeys []string
 
 	for i, query := range queries {
-		qp, err := executor.BuildQueryPoints(query)
+		qp, err := executor.BuildQueryPoints(ctx, query)
 		if err != nil {
 			return nil, fmt.Errorf("query %d parse error: %w", i, err)
 		}
