@@ -117,6 +117,8 @@ const (
 	TokenKindPlus
 	TokenKindMinus
 	TokenKindSlash
+	TokenKindRelevance
+	TokenKindFeedback
 	TokenKindEof
 )
 
@@ -235,6 +237,8 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindPlus:        "PLUS",
 	TokenKindMinus:       "MINUS",
 	TokenKindSlash:       "SLASH",
+	TokenKindRelevance:   "RELEVANCE",
+	TokenKindFeedback:    "FEEDBACK",
 	TokenKindEof:         "EOF",
 }
 

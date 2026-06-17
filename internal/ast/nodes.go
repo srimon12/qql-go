@@ -151,12 +151,13 @@ type QuantizationSearchWith struct {
 type QueryMode string
 
 const (
-	QueryModeNearest   QueryMode = "NEAREST"
-	QueryModeRecommend QueryMode = "RECOMMEND"
-	QueryModeDiscover  QueryMode = "DISCOVER"
-	QueryModeContext   QueryMode = "CONTEXT"
-	QueryModeOrderBy   QueryMode = "ORDER_BY"
-	QueryModeSample    QueryMode = "SAMPLE"
+	QueryModeNearest           QueryMode = "NEAREST"
+	QueryModeRecommend         QueryMode = "RECOMMEND"
+	QueryModeDiscover          QueryMode = "DISCOVER"
+	QueryModeContext            QueryMode = "CONTEXT"
+	QueryModeOrderBy           QueryMode = "ORDER_BY"
+	QueryModeSample            QueryMode = "SAMPLE"
+	QueryModeRelevanceFeedback QueryMode = "RELEVANCE_FEEDBACK"
 )
 
 type ContextPair struct {
@@ -197,6 +198,27 @@ type PrefetchRef struct {
 	ScoreThreshold *float64   // per-prefetch SCORE THRESHOLD
 	LookupFrom     string     // per-prefetch LOOKUP FROM <collection>
 	LookupVector   *string    // per-prefetch LOOKUP FROM ... VECTOR <name>
+}
+
+// FeedbackItem represents a single scored example for relevance feedback.
+type FeedbackItem struct {
+	Example any     // point ID or vector
+	Score   float64
+}
+
+// FeedbackStrategyType identifies the feedback strategy algorithm.
+type FeedbackStrategyType string
+
+const (
+	FeedbackStrategyNaive FeedbackStrategyType = "naive"
+)
+
+// FeedbackStrategy holds the parameters for a feedback strategy.
+type FeedbackStrategy struct {
+	Type FeedbackStrategyType
+	A    float64
+	B    float64
+	C    float64
 }
 
 type QueryStmt struct {
@@ -250,6 +272,11 @@ type QueryStmt struct {
 
 	Formula         FormulaExpr
 	FormulaDefaults map[string]float64
+
+	// For RELEVANCE FEEDBACK
+	FeedbackTarget   any             // point ID or vector
+	FeedbackItems    []FeedbackItem
+	FeedbackStrategy *FeedbackStrategy
 }
 
 type DeleteStmt struct {

@@ -110,6 +110,29 @@ func (p *Parser) parseQueryBody() (*ast.QueryStmt, error) {
 		stmt.Mode = ast.QueryModeSample
 		p.advance()
 
+	case lexer.TokenKindRelevance:
+		stmt.Mode = ast.QueryModeRelevanceFeedback
+		p.advance()
+		if _, err := p.expect(lexer.TokenKindFeedback); err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(lexer.TokenKindTarget); err != nil {
+			return nil, err
+		}
+		targetVal, err := p.parseValue()
+		if err != nil {
+			return nil, err
+		}
+		stmt.FeedbackTarget = targetVal
+		if _, err := p.expect(lexer.TokenKindFeedback); err != nil {
+			return nil, err
+		}
+		items, err := p.parseFeedbackItems()
+		if err != nil {
+			return nil, err
+		}
+		stmt.FeedbackItems = items
+
 	default:
 		stmt.Mode = ast.QueryModeNearest
 		switch tok.Kind {
@@ -310,6 +333,46 @@ func (p *Parser) parseContextPairs(label string) []ast.ContextPair {
 		}
 		return pairs
 	}
+}
+
+// parseFeedbackItems parses ((id, score), (id, score), ...) for RELEVANCE FEEDBACK.
+func (p *Parser) parseFeedbackItems() ([]ast.FeedbackItem, error) {
+	if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+		return nil, err
+	}
+	var items []ast.FeedbackItem
+	for {
+		if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+			return nil, err
+		}
+		exampleVal, err := p.parseValue()
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(lexer.TokenKindComma); err != nil {
+			return nil, err
+		}
+		scoreTok, err := p.parseNumericLiteral()
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(lexer.TokenKindRparen); err != nil {
+			return nil, err
+		}
+		items = append(items, ast.FeedbackItem{Example: exampleVal, Score: scoreTok})
+		if p.peek().Kind == lexer.TokenKindComma {
+			p.advance()
+			if p.peek().Kind == lexer.TokenKindRparen {
+				break
+			}
+			continue
+		}
+		break
+	}
+	if _, err := p.expect(lexer.TokenKindRparen); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 // parseQueryClauses parses all trailing clauses after FROM <collection>.
@@ -603,11 +666,46 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 			}
 			seenStrategy = true
 			p.advance()
-			strategy, err := p.parseStringPtr()
-			if err != nil {
-				return
+			// Check for NAIVE strategy with params: STRATEGY NAIVE (a = ..., b = ..., c = ...)
+			if p.peek().Kind == lexer.TokenKindIdentifier && asciiEqualLower(p.peek().Value, "naive") {
+				p.advance()
+				if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+					return
+				}
+				strat := &ast.FeedbackStrategy{Type: ast.FeedbackStrategyNaive}
+				for p.peek().Kind != lexer.TokenKindRparen {
+					key, err := p.parseIdentifier()
+					if err != nil {
+						return
+					}
+					if _, err := p.expect(lexer.TokenKindEquals); err != nil {
+						return
+					}
+					val, err := p.parseNumericLiteral()
+					if err != nil {
+						return
+					}
+					switch {
+					case asciiEqualLower(key, "a"):
+						strat.A = val
+					case asciiEqualLower(key, "b"):
+						strat.B = val
+					case asciiEqualLower(key, "c"):
+						strat.C = val
+					}
+					if p.peek().Kind == lexer.TokenKindComma {
+						p.advance()
+					}
+				}
+				p.advance() // consume )
+				stmt.FeedbackStrategy = strat
+			} else {
+				strategy, err := p.parseStringPtr()
+				if err != nil {
+					return
+				}
+				stmt.Strategy = strategy
 			}
-			stmt.Strategy = strategy
 
 		case lexer.TokenKindLimit:
 			p.advance()
