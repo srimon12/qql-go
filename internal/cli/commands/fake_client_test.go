@@ -116,6 +116,19 @@ func (f *fakeQdrantClient) Query(_ context.Context, req *qdrant.QueryPoints) ([]
 	return nil, nil
 }
 
+func (f *fakeQdrantClient) QueryBatch(_ context.Context, req *qdrant.QueryBatchPoints) ([]*qdrant.BatchResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, qp := range req.GetQueryPoints() {
+		f.queryRequests = append(f.queryRequests, qp)
+	}
+	results := make([]*qdrant.BatchResult, len(req.GetQueryPoints()))
+	for i := range results {
+		results[i] = &qdrant.BatchResult{}
+	}
+	return results, nil
+}
+
 func (f *fakeQdrantClient) QueryGroups(_ context.Context, req *qdrant.QueryPointGroups) ([]*qdrant.PointGroup, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
