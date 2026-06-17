@@ -1,569 +1,246 @@
-# qql-go — A Single-Binary Operational CLI for Qdrant
-
-`qql-go` is a portable command-line interface for operating, inspecting, testing, and automating Qdrant vector databases.
-
-It gives developers, scripts, CI pipelines, support workflows, and AI agents one deterministic command surface for common Qdrant operations without writing SDK code for every task.
-
-Use the Qdrant SDK when you are building application logic.
-
-Use `qql-go` when you need repeatable commands, stable JSON output, version-controlled `.qql` scripts, and a binary that can run anywhere.
-
-`qql-go` is an independent Go implementation inspired by the original [`pavanjava/qql`](https://github.com/pavanjava/qql), with a focus on portability, operational workflows, and automation-friendly output.
+# qql-go
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go 1.24+](https://img.shields.io/badge/Go-1.24%2B-00ADD8.svg)](https://go.dev/)
-[![Version](https://img.shields.io/badge/Version-0.3.0-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/Version-0.4.0-blue.svg)](VERSION)
 [![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/srimon12/qql-go/releases)
 
-## What qql-go supports
-
-`qql-go` supports common Qdrant operations including:
-
-- collection management
-- collection quantization
-- payload index creation
-- document insertion
-- vector and payload update
-- point retrieval and scroll pagination
-- dense, sparse, hybrid, recommendation, context, and discover retrieval
-- manual prefetch DAGs for multi-stage retrieval
-- parameterized RRF tuning
-- search pagination, score thresholds, and cross-collection lookup
-- grouped retrieval with cross-collection group lookup
-- recommendation by example IDs
-- rerank retrieval
-- explain plans
-- script execution
-- collection dump
-- filter-based delete
-
-It is designed for two modes of use:
-
-- **Human-readable CLI output** for local debugging, diagnostics, and exploration
-- **Stable JSON output** for scripts, CI jobs, automation pipelines, and agents
-
-## Why qql-go exists
-
-Qdrant already has excellent SDKs. `qql-go` is not trying to replace them.
-
-The SDK is the right tool for application code.
-
-`qql-go` exists for the workflows where SDK code is not the ideal artifact:
-
-- running CI smoke tests against a Qdrant instance
-- checking collection state from a terminal
-- debugging retrieval behavior during support sessions
-- executing version-controlled `.qql` scripts
-- automating maintenance tasks from shell scripts or cron jobs
-- giving AI agents a constrained command interface instead of arbitrary SDK code generation
-
-In short:
-
-> Use the SDK to build your application.  
-> Use `qql-go` to operate, inspect, test, and automate Qdrant.
-
-## Where qql-go fits
-
-`qql-go` is strongest in operational and automation workflows:
-
-- **CI and smoke tests**  
-  Validate collection setup, inserts, filters, and search behavior from a single binary.
-
-- **Support and debugging**  
-  Share exact commands that others can copy, run, and audit.
-
-- **Version-controlled database operations**  
-  Store `.qql` scripts in git for seeding, validation, cleanup, and repeatable maintenance.
-
-- **Retrieval diagnostics**  
-  Compare dense, sparse, hybrid, recommendation, and rerank behavior through readable commands.
-
-- **Agent and scripting workflows**  
-  Use `--json` output as a stable interface for agents, shell scripts, `jq`, and automation pipelines.
-
-## Product boundaries
-
-`qql-go` is not:
-
-- an ORM
-- a replacement for the Qdrant SDK in application code
-- a full SQL database layer over Qdrant
-- a general-purpose application framework
-
-It is a compact operational command interface for Qdrant.
-
-The goal is not to hide Qdrant behind another abstraction.
-
-The goal is to make Qdrant operations portable, repeatable, auditable, and easy to automate.
-
-## Installation
-
-Install the latest release on macOS or Linux:
+A single-binary CLI, SDK, and gateway for operating Qdrant vector databases with a SQL-like query language.
 
 ```bash
+qql-go exec "QUERY 'emergency care' FROM medical LIMIT 5 USING HYBRID RERANK"
+```
+
+## What it is
+
+`qql-go` is a compact operational interface for Qdrant. It gives developers, CI pipelines, and AI agents one deterministic command surface for collection management, vector search, score shaping, and data operations — without writing SDK code for every task.
+
+Use the Qdrant SDK when you're building application logic. Use `qql-go` when you need repeatable commands, stable JSON output, version-controlled scripts, and a binary that runs anywhere.
+
+## Install
+
+```bash
+# macOS / Linux
 curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | sh
-```
 
-Install a specific version:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/srimon12/qql-go/main/install.sh | VERSION=v0.3.0 sh
-```
-
-The Unix installer defaults to `~/.local/bin/qql-go`. Override with `INSTALL_DIR=/your/bin/path` when needed.
-
-Install on Windows with PowerShell:
-
-```powershell
+# Windows
 irm https://raw.githubusercontent.com/srimon12/qql-go/main/install.ps1 | iex
-```
-install the bundled QQL skill for agent use:
 
-```bash
-npx skills add srimon12/qql-go --skill qql-skill
+# From source
+go install github.com/srimon12/qql-go/cmd/qql-go@latest
 ```
 
-### Build from source
+## Quick start
 
 ```bash
-git clone https://github.com/srimon12/qql-go.git
-cd qql-go
-go build -o qql-go ./cmd/qql-go
-```
-
-## Quick Start
-
-Connect to Qdrant Cloud for text insert and text search:
-
-```bash
-qql-go connect --url https://<your-cluster>.qdrant.io --secret <your-api-key>
-```
-
-Or connect to a local/self-hosted Qdrant instance for non-inference operations:
-
-```bash
+# Connect to Qdrant
 qql-go connect --url http://localhost:6334
-```
 
-Or connect in external/local inference mode with an OpenAI-compatible embeddings API:
-
-```bash
-qql-go connect \
-  --url http://localhost:6334 \
-  --inference-mode external \
-  --embedding-endpoint https://api.openai.com/v1/embeddings \
-  --embedding-key <embedding-api-key> \
-  --embedding-model text-embedding-3-small
-```
-
-Run a simple query:
-
-```bash
-qql-go exec "SHOW COLLECTIONS"
-qql-go exec "SHOW COLLECTION docs"
-```
-
-Explain a query without executing it:
-
-```bash
-qql-go explain "QUERY 'vector db' FROM docs LIMIT 5 USING HYBRID"
-```
-
-Check saved connection health:
-
-```bash
-qql-go doctor
-```
-
-## CLI Usage
-
-Use the CLI directly:
-
-```bash
+# Create a collection with hybrid search
 qql-go exec "CREATE COLLECTION docs HYBRID"
-qql-go exec "CREATE COLLECTION docs HYBRID QUANTIZE TURBO BITS 2 ALWAYS RAM"
-qql-go exec "INSERT INTO docs VALUES {'text': 'Qdrant stores vectors', 'topic': 'search'} USING HYBRID"
+
+# Insert documents
+qql-go exec "INSERT INTO docs VALUES {'id': 1, 'text': 'Qdrant stores vectors', 'topic': 'search'} USING HYBRID"
+
+# Search
 qql-go exec "QUERY 'vector database' FROM docs LIMIT 5 USING HYBRID"
-qql-go exec "QUERY 'vector database' FROM docs LIMIT 5 USING HYBRID FUSION DBSF"
-qql-go exec "QUERY 'bm25 keyword' FROM docs LIMIT 5 USING SPARSE"
-qql-go exec "QUERY 'vector database' FROM docs LIMIT 5 USING HYBRID RERANK"
-qql-go exec "QUERY 'vector database' FROM docs LIMIT 5 USING HYBRID GROUP BY topic GROUP_SIZE 2"
-qql-go exec "QUERY RECOMMEND WITH (positive = ('uuid-1', 'uuid-2')) FROM docs LIMIT 5"
-qql-go exec "WITH a AS (QUERY 'search' USING dense LIMIT 100), b AS (QUERY 'search' USING sparse LIMIT 100) QUERY 'search' FROM docs LIMIT 10 PREFETCH (a, b) FUSION RRF"
-qql-go exec "SHOW COLLECTION docs"
-qql-go exec "SELECT * FROM docs WHERE id = 'pt-1'"
-qql-go exec "SCROLL FROM docs LIMIT 10"
-qql-go exec "UPDATE docs SET PAYLOAD = {'topic': 'retrieval'}"
+
+# Explain without executing
+qql-go explain "QUERY 'vector database' FROM docs LIMIT 5 USING HYBRID RERANK"
 ```
 
-Start the interactive shell:
+## Features
 
-```bash
-qql-go
+### Retrieval modes
+
+Dense, sparse, hybrid, recommendation, context-aware, discover, order-by, and random sampling — all through a unified `QUERY` statement:
+
+```sql
+-- Dense search
+QUERY 'emergency care' FROM docs LIMIT 5
+
+-- Hybrid with parameterized RRF
+QUERY 'emergency care' FROM docs LIMIT 5 USING HYBRID WITH (rrf_k = 30, rrf_weights = [0.7, 0.3])
+
+-- Multi-stage retrieval with CTEs
+WITH dense AS (QUERY 'care' USING dense LIMIT 200),
+     sparse AS (QUERY 'care' USING sparse LIMIT 300)
+QUERY 'care' FROM docs LIMIT 10 PREFETCH (dense, sparse) FUSION RRF
+
+-- Recommendation by example
+QUERY RECOMMEND WITH (positive = ('id-1', 'id-2'), negative = ('id-3')) FROM docs LIMIT 5
+
+-- Score shaping with BOOST
+QUERY 'emergency' FROM docs LIMIT 10
+  BOOST (CASE WHEN priority = 'high' THEN 2.0 ELSE 1.0 END + GAUSS_DECAY(date, target: datetime('2026-01-01'), scale: 30d))
 ```
 
-or:
+### Collection management
 
-```bash
-qql-go repl
+```sql
+CREATE COLLECTION docs HYBRID
+  WITH HNSW (m = 32, ef_construct = 100)
+  WITH QUANTIZATION (type = 'scalar', quantile = 0.95, always_ram = true)
+
+ALTER COLLECTION docs WITH VECTORS (on_disk = true)
+
+CREATE INDEX ON docs FOR tags TYPE keyword WITH (is_tenant = true)
+
+SHOW COLLECTION docs
 ```
 
-REPL shortcuts:
+### Data operations
 
-- `help`, `?`, `\h`
-- `explain <query>`
-- `exit`, `quit`, `\q`, `:q`
-
-## Agent & Scripting Mode
-
-For automation, do not parse human prose output.
-
-Use compact structured output:
-
-```bash
-qql-go exec --quiet --json "<query>"
-qql-go explain --quiet --json "<query>"
-qql-go doctor --quiet --json
-qql-go connect --quiet --json --url <url> [--secret <secret>]
-qql-go disconnect --quiet --json
-qql-go version --quiet --json
+```sql
+INSERT INTO docs VALUES {'id': 1, 'text': 'hello', 'topic': 'search'} USING HYBRID
+SELECT * FROM docs WHERE id = 1
+SCROLL FROM docs WHERE topic = 'search' LIMIT 10
+UPDATE docs SET PAYLOAD = {'status': 'reviewed'} WHERE id = 1
+DELETE FROM docs WHERE status = 'archived'
 ```
 
-Recommended agent examples:
+### Score boosting (BOOST)
+
+Full expression algebra executed directly inside Qdrant:
+
+```sql
+QUERY 'emergency care' FROM docs LIMIT 10
+  BOOST (
+    $score * 2
+    + CASE WHEN priority = 'high' THEN 10 ELSE 0 END
+    + ABS(GEO_DISTANCE({lat: 40.7, lon: -74.0}, location)) * -0.1
+  )
+  DEFAULTS (priority_weight = 1.5)
+```
+
+Arithmetic, math functions (`ABS`, `SQRT`, `LOG`, `LN`, `EXP`, `POW`), geo-distance, decay functions, datetime expressions, and `CASE WHEN` conditionals.
+
+### Filtering
+
+```sql
+WHERE status = 'active' AND year >= 2024
+WHERE priority IN ('high', 'medium') AND tags IS NOT NULL
+WHERE (team = 'search' OR team = 'infra') AND severity BETWEEN 3 AND 5
+WHERE title MATCH PHRASE 'vector search'
+```
+
+## SDKs
+
+### Go (`pkg/qql`)
+
+```go
+import "github.com/srimon12/qql-go/pkg/qql"
+
+client, _ := qql.NewQdrantClient(qql.ClientConfig{URL: "localhost:6334"})
+result, _ := qql.Exec(ctx, client, "QUERY 'search' FROM docs LIMIT 5")
+```
+
+### Python
+
+```python
+from qql import QQLClient
+client = QQLClient("http://localhost:50051")
+result = client.exec("QUERY 'search' FROM docs LIMIT 5")
+```
+
+### TypeScript
+
+```typescript
+import { QQLClient } from "qql"
+const client = new QQLClient("http://localhost:50051")
+const result = await client.exec("QUERY 'search' FROM docs LIMIT 5")
+```
+
+## Gateway (Connect RPC)
+
+Start a gRPC-compatible server for remote access:
 
 ```bash
+qql-go gateway --listen :50051 --qdrant-url http://localhost:6334
+```
+
+Exposes `Exec`, `ExecBatch`, `Explain`, and `Health` via Connect RPC (gRPC + gRPC-Web + HTTP/1.1). Auto-detects pure QUERY batches and routes to Qdrant's native `QueryBatch` API for single round-trip execution.
+
+## Agent and scripting mode
+
+```bash
+# Structured JSON output for agents and CI
 qql-go exec --quiet --json "SHOW COLLECTIONS"
-qql-go exec --quiet --json "SHOW COLLECTION docs"
-qql-go explain --quiet --json "QUERY 'vector db' FROM docs LIMIT 5 USING HYBRID"
+qql-go explain --quiet --json "QUERY 'search' FROM docs LIMIT 5"
 qql-go doctor --quiet --json
+
+# Script execution
+qql-go execute workflow.qql
+qql-go execute --stop-on-error workflow.qql
+
+# Collection dump
+qql-go dump docs backup.qql
 ```
 
-Output contract notes:
+## Documentation
 
-- `--json` enables structured output
-- `--quiet --json` emits compact JSON
-- `qql-go explain --quiet "<query>"` prints raw plan text
-- `qql-go connect --json` and `qql-go connect --quiet` do not enter REPL
-- `qql-go version` prints the current version
-
-## Use Cases
-
-- Qdrant collection management
-- Hybrid search and rerank exploration
-- Agent-driven retrieval workflows
-- Scripted demos and reproducible queries
-
-## Known Limitations
-
-Important behavior in the current Go build:
-
-- cloud mode uses Qdrant Cloud inference for text `INSERT` and text `QUERY`
-- local and external modes generate dense and sparse vectors client-side through an OpenAI-compatible embeddings API
-- use `--embedding-key` when the embedding provider requires bearer auth
-- `RERANK` is still cloud-only in this build
-- `SELECT`, `SCROLL`, `DELETE`, and `QUERY RECOMMEND` operate on stored vectors and work in every inference mode
-- self-hosted/local Qdrant works well for management operations such as `SHOW`, `CREATE`, `DROP`, `CREATE INDEX`, `SELECT`, `SCROLL`, and `DELETE`
-- collections auto-create on insert when missing
-- `text` is required in `INSERT ... VALUES {...}`
-- keys in `VALUES {...}` may be bare identifiers or quoted strings; quote them when they contain spaces or punctuation
-
-Put differently:
-
-- use Qdrant Cloud if you want the hosted inference path or rerank
-- use local/external mode if you want client-side embeddings against any Qdrant instance
-- use local/self-hosted freely for management operations even without inference
-
-## Supported Statements
-
-Supported statements:
-
-```sql
-CREATE COLLECTION <name>
-CREATE COLLECTION <name> HYBRID
-CREATE COLLECTION <name> HYBRID RERANK
-CREATE COLLECTION <name> USING MODEL '<model>'
-CREATE COLLECTION <name> (name VECTOR(size, DISTANCE), ...)
-CREATE COLLECTION <name> QUANTIZE SCALAR
-CREATE COLLECTION <name> QUANTIZE SCALAR QUANTILE <0.0-1.0>
-CREATE COLLECTION <name> QUANTIZE SCALAR QUANTILE <0.0-1.0> ALWAYS RAM
-CREATE COLLECTION <name> QUANTIZE BINARY
-CREATE COLLECTION <name> QUANTIZE BINARY ALWAYS RAM
-CREATE COLLECTION <name> QUANTIZE PRODUCT
-CREATE COLLECTION <name> QUANTIZE PRODUCT ALWAYS RAM
-CREATE COLLECTION <name> QUANTIZE TURBO
-CREATE COLLECTION <name> QUANTIZE TURBO BITS <1|1.5|2|4>
-CREATE COLLECTION <name> QUANTIZE TURBO BITS <1|1.5|2|4> ALWAYS RAM
-CREATE COLLECTION <name> WITH HNSW { payload_m: <n> }
-ALTER COLLECTION <name> WITH VECTORS { on_disk: true }
-ALTER COLLECTION <name> WITH HNSW { ... }
-ALTER COLLECTION <name> WITH OPTIMIZERS { ... }
-ALTER COLLECTION <name> WITH PARAMS { ... }
-ALTER COLLECTION <name> QUANTIZE ...
-ALTER COLLECTION <name> QUANTIZE DISABLED
-DROP COLLECTION <name>
-SHOW COLLECTIONS
-SHOW COLLECTION <name>
-
-CREATE INDEX ON COLLECTION <name> FOR <field> TYPE keyword
-CREATE INDEX ON COLLECTION <name> FOR <field> TYPE integer
-CREATE INDEX ON COLLECTION <name> FOR <field> TYPE float
-CREATE INDEX ON COLLECTION <name> FOR <field> TYPE bool
-CREATE INDEX ON COLLECTION <name> FOR <field> TYPE uuid
-CREATE INDEX ON COLLECTION <name> FOR <field> TYPE keyword WITH { is_tenant: true, on_disk: true, enable_hnsw: false }
-CREATE INDEX ON COLLECTION <name> FOR <field> TYPE text WITH { tokenizer: 'word', min_token_len: 2, max_token_len: 20, lowercase: true }
-
-INSERT INTO <name> VALUES {...}
-INSERT INTO <name> VALUES {...}, {...}
-INSERT INTO <name> VALUES {...} USING MODEL '<model>'
-INSERT INTO <name> VALUES {...} USING HYBRID
-INSERT INTO <name> VALUES {...} USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'
-
-QUERY '<text>' FROM <name> LIMIT <n>
-QUERY '<text>' FROM <name> LIMIT <n> OFFSET <n>
-QUERY '<text>' FROM <name> LIMIT <n> SCORE THRESHOLD <float|int>
-QUERY '<text>' FROM <name> LIMIT <n> LOOKUP FROM <collection> [VECTOR '<name>']
-QUERY '<text>' FROM <name> LIMIT <n> USING MODEL '<model>'
-QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID
-QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID FUSION DBSF
-QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID WITH (rrf_k = <n>, rrf_weights = [...])
-QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID DENSE MODEL '<model>' SPARSE MODEL '<model>'
-QUERY '<text>' FROM <name> LIMIT <n> USING SPARSE
-QUERY '<text>' FROM <name> LIMIT <n> USING DENSE
-QUERY '<text>' FROM <name> LIMIT <n> WHERE <filter>
-QUERY '<text>' FROM <name> LIMIT <n> EXACT
-QUERY '<text>' FROM <name> LIMIT <n> WITH (hnsw_ef = <n>, exact = <bool>, acorn = <bool>, indexed_only = <bool>)
-QUERY '<text>' FROM <name> LIMIT <n> WITH (mmr_diversity = <0..1>, mmr_candidates = <n>)
-QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID WITH (mmr_diversity = <0..1>, mmr_candidates = <n>)
-QUERY '<text>' FROM <name> LIMIT <n> RERANK
-QUERY '<text>' FROM <name> LIMIT <n> RERANK MODEL '<model>'
-QUERY '<text>' FROM <name> LIMIT <n> USING HYBRID RERANK
-QUERY '<text>' FROM <name> LIMIT <n> USING SPARSE RERANK
-QUERY '<text>' FROM <name> LIMIT <n> GROUP BY <field> [GROUP_SIZE <n>] [WITH LOOKUP FROM <collection>]
-
-QUERY RECOMMEND WITH (positive = (<id>, ...)) FROM <name> LIMIT <n>
-QUERY RECOMMEND WITH (positive = (<id>, ...), negative = (<id>, ...)) FROM <name> LIMIT <n>
-QUERY RECOMMEND WITH (positive = (<id>, ...)) STRATEGY '<strategy>' FROM <name> LIMIT <n>
-QUERY RECOMMEND WITH (positive = (<id>, ...)) FROM <name> LIMIT <n> OFFSET <n>
-QUERY RECOMMEND WITH (positive = (<id>, ...)) FROM <name> LIMIT <n> SCORE THRESHOLD <float|int>
-QUERY RECOMMEND WITH (positive = (<id>, ...)) FROM <name> LOOKUP FROM <collection> [VECTOR '<name>'] LIMIT <n>
-
-QUERY CONTEXT PAIRS ((<pos_id>, <neg_id>), ...) FROM <name> LIMIT <n>
-QUERY DISCOVER TARGET <id> CONTEXT PAIRS ((<pos_id>, <neg_id>), ...) FROM <name> LIMIT <n>
-
-WITH <name> AS (QUERY ...), <name> AS (QUERY ...)
-QUERY '<text>' FROM <name> LIMIT 10 PREFETCH (<name> [WHERE <filter>] [SCORE THRESHOLD <n>], <name> [WHERE <filter>] [SCORE THRESHOLD <n>]) FUSION RRF WITH (rrf_k = <n>, rrf_weights = [...])
-QUERY ORDER BY <field> [ASC|DESC] FROM <name> LIMIT <n>
-QUERY '<text>' FROM <name> LIMIT <n> WITH PAYLOAD (include = ['f1'], exclude = ['f2']) WITH VECTORS ('v1')
-
-SELECT * FROM <name> WHERE id = '<uuid>'
-SELECT * FROM <name> WHERE id = <integer>
-
-SCROLL FROM <name> LIMIT <n>
-SCROLL FROM <name> WHERE <filter> LIMIT <n>
-SCROLL FROM <name> AFTER '<point_id>' LIMIT <n>
-SCROLL FROM <name> WHERE <filter> AFTER <point_id> LIMIT <n>
-
-DELETE FROM <name> WHERE id = '<uuid>'
-DELETE FROM <name> WHERE id = <integer>
-DELETE FROM <name> WHERE <field> = '<value>'
-
-qql-go execute <script.qql>
-qql-go execute --stop-on-error <script.qql>
-qql-go dump <collection> <output.qql>
-qql-go dump --batch-size <n> <collection> <output.qql>
-
-`qql-go explain <statement>`
-```
-
-## Retrieval Modes
-
-Dense search:
-
-- use plain `QUERY '<text>' FROM <collection>`
-- use `USING MODEL '<model>'` when you want to pin the dense model
-- add `OFFSET <n>` for flat search pagination
-- add `SCORE THRESHOLD <float|int>` to drop low-score matches
-- add `LOOKUP FROM <collection> [VECTOR '<name>']` for cross-collection vector lookup
-- default dense model: `sentence-transformers/all-minilm-l6-v2`
-
-Collection quantization:
-
-- use `QUANTIZE SCALAR` for the default `int8` compression path
-- use `QUANTIZE SCALAR QUANTILE <0..1>` when you want explicit scalar calibration
-- use `QUANTIZE BINARY` for more aggressive compression
-- use `QUANTIZE PRODUCT` for fixed `x4` product quantization
-- use `QUANTIZE TURBO [BITS <1|1.5|2|4>]` for stronger compression with better recall than binary
-- add `ALWAYS RAM` when quantized vectors should stay pinned in memory
-
-Hybrid search:
-
-- use `USING HYBRID` when exact terms and semantic similarity both matter; this uses `RRF` by default
-- use `FUSION DBSF` when you want the DBSF hybrid fusion strategy instead of the default RRF
-- use `WITH (rrf_k = <n>, rrf_weights: [...])` to tune parameterized RRF
-- use `WITH { mmr_diversity, mmr_candidates }` with hybrid search when you want diversity on the dense leg before fusion
-- combine `GROUP BY` with hybrid search when you need grouped top results; do not combine grouped search with `OFFSET`
-- default sparse model: `qdrant/bm25`
-
-Manual prefetch DAGs:
-
-- use `PREFETCH (...)` for multi-stage retrieval with per-prefetch filters, limits, and score thresholds
-- add `WHERE <filter>` after a CTE name to apply a per-prefetch filter
-- add `SCORE THRESHOLD <n>` after a CTE name to apply a per-prefetch score threshold
-- combine with `FUSION RRF` or `FUSION DBSF` for the top-level fusion
-- `PREFETCH` and `USING HYBRID` are mutually exclusive
-
-Sparse-only search:
-
-- use `USING SPARSE` when the request is primarily keyword retrieval
-- use `USING SPARSE RERANK` when sparse recall is good but top ordering needs cloud rerank
-
-Point access:
-
-- use `SELECT` when you already know the exact point ID
-- use `SCROLL` when you need pagination or to browse points page by page
-
-Recommendation:
-
-- use `QUERY RECOMMEND WITH (positive = (...))` to find similar items by example IDs
-- use `STRATEGY 'average_vector|best_score|sum_scores'` to control recommendation strategy
-
-Context and Discover:
-
-- use `QUERY CONTEXT PAIRS ((pos, neg), ...)` for context-aware search
-- use `QUERY DISCOVER TARGET <id> CONTEXT PAIRS (...)` for exploration search
-
-Rerank:
-
-- use `RERANK` when retrieval is okay but ordering needs improvement
-- default rerank model: `answerdotai/answerai-colbert-small-v1`
-- requires a collection created with `HYBRID RERANK`
-
-Search-time tuning:
-
-- `EXACT`
-- `WITH (hnsw_ef = <n>)`
-- `WITH (exact = true|false)`
-- `WITH (acorn = true|false)`
-- `WITH (indexed_only = true|false)`
-- `WITH (quantization = { ignore, rescore, oversampling) }`
-- `WITH (mmr_diversity = <0..1>, mmr_candidates: <n>)` for dense search and the dense leg of hybrid search
-- `WITH (rrf_k = <n>, rrf_weights: [...])` for parameterized RRF
-
-## Filter Syntax
-
-Supported predicates:
-
-- `=` `!=` `>` `>=` `<` `<=`
-- `BETWEEN ... AND ...`
-- `IN (...)` `NOT IN (...)`
-- boolean literals: `true`, `false`
-- `IS NULL` `IS NOT NULL`
-- `IS EMPTY` `IS NOT EMPTY`
-- `MATCH` `MATCH ANY` `MATCH PHRASE`
-
-Supported logical operators:
-
-- `AND`
-- `OR`
-- `NOT`
-- parentheses
-
-Examples:
-
-```sql
-QUERY 'deep learning' FROM articles LIMIT 10 WHERE year >= 2020
-QUERY 'retrieval' FROM articles LIMIT 10 WHERE status IN ('published', 'reviewed')
-QUERY 'search' FROM articles LIMIT 10 WHERE title MATCH PHRASE 'semantic search'
-QUERY 'incident' FROM docs LIMIT 10 WHERE (team = 'search' OR team = 'infra') AND severity >= 3
-```
-
-If you filter heavily, create payload indexes first.
-
-## Release Notes
-
-- [CHANGELOG.md](CHANGELOG.md) for the latest user-facing changes
+| | |
+|---|---|
+| [Syntax Reference](docs/syntax.md) | Complete QQL statement reference |
+| [Filter Reference](docs/filters.md) | WHERE clause predicates and operators |
+| [Release Notes](docs/releases/) | Per-version release notes |
+| [CHANGELOG.md](CHANGELOG.md) | User-facing changes |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contributor guide |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Maintainer and release workflow |
 
 ## Examples
 
-The repo now ships first-class operational examples under [examples/README.md](examples/README.md).
+First-class operational examples under [`examples/`](examples/):
 
-If you want the single strongest example first, start with `examples/release-validation/`: it runs read-only retrieval regression checks against an existing Qdrant collection, validates JSON artifacts, and fits naturally into CI without reseeding the corpus.
+- **release-validation** — retrieval regression checks, fits into CI
+- **medical-retrieval-ops** — vertical benchmark workflow
+- **retrieval-debug-runbook** — debugging and diagnostics
 
-Use them to showcase the workflows `qql-go` is strongest at:
+Agent-oriented demos under [`skills/qql-skill/scripts/`](skills/qql-skill/scripts/).
 
-- retrieval regression CI
-- retrieval debugging and runbooks
-- vertical benchmark workflows such as medical retrieval
+## Architecture
 
-The agent-oriented helper demos still live under `skills/qql-skill/scripts/`, but they are now secondary to the public `examples/` surface.
-
-## Skills
-
-This repo publishes installable skills from `skills/`.
-
-List available skills:
-
-```bash
-npx skills add srimon12/qql-go --list
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────────┐
+│  Lexer   │───>│  Parser  │───>│   AST    │───>│   Executor   │
+│          │    │ (Pratt)  │    │          │    │              │
+│ O(1)     │    │ Zero-alloc│    │ Typed    │    │ Pipeline DAG │
+│ keywords │    │ compare  │    │ nodes    │    │              │
+└──────────┘    └──────────┘    └──────────┘    └──────┬──────┘
+                                                       │
+                              ┌─────────────────────────┼───────┐
+                              │                         │       │
+                     ┌────────▼───┐   ┌─────────┐  ┌───▼────┐  │
+                     │  Pipeline  │   │ Filters │  │ Sparse │  │
+                     │            │   │         │  │  BM25  │  │
+                     │ EmbedNode  │   │ Type-   │  │ Atomic │  │
+                     │ FusionNode │   │ switch  │  │ cache  │  │
+                     │ RerankNode │   │ (no     │  └────────┘  │
+                     │ FormulaNode│   │reflect) │              │
+                     └─────┬──────┘   └─────────┘              │
+                           │                                    │
+                    ┌──────▼────────────────────────────────────┘
+                    │
+              ┌─────▼─────┐    ┌───────────┐
+              │   Qdrant   │    │  Gateway  │
+              │  gRPC API  │    │ (Connect  │
+              │            │    │   RPC)    │
+              └───────────┘    └───────────┘
 ```
 
-Install the bundled QQL skill:
+## Performance
 
-```bash
-npx skills add srimon12/qql-go --skill qql-skill
-```
+Benchmarked on i5-10400F, Go 1.24:
 
+| Operation | Latency | Allocs |
+|---|---|---|
+| Lex (simple) | 304 ns/op | 2 |
+| Lex (full query) | 945 ns/op | 2 |
+| Parse (simple) | 477 ns/op | 4 |
+| Parse (full query) | 1,470 ns/op | 8 |
 
-## Configuration
+Lexer uses O(1) stack-buffer keyword lookup. Parser uses zero-allocation byte-level comparison. Filters use type-switch instead of `reflect`. BM25 params cached with `atomic.Pointer`.
 
-Prebuilt binaries are published on [GitHub Releases](https://github.com/srimon12/qql-go/releases) for:
+## License
 
-- Windows
-- Linux
-- macOS
-
-The repo also ships direct install scripts:
-
-- [install.sh](install.sh)
-- [install.ps1](install.ps1)
-
-Config is stored at:
-
-```text
-~/.qql/config.json
-```
-
-## Contributing And Maintenance
-
-- [CONTRIBUTING.md](CONTRIBUTING.md) for contributors
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for maintainers and release workflow details
-- [CHANGELOG.md](CHANGELOG.md) for user-facing changes
-- [docs/releases/0.3.0.md](docs/releases/0.3.0.md) for the current release note
-
-## Project Layout
-
-```text
-qql-go/
-├── cmd/qql-go/
-├── internal/ast/
-├── internal/cli/
-├── internal/config/
-├── internal/errors/
-├── internal/filters/
-├── internal/lexer/
-├── internal/output/
-├── internal/parser/
-├── internal/pipeline/
-├── internal/repl/
-├── skills/qql-skill/
-├── install.sh
-├── install.ps1
-└── README.md
-```
-
-## Local Verification
-
-```bash
-go test ./...
-go build ./cmd/qql-go
-```
+[MIT](LICENSE)
