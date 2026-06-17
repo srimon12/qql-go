@@ -7,6 +7,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/srimon12/qql-go/gen/qqlpb"
+	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/pkg/qql"
 )
 
@@ -60,7 +61,31 @@ func (h *Handler) ExecBatch(
 		queries[i] = q.GetQuery()
 	}
 
-	results, err := qql.ExecBatch(ctx, h.client, queries, batchReq.GetStopOnError())
+	// Try native batch first for pure QUERY batches
+	allQuery := true
+	for _, q := range queries {
+		node, err := qql.Parse(q)
+		if err != nil {
+			allQuery = false
+			break
+		}
+		if _, ok := node.(*ast.QueryStmt); !ok {
+			allQuery = false
+			break
+		}
+	}
+
+	var results []*qql.Result
+	var err error
+
+	if allQuery && len(queries) > 1 {
+		// Use native Qdrant QueryBatch for pure query batches
+		results, err = qql.BatchQuery(ctx, h.client, queries)
+	} else {
+		// Fall back to sequential execution for mixed statements
+		results, err = qql.ExecBatch(ctx, h.client, queries, batchReq.GetStopOnError())
+	}
+
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

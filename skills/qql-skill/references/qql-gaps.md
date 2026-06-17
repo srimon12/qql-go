@@ -10,8 +10,6 @@ Use this file when a request sounds reasonable in Qdrant terms but is still outs
 - MMR for `USING SPARSE` or `RECOMMEND`
 - custom vector on-disk toggles
 - ReadConsistency / ShardKeySelector / Timeout controls
-- Go programmatic API (`qql.Parse()` + `qql.Execute()`)
-- batch query / mutation surfaces
 - Datetime / DatetimeKey formula expressions (rare)
 
 ## What To Say

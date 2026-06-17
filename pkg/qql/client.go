@@ -22,6 +22,7 @@ type QdrantClient interface {
 	DeleteCollection(context.Context, string) error
 	Upsert(context.Context, *qdrant.UpsertPoints) (*qdrant.UpdateResult, error)
 	Query(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error)
+	QueryBatch(context.Context, *qdrant.QueryBatchPoints) ([]*qdrant.BatchResult, error)
 	QueryGroups(context.Context, *qdrant.QueryPointGroups) ([]*qdrant.PointGroup, error)
 	Delete(context.Context, *qdrant.DeletePoints) (*qdrant.UpdateResult, error)
 	UpdateVectors(context.Context, *qdrant.UpdatePointVectors) (*qdrant.UpdateResult, error)

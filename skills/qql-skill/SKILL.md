@@ -108,8 +108,9 @@ The `BOOST` clause applies a mathematical expression to modify search scores.
 - **Variables:** `$score` (current score), bare names for payload fields (e.g., `popularity`, `freshness`)
 - **Operators:** `+`, `-`, `*`, `/` with standard precedence (`*` and `/` before `+` and `-`)
 - **Functions:** `ABS(x)`, `SQRT(x)`, `LOG(x)`, `LN(x)`, `EXP(x)`, `POW(base, exp)`
-- **Geo:** `GEO_DISTANCE(lat, lon, field)` — distance in meters
-- **Decay:** `GAUSS_DECAY(x, target, scale, midpoint)`, `EXP_DECAY(...)`, `LIN_DECAY(...)`
+- **Geo:** `GEO_DISTANCE(lat, lon, field)` or `GEO_DISTANCE({'lat': x, 'lon': y}, field)`
+- **Decay:** `GAUSS_DECAY(x, target, scale, midpoint)`, `EXP_DECAY(...)`, `LIN_DECAY(...)` — supports kwargs: `gauss_decay(x, scale=5000)`
+- **Datetime:** `datetime('2026-01-01T00:00:00Z')` (literal), `datetime_key('field')` (payload field)
 - **Conditional:** `CASE WHEN <filter> THEN <expr> ELSE <expr> END`
 - **Defaults:** `DEFAULTS (var1 = 1.0, var2 = 0.0)` — fallback values for missing payload fields
 
@@ -117,8 +118,9 @@ Examples:
 ```sql
 BOOST ($score + 0.3 * popularity)
 BOOST (CASE WHEN category = 'premium' THEN $score * 2.0 ELSE $score END)
-BOOST ($score * GAUSS_DECAY(GEO_DISTANCE(48.85, 2.35, location), 0, 5000, 0.5))
+BOOST ($score * gauss_decay(geo_distance({'lat': 48.85, 'lon': 2.35}, location), scale=5000))
 BOOST (SQRT($score) * LOG(citation_count + 1)) DEFAULTS (citation_count = 0)
+BOOST ($score + exp_decay(datetime_key('published_at'), target=datetime('2026-06-17T00:00:00Z'), scale=86400))
 ```
 
 ### CTEs (Common Table Expressions)
@@ -149,3 +151,33 @@ CREATE COLLECTION my_collection
 INSERT INTO my_collection VALUES {'text': 'hello'}
 QUERY 'hello' FROM my_collection LIMIT 5
 ```
+
+## Go Library API
+For programmatic usage, use `pkg/qql`:
+```go
+import "github.com/srimon12/qql-go/pkg/qql"
+
+// Parse (no Qdrant client needed)
+node, err := qql.Parse("QUERY 'search' FROM docs LIMIT 5")
+
+// Execute single query
+result, err := qql.Exec(ctx, client, "QUERY 'search' FROM docs LIMIT 5")
+
+// Execute mixed statements sequentially
+results, err := qql.ExecBatch(ctx, client, queries, true)
+
+// Execute pure QUERY batch (single round-trip via Qdrant QueryBatch API)
+results, err := qql.BatchQuery(ctx, client, []string{
+    "QUERY 'stroke' FROM medical LIMIT 5",
+    "QUERY 'cardiac' FROM medical LIMIT 5",
+    "QUERY 'pulmonary' FROM medical LIMIT 5",
+})
+
+// Explain without executing
+plan, err := qql.Explain("QUERY 'test' FROM docs LIMIT 5")
+```
+
+## Batch Operations
+- **Mixed statements** (INSERT, CREATE, QUERY): Use `ExecBatch` — sequential execution
+- **Pure QUERY batches**: Use `BatchQuery` — single round-trip via Qdrant's native `QueryBatch` API
+- **Bulk insert**: Use comma-separated `INSERT INTO <name> VALUES {...}, {...}`

@@ -71,6 +71,13 @@ func (p *Parser) peek() lexer.Token {
 	return lexer.Token{Kind: lexer.TokenKindEof, Value: "", Pos: -1}
 }
 
+func (p *Parser) peekNext() lexer.Token {
+	if p.pos+1 < len(p.tokens) {
+		return p.tokens[p.pos+1]
+	}
+	return lexer.Token{Kind: lexer.TokenKindEof, Value: "", Pos: -1}
+}
+
 func (p *Parser) advance() lexer.Token {
 	if p.pos >= len(p.tokens) {
 		return lexer.Token{Kind: lexer.TokenKindEof, Value: "", Pos: -1}

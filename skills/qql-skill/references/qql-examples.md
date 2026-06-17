@@ -408,3 +408,126 @@ QUERY 'transformer attention mechanism' FROM papers LIMIT 10
 - `BOOST` adds a flat bonus for top venue papers.
 - The `CASE WHEN venue IN (...)` checks if the paper is from a top venue — conditional boost.
 - The formula applies to the fused score, not individual prefetch scores.
+
+---
+
+## 16. Batch Query — Single Round-Trip
+
+**Problem:** You need to run multiple independent queries (e.g., for different search facets or A/B testing) but want to minimize network overhead.
+
+**Why this works:** `BatchQuery` uses Qdrant's native `QueryBatch` API — all queries are sent in a single `QueryBatchPoints` call and return together. This is 3-5x faster than sequential execution for pure QUERY batches.
+
+```go
+results, _ := qql.BatchQuery(ctx, client, []string{
+    "QUERY 'emergency triage' FROM docs LIMIT 5 USING HYBRID",
+    "QUERY 'cardiac arrest protocol' FROM docs LIMIT 5 USING HYBRID",
+    "QUERY 'neurological assessment' FROM docs LIMIT 5 USING HYBRID",
+})
+// All 3 queries executed in one round-trip
+```
+
+**Key decisions:**
+- Use `BatchQuery` for pure QUERY batches — single round-trip to Qdrant.
+- Use `ExecBatch` for mixed statements (INSERT + QUERY + CREATE) — sequential execution.
+- All queries in a `BatchQuery` must target the same collection.
+
+---
+
+## 17. Batch Ingest + Query Pipeline
+
+**Problem:** You need to set up a collection, insert data, and query it in a single pipeline.
+
+**Why this works:** `ExecBatch` handles mixed statement types sequentially. Each statement is executed in order, and errors can be caught per-statement.
+
+```go
+results, _ := qql.ExecBatch(ctx, client, []string{
+    "CREATE COLLECTION medical HYBRID WITH HNSW (m = 32) WITH QUANTIZATION (type = 'turbo', bits = 2)",
+    "CREATE INDEX ON COLLECTION medical FOR specialty TYPE keyword",
+    "INSERT INTO medical VALUES {'text': 'stroke protocol', 'specialty': 'neurology'} USING HYBRID",
+    "INSERT INTO medical VALUES {'text': 'cardiac arrest', 'specialty': 'cardiology'} USING HYBRID",
+    "QUERY 'emergency' FROM medical LIMIT 5 USING HYBRID",
+}, true) // stopOnError = true
+```
+
+**Key decisions:**
+- `stopOnError = true` — stops at first failure (useful for setup scripts).
+- Each result has `ok`, `operation`, `message`, `data` fields.
+- Use comma-separated VALUES for bulk insert within a single INSERT statement.
+
+---
+
+## 18. Time-Based Freshness Boosting
+
+**Problem:** You want to prioritize recent articles over older ones, with exponential decay based on how old the content is.
+
+**Why this works:** `datetime_key` tells Qdrant to parse the payload value as a datetime string. `datetime` parses a literal datetime string. The `exp_decay` function clamps the time difference into a 0-1 range, with newer items scoring closer to 1.
+
+```sql
+QUERY 'kubernetes deployment' FROM articles LIMIT 10
+  BOOST (
+    $score + exp_decay(
+      datetime_key('published_at'),
+      target=datetime('2026-06-17T00:00:00Z'),
+      scale=86400,
+      midpoint=0.5
+    )
+  )
+```
+
+**Key decisions:**
+- `datetime_key('published_at')` — reads the `published_at` payload field as a datetime.
+- `datetime('2026-06-17T00:00:00Z')` — the "now" reference point.
+- `scale=86400` — 1 day in seconds. After 1 day, the decay factor is 0.5.
+- `midpoint=0.5` — the decay reaches 0.5 at `target ± scale`.
+- Kwargs (`target=`, `scale=`, `midpoint=`) make decay functions readable.
+
+---
+
+## 19. Geo-Distance Boosting with Dict Syntax
+
+**Problem:** You want to boost results closer to a user's location, with smooth gaussian decay based on distance.
+
+**Why this works:** `geo_distance` computes haversine distance between a point and a payload field. `gauss_decay` converts that distance into a 0-1 score factor. The dict syntax `{'lat': x, 'lon': y}` makes coordinates readable.
+
+```sql
+QUERY 'restaurant' FROM places LIMIT 10
+  BOOST (
+    $score * gauss_decay(
+      geo_distance({'lat': 48.8566, 'lon': 2.3522}, location),
+      scale=5000,
+      midpoint=0.5
+    )
+  )
+```
+
+**Key decisions:**
+- `geo_distance({'lat': 48.8566, 'lon': 2.3522}, location)` — Paris coordinates, `location` is the payload field.
+- `gauss_decay(..., scale=5000)` — at 5km, the decay factor is 0.5.
+- Multiplying `$score` by the decay preserves ranking while penalizing distance.
+- Dict syntax `{'lat': x, 'lon': y}` is clearer than positional `geo_distance(lat, lon, field)`.
+
+---
+
+## 20. Combined: Hybrid + MMR + Time Decay + Conditional Boost
+
+**Problem:** You want the full power of QQL — hybrid retrieval, MMR diversity, time-based freshness, and conditional scoring — in a single query.
+
+**Why this works:** QQL composes all features into one declarative statement. The query planner handles the execution order automatically.
+
+```sql
+QUERY 'emergency triage' FROM docs LIMIT 10
+  USING HYBRID
+  WITH (mmr_diversity = 0.5, mmr_candidates = 100)
+  BOOST (
+    $score
+    + exp_decay(datetime_key('updated_at'), target=datetime('2026-06-17T00:00:00Z'), scale=86400)
+    + CASE WHEN priority = 'critical' THEN 0.5 ELSE 0 END
+  )
+```
+
+**Key decisions:**
+- `USING HYBRID` — dense + sparse retrieval.
+- `WITH (mmr_diversity = 0.5)` — diverse results before boosting.
+- `exp_decay(...)` — fresh content gets a score boost.
+- `CASE WHEN priority = 'critical'` — critical items get a flat bonus.
+- All three signals (similarity, freshness, priority) are combined in one pass.

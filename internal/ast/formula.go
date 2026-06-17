@@ -10,6 +10,18 @@ type FormulaExpr interface {
 	isFormulaExpr()
 }
 
+type FormulaDatetime struct {
+	Value string
+}
+
+func (FormulaDatetime) isFormulaExpr() {}
+
+type FormulaDatetimeKey struct {
+	Key string
+}
+
+func (FormulaDatetimeKey) isFormulaExpr() {}
+
 type FormulaConstant struct {
 	Value float64
 }
@@ -126,6 +138,10 @@ func FormulaExprString(expr FormulaExpr) string {
 		return "<nil>"
 	}
 	switch e := expr.(type) {
+	case FormulaDatetime:
+		return fmt.Sprintf("DATETIME('%s')", e.Value)
+	case FormulaDatetimeKey:
+		return fmt.Sprintf("DATETIME_KEY('%s')", e.Key)
 	case FormulaConstant:
 		if e.Value == float64(int(e.Value)) {
 			return fmt.Sprintf("%d", int(e.Value))

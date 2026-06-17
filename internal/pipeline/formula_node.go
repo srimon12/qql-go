@@ -51,6 +51,10 @@ func (n *FormulaNode) Execute(ctx context.Context, state *QueryState) error {
 
 func BuildExpression(expr ast.FormulaExpr) (*qdrant.Expression, error) {
 	switch e := expr.(type) {
+	case ast.FormulaDatetime:
+		return qdrant.NewExpressionDatetime(e.Value), nil
+	case ast.FormulaDatetimeKey:
+		return qdrant.NewExpressionDatetimeKey(e.Key), nil
 	case ast.FormulaConstant:
 		return qdrant.NewExpressionConstant(float32(e.Value)), nil
 	case ast.FormulaVariable:

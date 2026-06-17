@@ -490,3 +490,185 @@ func buildWithVectors(sel *ast.VectorsSelector) *qdrant.WithVectorsSelector {
 	}
 	return nil
 }
+
+// BuildQueryPoints parses a QQL query and returns the QueryPoints request
+// without executing it. Used by BatchQuery for native Qdrant batch operations.
+func (e *Executor) BuildQueryPoints(query string) (*qdrant.QueryPoints, error) {
+	node, err := parseQuery(query)
+	if err != nil {
+		return nil, err
+	}
+	stmt, ok := node.(*ast.QueryStmt)
+	if !ok {
+		return nil, fmt.Errorf("expected QUERY statement, got %T", node)
+	}
+
+	ctx := context.Background()
+
+	denseVectorName := ""
+	sparseVectorName := ""
+	if stmt.Using != nil {
+		denseVectorName = *stmt.Using
+		sparseVectorName = *stmt.Using
+	} else {
+		topo, err := e.resolveVectorTopology(ctx, stmt.Collection)
+		if err == nil && topo != nil && topo.DenseVector != nil && *topo.DenseVector != "" {
+			denseVectorName = *topo.DenseVector
+			if topo.SparseVector != nil && *topo.SparseVector != "" {
+				sparseVectorName = *topo.SparseVector
+			}
+		}
+	}
+
+	denseModel := e.resolveDenseModel(stmt.Model)
+	var sparseModel *string
+	if stmt.Type == ast.QueryTypeHybrid {
+		sm := e.resolveSparseModel(stmt.Model)
+		sparseModel = &sm
+	}
+
+	var qdrantFilter *qdrant.Filter
+	if stmt.QueryFilter != nil {
+		qdrantFilter, err = filters.NewFilterConverter().BuildFilter(stmt.QueryFilter)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	state := &pipeline.QueryState{
+		Embedder:          e,
+		LocalEmbed:        e.usesLocalEmbeddings(),
+		Params:            pipeline.BuildSearchParams(stmt.WithClause),
+		HasMMR:            hasMMR(stmt.WithClause),
+		CloudModelOptions: e.cloudModelOptions(),
+		DenseModel:        denseModel,
+		CollectionName:    stmt.Collection,
+		Limit:             uint64(stmt.Limit),
+		Offset:            uint64(stmt.Offset),
+		QdrantFilter:      qdrantFilter,
+	}
+
+	if stmt.WithClause != nil {
+		if stmt.WithClause.RrfK != nil || len(stmt.WithClause.RrfWeights) > 0 {
+			state.FusionConfig = &qdrant.Rrf{}
+			if stmt.WithClause.RrfK != nil {
+				state.FusionConfig.K = qdrant.PtrOf(uint32(*stmt.WithClause.RrfK))
+			}
+			if len(stmt.WithClause.RrfWeights) > 0 {
+				state.FusionConfig.Weights = stmt.WithClause.RrfWeights
+			}
+		}
+	}
+	if stmt.ScoreThreshold != nil {
+		state.ScoreThreshold = qdrant.PtrOf(float32(*stmt.ScoreThreshold))
+	}
+	if stmt.LookupFrom != "" {
+		state.LookupFrom = &qdrant.LookupLocation{
+			CollectionName: stmt.LookupFrom,
+			VectorName:     stmt.LookupVector,
+		}
+	}
+	if stmt.WithPayload != nil {
+		state.WithPayload = buildWithPayload(stmt.WithPayload)
+	}
+	if stmt.WithVectors != nil {
+		state.WithVectors = buildWithVectors(stmt.WithVectors)
+	}
+	if stmt.GroupBy != nil {
+		state.GroupBy = *stmt.GroupBy
+	}
+	if stmt.GroupSize != nil {
+		state.GroupSize = uint64(*stmt.GroupSize)
+	}
+	if stmt.WithLookupCollection != nil {
+		state.WithLookup = &qdrant.WithLookup{
+			Collection: *stmt.WithLookupCollection,
+		}
+	}
+	if state.HasMMR {
+		if stmt.WithClause.MmrDiversity != nil {
+			state.MmrDiversity = float32(*stmt.WithClause.MmrDiversity)
+		}
+		if stmt.WithClause.MmrCandidates != nil {
+			state.MmrCandidates = uint32(*stmt.WithClause.MmrCandidates)
+		}
+	}
+
+	execPipeline := pipeline.NewQueryPipeline()
+
+	switch stmt.Mode {
+	case ast.QueryModeOrderBy:
+		asc := true
+		if stmt.OrderByAsc != nil {
+			asc = *stmt.OrderByAsc
+		}
+		execPipeline.Add(&pipeline.OrderByNode{Field: *stmt.OrderByField, Asc: asc})
+	case ast.QueryModeSample:
+		execPipeline.Add(&pipeline.SampleNode{})
+	case ast.QueryModeNearest:
+		if stmt.QueryID != nil {
+			execPipeline.Add(&pipeline.RecommendNode{PositiveIDs: []any{stmt.QueryID}})
+		} else {
+			if stmt.QueryText != nil {
+				state.QueryText = *stmt.QueryText
+			}
+			switch stmt.Type {
+			case ast.QueryTypeHybrid:
+				execPipeline.Add(&pipeline.DenseEmbedNode{Model: denseModel, VectorName: denseVectorName, Limit: uint64(stmt.Limit) * 10, AsPrefetch: true})
+				execPipeline.Add(&pipeline.SparseEmbedNode{Model: *sparseModel, VectorName: sparseVectorName, Limit: uint64(stmt.Limit) * 10, AsPrefetch: true})
+				if stmt.FusionType != nil {
+					execPipeline.Add(&pipeline.FusionNode{Mode: strings.ToLower(*stmt.FusionType)})
+				} else {
+					execPipeline.Add(&pipeline.FusionNode{Mode: "rrf"})
+				}
+			case ast.QueryTypeSparse:
+				execPipeline.Add(&pipeline.SparseEmbedNode{Model: e.resolveSparseModel(stmt.Model), VectorName: sparseVectorName, Limit: uint64(stmt.Limit)})
+				state.VectorName = sparseVectorName
+			default:
+				if stmt.QueryText != nil {
+					execPipeline.Add(&pipeline.DenseEmbedNode{Model: denseModel, VectorName: denseVectorName, Limit: uint64(stmt.Limit)})
+					state.VectorName = denseVectorName
+				}
+			}
+			if stmt.FusionType != nil && stmt.Type != ast.QueryTypeHybrid {
+				execPipeline.Add(&pipeline.FusionNode{Mode: strings.ToLower(*stmt.FusionType)})
+				state.VectorName = ""
+			}
+		}
+	case ast.QueryModeRecommend:
+		execPipeline.Add(&pipeline.RecommendNode{PositiveIDs: stmt.PositiveIDs, NegativeIDs: stmt.NegativeIDs, Strategy: stmt.Strategy})
+		state.VectorName = denseVectorName
+	case ast.QueryModeContext:
+		pairs := make([]pipeline.ContextPair, len(stmt.ContextPairs))
+		for i, p := range stmt.ContextPairs {
+			pairs[i] = pipeline.ContextPair{Positive: p.Positive, Negative: p.Negative}
+		}
+		execPipeline.Add(&pipeline.ContextNode{Pairs: pairs})
+		state.VectorName = denseVectorName
+	case ast.QueryModeDiscover:
+		pairs := make([]pipeline.ContextPair, len(stmt.ContextPairs))
+		for i, p := range stmt.ContextPairs {
+			pairs[i] = pipeline.ContextPair{Positive: p.Positive, Negative: p.Negative}
+		}
+		execPipeline.Add(&pipeline.DiscoverNode{Target: stmt.Target, Pairs: pairs})
+		state.VectorName = denseVectorName
+	}
+
+	if stmt.Rerank {
+		rerankModel := "default-reranker"
+		if stmt.RerankModel != nil {
+			rerankModel = *stmt.RerankModel
+		}
+		execPipeline.Add(&pipeline.RerankNode{Model: rerankModel})
+	}
+
+	if stmt.Formula != nil {
+		execPipeline.Add(&pipeline.FormulaNode{Expr: stmt.Formula, Defaults: stmt.FormulaDefaults})
+	}
+
+	if err := execPipeline.Execute(ctx, state); err != nil {
+		return nil, err
+	}
+
+	return execPipeline.BuildFlatRequest(state), nil
+}
