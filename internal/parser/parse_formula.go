@@ -191,7 +191,68 @@ func (p *Parser) parseFormulaCaseExpression() (ast.FormulaExpr, error) {
 }
 
 func (p *Parser) parseFormulaFunctionCall(funcName string, pos int) (ast.FormulaExpr, error) {
-	args, err := p.parseFormulaCallArguments()
+	// Special cases that don't follow generic expression arguments
+	switch funcName {
+	case "datetime":
+		tok, err := p.expect(lexer.TokenKindString)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(lexer.TokenKindRparen); err != nil {
+			return nil, err
+		}
+		return ast.FormulaDatetime{Value: tok.Value}, nil
+	case "datetime_key":
+		tok, err := p.expect(lexer.TokenKindString)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(lexer.TokenKindRparen); err != nil {
+			return nil, err
+		}
+		return ast.FormulaDatetimeKey{Key: tok.Value}, nil
+	case "geo_distance":
+		// Check if the first argument is a dictionary
+		if p.peek().Kind == lexer.TokenKindLbrace {
+			dict, err := p.parsePayloadDict() // This consumes { 'lat': x, 'lon': y }
+			if err != nil {
+				return nil, err
+			}
+			if p.peek().Kind == lexer.TokenKindComma {
+				p.advance()
+			}
+			fieldTok, err := p.expect(lexer.TokenKindIdentifier)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := p.expect(lexer.TokenKindRparen); err != nil {
+				return nil, err
+			}
+
+			latVal, hasLat := dict["lat"]
+			lonVal, hasLon := dict["lon"]
+			if !hasLat || !hasLon {
+				return nil, errors.NewQQLSyntaxError("geo_distance dict must have 'lat' and 'lon' keys", pos)
+			}
+
+			var lat, lon float64
+			switch v := latVal.(type) {
+			case float64: lat = v
+			case int: lat = float64(v)
+			default: return nil, errors.NewQQLSyntaxError("geo_distance lat must be a number", pos)
+			}
+
+			switch v := lonVal.(type) {
+			case float64: lon = v
+			case int: lon = float64(v)
+			default: return nil, errors.NewQQLSyntaxError("geo_distance lon must be a number", pos)
+			}
+
+			return ast.FormulaGeoDistance{Lat: lat, Lon: lon, Field: fieldTok.Value}, nil
+		}
+	}
+
+	args, kwargs, err := p.parseFormulaCallArgumentsAndKwargs()
 	if err != nil {
 		return nil, err
 	}
@@ -239,22 +300,56 @@ func (p *Parser) parseFormulaFunctionCall(funcName string, pos int) (ast.Formula
 		}
 		return ast.FormulaGeoDistance{Lat: latNode.Value, Lon: lonNode.Value, Field: fieldNode.Name}, nil
 	case "exp_decay", "gauss_decay", "lin_decay":
-		if len(args) != 4 {
-			return nil, errors.NewQQLSyntaxError(strings.ToUpper(funcName)+"() expects 4 arguments (x, target, scale, midpoint)", pos)
+		if len(args)+len(kwargs) < 1 {
+			return nil, errors.NewQQLSyntaxError(strings.ToUpper(funcName)+"() expects at least 1 argument (x)", pos)
 		}
 
+		var x ast.FormulaExpr
+		var target *ast.FormulaExpr
 		var scale, midpoint *float64
-		if c, ok := args[2].(ast.FormulaConstant); ok {
-			scale = &c.Value
+
+		// x is always the first argument, either positional or kwargs
+		if len(args) > 0 {
+			x = args[0]
+		} else if val, ok := kwargs["x"]; ok {
+			x = val
+		} else {
+			return nil, errors.NewQQLSyntaxError(strings.ToUpper(funcName)+"() requires 'x' argument", pos)
 		}
-		if c, ok := args[3].(ast.FormulaConstant); ok {
-			midpoint = &c.Value
+
+		// target
+		if len(args) > 1 {
+			target = &args[1]
+		} else if val, ok := kwargs["target"]; ok {
+			target = &val
+		}
+
+		// scale
+		if len(args) > 2 {
+			if c, ok := args[2].(ast.FormulaConstant); ok {
+				scale = &c.Value
+			}
+		} else if val, ok := kwargs["scale"]; ok {
+			if c, ok := val.(ast.FormulaConstant); ok {
+				scale = &c.Value
+			}
+		}
+
+		// midpoint
+		if len(args) > 3 {
+			if c, ok := args[3].(ast.FormulaConstant); ok {
+				midpoint = &c.Value
+			}
+		} else if val, ok := kwargs["midpoint"]; ok {
+			if c, ok := val.(ast.FormulaConstant); ok {
+				midpoint = &c.Value
+			}
 		}
 
 		return ast.FormulaDecay{
 			Kind:     funcName,
-			X:        args[0],
-			Target:   &args[1],
+			X:        x,
+			Target:   target,
 			Scale:    scale,
 			Midpoint: midpoint,
 		}, nil
@@ -263,32 +358,47 @@ func (p *Parser) parseFormulaFunctionCall(funcName string, pos int) (ast.Formula
 	}
 }
 
-func (p *Parser) parseFormulaCallArguments() ([]ast.FormulaExpr, error) {
+func (p *Parser) parseFormulaCallArgumentsAndKwargs() ([]ast.FormulaExpr, map[string]ast.FormulaExpr, error) {
 	var args []ast.FormulaExpr
+	kwargs := make(map[string]ast.FormulaExpr)
 
 	if p.peek().Kind == lexer.TokenKindRparen {
 		p.advance()
-		return args, nil
+		return args, kwargs, nil
 	}
 
-	arg, err := p.parseFormulaExpr(precedenceLowest)
-	if err != nil {
-		return nil, err
-	}
-	args = append(args, arg)
-
-	for p.peek().Kind == lexer.TokenKindComma {
-		p.advance()
-		arg, err := p.parseFormulaExpr(precedenceLowest)
-		if err != nil {
-			return nil, err
+	for {
+		// Check for kwarg: Anything followed by Equals (allows keywords like 'target', 'scale')
+		if p.peekNext().Kind == lexer.TokenKindEquals {
+			keyTok := p.advance() // Identifier or Keyword
+			p.advance()           // Equals
+			arg, err := p.parseFormulaExpr(precedenceLowest)
+			if err != nil {
+				return nil, nil, err
+			}
+			kwargs[keyTok.Value] = arg
+		} else {
+			// Positional argument
+			if len(kwargs) > 0 {
+				return nil, nil, errors.NewQQLSyntaxError("Positional argument cannot follow keyword argument", p.peek().Pos)
+			}
+			arg, err := p.parseFormulaExpr(precedenceLowest)
+			if err != nil {
+				return nil, nil, err
+			}
+			args = append(args, arg)
 		}
-		args = append(args, arg)
+
+		if p.peek().Kind == lexer.TokenKindComma {
+			p.advance()
+		} else {
+			break
+		}
 	}
 
 	if _, err := p.expect(lexer.TokenKindRparen); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return args, nil
+	return args, kwargs, nil
 }

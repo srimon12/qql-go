@@ -39,7 +39,7 @@ const res = await client.exec("QUERY 'stroke' FROM medical LIMIT 5");
 
 ### `execBatch(queries: string[], stopOnError?: boolean): Promise<Result[]>`
 
-Execute multiple queries in one round-trip.
+Execute multiple queries. Supports mixed statement types (INSERT, CREATE, QUERY, etc.). For pure QUERY batches, the gateway automatically uses Qdrant's native `QueryBatch` API for a single round-trip.
 
 ```typescript
 const results = await client.execBatch([

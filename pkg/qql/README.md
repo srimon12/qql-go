@@ -58,7 +58,7 @@ res, err := qql.Exec(ctx, client, "QUERY 'stroke' FROM medical LIMIT 5")
 
 ### `ExecBatch(ctx, client, queries, stopOnError) ([]*Result, error)`
 
-Execute multiple queries in sequence.
+Execute multiple queries in sequence. Supports mixed statement types (INSERT, CREATE, QUERY, etc.).
 
 ```go
 results, err := qql.ExecBatch(ctx, client, []string{
@@ -66,6 +66,23 @@ results, err := qql.ExecBatch(ctx, client, []string{
     "QUERY 'hello' FROM docs LIMIT 5",
 }, true)
 ```
+
+### `BatchQuery(ctx, client, queries) ([]*Result, error)`
+
+Execute multiple QUERY statements using Qdrant's native `QueryBatch` API. All queries are sent in a single round-trip — 3-5x faster than sequential execution for pure QUERY batches.
+
+```go
+results, err := qql.BatchQuery(ctx, client, []string{
+    "QUERY 'stroke' FROM medical LIMIT 5",
+    "QUERY 'cardiac' FROM medical LIMIT 5",
+    "QUERY 'pulmonary' FROM medical LIMIT 5",
+})
+// All 3 queries executed in one round-trip to Qdrant
+```
+
+**When to use which:**
+- `ExecBatch` — mixed statements (INSERT + QUERY + CREATE), sequential execution
+- `BatchQuery` — pure QUERY batches, single round-trip via Qdrant's QueryBatch API
 
 ### `Explain(query) (string, error)`
 

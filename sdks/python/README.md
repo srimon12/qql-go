@@ -39,7 +39,7 @@ res = client.exec("QUERY 'stroke' FROM medical LIMIT 5")
 
 ### `exec_batch(queries: list[str], stop_on_error=False) -> list[Result]`
 
-Execute multiple queries in one round-trip.
+Execute multiple queries. Supports mixed statement types (INSERT, CREATE, QUERY, etc.). For pure QUERY batches, the gateway automatically uses Qdrant's native `QueryBatch` API for a single round-trip.
 
 ```python
 results = client.exec_batch([
