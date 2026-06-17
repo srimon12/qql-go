@@ -15,7 +15,7 @@ func TestBuildDeleteRequestByFieldUsesFilterSelector(t *testing.T) {
 		Collection: "demo",
 		Field:      "status",
 		Value:      "archived",
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "demo", req.GetCollectionName())
@@ -31,7 +31,7 @@ func TestBuildDeleteRequestByIDUsesPointSelector(t *testing.T) {
 	req, err := buildDeleteRequest(&ast.DeleteStmt{
 		Collection: "demo",
 		PointID:    "point-123",
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, "demo", req.GetCollectionName())
@@ -71,7 +71,7 @@ func TestBuildUpdatePayloadRequestSupportsFilterSelector(t *testing.T) {
 		Collection:  "docs",
 		QueryFilter: &ast.CompareExpr{Field: "status", Op: "=", Value: "draft"},
 		Payload:     map[string]any{"status": "published"},
-	})
+	}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, req.GetPointsSelector().GetFilter())
 	require.Equal(t, "published", req.GetPayload()["status"].GetStringValue())

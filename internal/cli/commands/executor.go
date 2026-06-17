@@ -459,7 +459,19 @@ type Executor struct {
 }
 
 func (e *Executor) defaultContext() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 30*time.Second)
+	timeout := 30 * time.Second
+	if e != nil && e.config != nil && e.config.RequestTimeout > 0 {
+		timeout = time.Duration(e.config.RequestTimeout) * time.Second
+	}
+	return context.WithTimeout(context.Background(), timeout)
+}
+
+// requestTimeout returns the Qdrant-native per-request timeout, or nil if unset.
+func (e *Executor) requestTimeout() *uint64 {
+	if e != nil && e.config != nil && e.config.RequestTimeout > 0 {
+		return qdrant.PtrOf(uint64(e.config.RequestTimeout))
+	}
+	return nil
 }
 
 type qdrantClient interface {

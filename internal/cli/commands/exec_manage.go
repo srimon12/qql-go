@@ -30,6 +30,7 @@ func (e *Executor) doCreateIndex(n *ast.CreateIndexStmt) (*ExecResponse, error) 
 		FieldType:        &fieldType,
 		FieldIndexParams: fieldIndexParams,
 		Wait:             &wait,
+		Timeout:          e.requestTimeout(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create index: %w", err)

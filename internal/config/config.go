@@ -23,6 +23,7 @@ type Config struct {
 	EmbeddingDimension   int               `json:"embedding_dimension"`
 	NoVerify             bool              `json:"no_verify"`
 	CACert               string            `json:"ca_cert"`
+	RequestTimeout       int               `json:"request_timeout,omitempty"` // per-request timeout in seconds for Qdrant operations; 0 = no server-side timeout
 	BM25K1               *float64          `json:"bm25_k1,omitempty"`
 	BM25B                *float64          `json:"bm25_b,omitempty"`
 	BM25AvgDL            *float64          `json:"bm25_avg_dl,omitempty"`
