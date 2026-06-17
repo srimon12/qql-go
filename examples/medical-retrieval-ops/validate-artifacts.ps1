@@ -1,9 +1,9 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [Parameter(Mandatory=$true)] [string]$EvalPath,
     [Parameter(Mandatory=$true)] [string]$Artifacts
 )
+
+$ErrorActionPreference = "Stop"
 
 function Assert-True {
     param(
@@ -39,38 +39,38 @@ Assert-True ($inspect.data.payload_schema.topic_text.type -eq "text") "topic tex
 Assert-True ($inspect.data.payload_schema.case_priority.type -eq "keyword") "case priority payload index should remain keyword"
 
 $explain = Read-Json (Join-Path $Artifacts "05-explain-hybrid-rrf.json")
-Assert-True ($explain.ok -and $explain.plan.Contains("Search: HYBRID")) "hybrid explain plan should be present"
+Assert-True ($explain.ok -and $explain.plan.Contains("Using: HYBRID")) "hybrid explain plan should be present"
 
 $dense = Read-Json (Join-Path $Artifacts "06-search-dense.json")
-Assert-True ($dense.ok -and ($dense.data.results.id -contains $mainId)) "main document should appear in dense results"
+Assert-True ($dense.ok -and ($dense.data.id -contains $mainId)) "main document should appear in dense results"
 
 $sparse = Read-Json (Join-Path $Artifacts "07-search-sparse.json")
-Assert-True ($sparse.ok -and $sparse.data.count -ge 1) "sparse search should return medical matches"
+Assert-True ($sparse.ok -and $sparse.data.Count -ge 1) "sparse search should return medical matches"
 
 $hybridRrf = Read-Json (Join-Path $Artifacts "08-search-hybrid-rrf.json")
-Assert-True ($hybridRrf.ok -and ($hybridRrf.data.results.id -contains $mainId)) "main document should appear in hybrid RRF results"
+Assert-True ($hybridRrf.ok -and ($hybridRrf.data.id -contains $mainId)) "main document should appear in hybrid RRF results"
 
 $hybridDbsf = Read-Json (Join-Path $Artifacts "09-search-hybrid-dbsf.json")
-Assert-True ($hybridDbsf.ok -and ($hybridDbsf.data.results.id -contains $mainId)) "main document should appear in hybrid DBSF results"
+Assert-True ($hybridDbsf.ok -and ($hybridDbsf.data.id -contains $mainId)) "main document should appear in hybrid DBSF results"
 
 $exact = Read-Json (Join-Path $Artifacts "10-search-exact.json")
-Assert-True ($exact.ok -and ($exact.data.results.id -contains $mainId)) "main document should appear in exact results"
+Assert-True ($exact.ok -and ($exact.data.id -contains $mainId)) "main document should appear in exact results"
 
 $filtered = Read-Json (Join-Path $Artifacts "11-search-filtered-tenant.json")
-Assert-True ($filtered.ok -and $filtered.data.count -ge 1 -and ($filtered.data.results.id -contains $mainId)) "tenant-filtered active high-priority search should keep the main document"
+Assert-True ($filtered.ok -and $filtered.data.Count -ge 1 -and ($filtered.data.id -contains $mainId)) "tenant-filtered active high-priority search should keep the main document"
 
 $threshold = Read-Json (Join-Path $Artifacts "12-search-score-threshold.json")
-Assert-True ($threshold.ok -and $threshold.data.count -ge 1) "score-thresholded hybrid search should return medical matches"
+Assert-True ($threshold.ok -and $threshold.data.Count -ge 1) "score-thresholded hybrid search should return medical matches"
 
 $offset = Read-Json (Join-Path $Artifacts "13-search-offset-window.json")
-Assert-True ($offset.ok -and $offset.data.count -ge 1) "offset hybrid search should return the next result window"
+Assert-True ($offset.ok -and $offset.data.Count -ge 1) "offset hybrid search should return the next result window"
 
 $grouped = Read-Json (Join-Path $Artifacts "14-search-grouped-specialty.json")
-Assert-True ($grouped.ok -and $grouped.data.group_by -eq "specialty") "grouped search should stay grouped by specialty"
-Assert-True ($grouped.data.groups.group_id -contains $mainSpecialty) "grouped search should surface the specialty groups"
+Assert-True ($grouped.ok -and $grouped.data.Count -ge 1) "grouped search should return groups"
+Assert-True ($grouped.data.group_id -contains $mainSpecialty) "grouped search should surface the specialty groups"
 
 $mmr = Read-Json (Join-Path $Artifacts "15-search-hybrid-mmr.json")
-Assert-True ($mmr.ok -and $mmr.data.count -ge 1) "hybrid MMR search should return diversified medical matches"
+Assert-True ($mmr.ok -and $mmr.data.Count -ge 1) "hybrid MMR search should return diversified medical matches"
 
 $select = Read-Json (Join-Path $Artifacts "16-select-main.json")
 Assert-True $select.ok "selected document should exist by ID"
@@ -79,7 +79,7 @@ Assert-True ($select.data.payload.case_priority -eq $mainPriority) "selected doc
 Assert-True ($select.data.payload.case_status -eq $mainStatus) "selected document should preserve status metadata"
 
 $recommend = Read-Json (Join-Path $Artifacts "17-recommend-related.json")
-Assert-True ($recommend.ok -and $recommend.data.count -ge 1) "recommend should return related medical answers"
+Assert-True ($recommend.ok -and $recommend.data.Count -ge 1) "recommend should return related medical answers"
 
 $scroll = Read-Json (Join-Path $Artifacts "18-scroll-tenant.json")
 Assert-True ($scroll.ok -and $scroll.data.points.Count -ge 1) "tenant scroll should return related entries"

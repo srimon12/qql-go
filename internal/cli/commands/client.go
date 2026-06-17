@@ -44,7 +44,7 @@ func buildClientConfig(rawURL, apiKey string, noVerify bool, caCert string) (*qd
 		return nil, fmt.Errorf("missing host")
 	}
 
-	port := 6333
+	port := 6334
 	if parsedPort := parsed.Port(); parsedPort != "" {
 		port, err = strconv.Atoi(parsedPort)
 		if err != nil {
@@ -52,10 +52,9 @@ func buildClientConfig(rawURL, apiKey string, noVerify bool, caCert string) (*qd
 		}
 	}
 	// Qdrant exposes port 6333 for the REST API and port 6334 for gRPC.
-	// QQL communicates exclusively via gRPC (go-client), so if the user
-	// provides the well-known REST port we redirect automatically.
+	// QQL communicates exclusively via gRPC (go-client).
 	if port == 6333 {
-		port = 6334
+		return nil, fmt.Errorf("port 6333 is the Qdrant REST API port; QQL uses gRPC on port 6334 — use %s:6334 or omit the port", host)
 	}
 
 	var tlsConf *tls.Config

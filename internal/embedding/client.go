@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -39,7 +40,7 @@ func NewClient(cfg Config) (*Client, error) {
 
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
-		httpClient = http.DefaultClient
+		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
 
 	return &Client{
@@ -59,64 +60,7 @@ func (c *Client) Embed(ctx context.Context, input string) ([]float32, error) {
 	return vectors[0], nil
 }
 
-// ProbeDimension calls the embedding endpoint with a dummy input and returns
-// the dimension of the returned vector without validating against a target.
-func (c *Client) ProbeDimension(ctx context.Context, input string) (int, error) {
-	body, err := json.Marshal(request{
-		Model: c.model,
-		Input: []string{input},
-	})
-	if err != nil {
-		return 0, fmt.Errorf("failed to encode embedding request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
-	if err != nil {
-		return 0, fmt.Errorf("failed to create embedding request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if c.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return 0, fmt.Errorf("failed to call embedding endpoint: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		snippet = bytes.TrimSpace(snippet)
-		if len(snippet) == 0 {
-			return 0, fmt.Errorf("embedding endpoint returned %s", resp.Status)
-		}
-		return 0, fmt.Errorf("embedding endpoint returned %s: %s", resp.Status, snippet)
-	}
-
-	var decoded response
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return 0, fmt.Errorf("failed to decode embedding response: %w", err)
-	}
-	if len(decoded.Data) == 0 {
-		return 0, fmt.Errorf("embedding response contained no vectors")
-	}
-	return len(decoded.Data[0].Embedding), nil
-}
-
-func (c *Client) EmbedBatch(ctx context.Context, inputs []string) ([][]float32, error) {
-	if len(inputs) == 0 {
-		return nil, fmt.Errorf("inputs are required")
-	}
-
-	body, err := json.Marshal(request{
-		Model: c.model,
-		Input: inputs,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode embedding request: %w", err)
-	}
-
+func (c *Client) doRequest(ctx context.Context, body []byte) (*response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create embedding request: %w", err)
@@ -144,6 +88,47 @@ func (c *Client) EmbedBatch(ctx context.Context, inputs []string) ([][]float32, 
 	var decoded response
 	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
 		return nil, fmt.Errorf("failed to decode embedding response: %w", err)
+	}
+	return &decoded, nil
+}
+
+// ProbeDimension calls the embedding endpoint with a dummy input and returns
+// the dimension of the returned vector without validating against a target.
+func (c *Client) ProbeDimension(ctx context.Context, input string) (int, error) {
+	body, err := json.Marshal(request{
+		Model: c.model,
+		Input: []string{input},
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to encode embedding request: %w", err)
+	}
+
+	decoded, err := c.doRequest(ctx, body)
+	if err != nil {
+		return 0, err
+	}
+	if len(decoded.Data) == 0 {
+		return 0, fmt.Errorf("embedding response contained no vectors")
+	}
+	return len(decoded.Data[0].Embedding), nil
+}
+
+func (c *Client) EmbedBatch(ctx context.Context, inputs []string) ([][]float32, error) {
+	if len(inputs) == 0 {
+		return nil, fmt.Errorf("inputs are required")
+	}
+
+	body, err := json.Marshal(request{
+		Model: c.model,
+		Input: inputs,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode embedding request: %w", err)
+	}
+
+	decoded, err := c.doRequest(ctx, body)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(decoded.Data) != len(inputs) {

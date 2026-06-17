@@ -1,12 +1,17 @@
 package lexer
 
 import (
-	"strings"
-
 	"github.com/srimon12/qql-go/internal/errors"
 )
 
 var keywords = map[string]TokenKind{
+	"BOOST":       TokenKindBoost,
+	"DEFAULTS":    TokenKindDefaults,
+	"CASE":        TokenKindCase,
+	"WHEN":        TokenKindWhen,
+	"THEN":        TokenKindThen,
+	"ELSE":        TokenKindElse,
+	"END":         TokenKindEnd,
 	"INSERT":      TokenKindInsert,
 	"INTO":        TokenKindInto,
 	"COLLECTION":  TokenKindCollection,
@@ -91,12 +96,13 @@ var keywords = map[string]TokenKind{
 	"MANHATTAN":   TokenKindManhattan,
 	"PREFETCH":    TokenKindPrefetch,
 	"FUSION":      TokenKindFusion,
+	"SAMPLE":      TokenKindSample,
 }
 
 type Lexer struct{}
 
 func (l *Lexer) Tokenize(query string) ([]Token, error) {
-	tokens := make([]Token, 0)
+	tokens := make([]Token, 0, len(query)/8)
 	i := 0
 	n := len(query)
 
@@ -172,26 +178,27 @@ func (l *Lexer) Tokenize(query string) ([]Token, error) {
 			}
 			tokens = append(tokens, token)
 			i = endPos
+		case '+':
+			tokens = append(tokens, Token{Kind: TokenKindPlus, Value: "+", Pos: i})
+			i++
+		case '/':
+			tokens = append(tokens, Token{Kind: TokenKindSlash, Value: "/", Pos: i})
+			i++
 		case '-':
 			if i+1 < n && isDigit(query[i+1]) {
 				token := l.readNumber(query, i)
 				tokens = append(tokens, token)
 				i = token.Pos + len(token.Value)
-			} else if i+1 < n && (isAlpha(query[i+1]) || query[i+1] == '_') {
-				token := l.readIdentifier(query, i+1)
-				token.Value = "-" + token.Value
-				token.Pos = i
-				tokens = append(tokens, token)
-				i = token.Pos + len(token.Value)
 			} else {
-				return nil, errors.NewQQLSyntaxError("Unexpected character '-' (use quotes for UUIDs: '123e4567-e89b-...')", i)
+				tokens = append(tokens, Token{Kind: TokenKindMinus, Value: "-", Pos: i})
+				i++
 			}
 		default:
 			if isDigit(ch) {
 				token := l.readNumber(query, i)
 				tokens = append(tokens, token)
 				i = token.Pos + len(token.Value)
-			} else if isAlpha(ch) || ch == '_' {
+			} else if isAlpha(ch) || ch == '_' || ch == '$' {
 				token := l.readIdentifier(query, i)
 				tokens = append(tokens, token)
 				i = token.Pos + len(token.Value)
@@ -208,7 +215,20 @@ func (l *Lexer) Tokenize(query string) ([]Token, error) {
 func (l *Lexer) readString(query string, start int, quote byte) (Token, int, error) {
 	i := start + 1
 	n := len(query)
-	buf := make([]byte, 0)
+
+	for i < n {
+		ch := query[i]
+		if ch == '\\' {
+			break
+		}
+		if ch == quote {
+			return Token{Kind: TokenKindString, Value: query[start+1 : i], Pos: start}, i + 1, nil
+		}
+		i++
+	}
+
+	buf := make([]byte, 0, i-start-1)
+	buf = append(buf, query[start+1:i]...)
 
 	for i < n {
 		ch := query[i]
@@ -285,15 +305,55 @@ func (l *Lexer) readIdentifier(query string, start int) Token {
 	}
 
 	word := query[start:i]
-	firstSegment := word[:findDot(word)]
-	if len(firstSegment) > 0 {
-		upperFirst := strings.ToUpper(firstSegment)
-		if kind, ok := keywords[upperFirst]; ok && !containsDot(word) {
+	segLen := findDot(word)
+	if segLen > 0 && segLen == len(word) {
+		if kind, ok := lookupKeyword(word[:segLen]); ok {
 			return Token{Kind: kind, Value: word, Pos: start}
 		}
 	}
 
 	return Token{Kind: TokenKindIdentifier, Value: word, Pos: start}
+}
+
+func lookupKeyword(s string) (TokenKind, bool) {
+	if kind, ok := keywords[s]; ok {
+		return kind, true
+	}
+
+	if len(s) <= 16 {
+		var buf [16]byte
+		for i := 0; i < len(s); i++ {
+			c := s[i]
+			if c >= 'a' && c <= 'z' {
+				c -= 32
+			}
+			buf[i] = c
+		}
+		if kind, ok := keywords[string(buf[:len(s)])]; ok {
+			return kind, true
+		}
+		return 0, false
+	}
+
+	for kw, kind := range keywords {
+		if len(kw) == len(s) && hasPrefixCaseInsensitive(s, kw) {
+			return kind, true
+		}
+	}
+	return 0, false
+}
+
+func hasPrefixCaseInsensitive(s, upper string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'a' && c <= 'z' {
+			c -= 32
+		}
+		if c != upper[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func findDot(s string) int {
@@ -305,15 +365,6 @@ func findDot(s string) int {
 	return len(s)
 }
 
-func containsDot(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] == '.' {
-			return true
-		}
-	}
-	return false
-}
-
 func isWhitespace(ch byte) bool {
 	return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
 }
@@ -323,6 +374,9 @@ func isDigit(ch byte) bool {
 }
 
 func isAlpha(ch byte) bool {
+	if ch == '$' {
+		return true
+	}
 	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
 }
 

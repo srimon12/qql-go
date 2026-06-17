@@ -3,7 +3,6 @@ package parser
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
@@ -71,6 +70,13 @@ func (p *Parser) peek() lexer.Token {
 	return lexer.Token{Kind: lexer.TokenKindEof, Value: "", Pos: -1}
 }
 
+func (p *Parser) peekNext() lexer.Token {
+	if p.pos+1 < len(p.tokens) {
+		return p.tokens[p.pos+1]
+	}
+	return lexer.Token{Kind: lexer.TokenKindEof, Value: "", Pos: -1}
+}
+
 func (p *Parser) advance() lexer.Token {
 	if p.pos >= len(p.tokens) {
 		return lexer.Token{Kind: lexer.TokenKindEof, Value: "", Pos: -1}
@@ -111,7 +117,7 @@ func isContextualFieldName(kind lexer.TokenKind) bool {
 	return isContextualIdentifier(kind)
 }
 
-func (p *Parser) parseDict() (map[string]any, error) {
+func (p *Parser) parsePayloadDict() (map[string]any, error) {
 	if _, err := p.expect(lexer.TokenKindLbrace); err != nil {
 		return nil, err
 	}
@@ -145,6 +151,48 @@ func (p *Parser) parseDict() (map[string]any, error) {
 		}
 	}
 	if _, err := p.expect(lexer.TokenKindRbrace); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (p *Parser) parseConfigBlock() (map[string]any, error) {
+	if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+		return nil, err
+	}
+	result := make(map[string]any)
+	if p.peek().Kind == lexer.TokenKindRparen {
+		p.advance()
+		return result, nil
+	}
+	for {
+		keyTok := p.peek()
+		switch keyTok.Kind {
+		case lexer.TokenKindLparen, lexer.TokenKindRparen, lexer.TokenKindEquals, lexer.TokenKindComma, lexer.TokenKindEof:
+			return nil, errors.NewQQLSyntaxError("Expected configuration key, got '"+keyTok.Value+"'", keyTok.Pos)
+		}
+		p.advance()
+		key := keyTok.Value
+
+		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
+			return nil, err
+		}
+		value, err := p.parseValue()
+		if err != nil {
+			return nil, err
+		}
+		result[key] = value
+
+		if p.peek().Kind == lexer.TokenKindComma {
+			p.advance()
+			if p.peek().Kind == lexer.TokenKindRparen {
+				break
+			}
+		} else {
+			break
+		}
+	}
+	if _, err := p.expect(lexer.TokenKindRparen); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -197,19 +245,18 @@ func (p *Parser) parseValue() (any, error) {
 		return nil, nil
 	case lexer.TokenKindIdentifier:
 		p.advance()
-		upper := strings.ToUpper(tok.Value)
-		if upper == "TRUE" {
+		if asciiEqual(tok.Value, "TRUE") {
 			return true, nil
 		}
-		if upper == "FALSE" {
+		if asciiEqual(tok.Value, "FALSE") {
 			return false, nil
 		}
-		if upper == "NULL" {
+		if asciiEqual(tok.Value, "NULL") {
 			return nil, nil
 		}
 		return tok.Value, nil
 	case lexer.TokenKindLbrace:
-		return p.parseDict()
+		return p.parsePayloadDict()
 	case lexer.TokenKindLbracket:
 		return p.parseList()
 	}
@@ -220,11 +267,10 @@ func (p *Parser) parseBool() (bool, error) {
 	tok := p.peek()
 	if tok.Kind == lexer.TokenKindIdentifier {
 		p.advance()
-		upper := strings.ToUpper(tok.Value)
-		if upper == "TRUE" {
+		if asciiEqual(tok.Value, "TRUE") {
 			return true, nil
 		}
-		if upper == "FALSE" {
+		if asciiEqual(tok.Value, "FALSE") {
 			return false, nil
 		}
 	}
@@ -387,9 +433,43 @@ func (p *Parser) parseNumericLiteral() (float64, error) {
 
 func (p *Parser) parseOptionalVectorString() (*string, error) {
 	tok := p.peek()
-	if tok.Kind == lexer.TokenKindVector || (tok.Kind == lexer.TokenKindIdentifier && strings.ToUpper(tok.Value) == "VECTOR") {
+	if tok.Kind == lexer.TokenKindVector || (tok.Kind == lexer.TokenKindIdentifier && asciiEqual(tok.Value, "VECTOR")) {
 		p.advance()
 		return p.parseStringPtr()
 	}
 	return nil, nil
+}
+
+// asciiEqual performs case-insensitive ASCII comparison without allocation.
+func asciiEqual(s, upper string) bool {
+	if len(s) != len(upper) {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'a' && c <= 'z' {
+			c -= 32
+		}
+		if c != upper[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// asciiEqualLower performs case-insensitive ASCII comparison against a lowercase string.
+func asciiEqualLower(s, lower string) bool {
+	if len(s) != len(lower) {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 32
+		}
+		if c != lower[i] {
+			return false
+		}
+	}
+	return true
 }

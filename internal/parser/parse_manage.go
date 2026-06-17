@@ -47,19 +47,14 @@ func (p *Parser) parseAlter() (*ast.AlterCollectionStmt, error) {
 	if err != nil {
 		return nil, err
 	}
-	quantization, err := p.parseOptionalAlterQuantization()
-	if err != nil {
-		return nil, err
-	}
-	if config == nil && quantization == nil {
+	if config == nil {
 		return nil, errors.NewQQLSyntaxError(
-			"ALTER COLLECTION requires at least one WITH HNSW/VECTORS/OPTIMIZERS/PARAMS clause or QUANTIZE clause",
+			"ALTER COLLECTION requires at least one WITH HNSW/VECTORS/OPTIMIZERS/PARAMS/QUANTIZATION clause",
 			p.peek().Pos,
 		)
 	}
 	return &ast.AlterCollectionStmt{
-		Collection:   collection,
-		Config:       config,
-		Quantization: quantization,
+		Collection: collection,
+		Config:     config,
 	}, nil
 }

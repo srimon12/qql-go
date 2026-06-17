@@ -98,3 +98,10 @@ func TestRunScriptStopOnError(t *testing.T) {
 	require.Equal(t, 1, failCount)
 	require.Equal(t, []string{"SHOW COLLECTIONS", "DROP COLLECTION docs"}, exec.queries)
 }
+
+func TestRunFileNotFound(t *testing.T) {
+	exec := &stubExecutor{}
+	_, _, err := RunFile("/nonexistent/path/script.qql", exec, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot read file")
+}

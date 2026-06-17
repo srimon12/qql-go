@@ -8,6 +8,57 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 - No unreleased changes yet.
 
+## [0.4.0] - 2026-06-18
+
+### Added
+
+- **Connect RPC Gateway** — `qql-go gateway` starts a standalone gRPC-compatible server exposing `Exec`, `ExecBatch`, `Explain`, and `Health` via Connect RPC (gRPC + gRPC-Web + HTTP/1.1). Auto-detects pure QUERY batches and routes to Qdrant's native `QueryBatch` API.
+- **Go SDK (`pkg/qql`)** — Public library with `Parse`, `Exec`, `ExecWithConfig`, `Explain`, `ExecBatch`, `BatchQuery`, `BatchQueryWithConfig`. Accepts `QdrantClient` interface and `*config.Config`.
+- **Python SDK (`sdks/python/`)** — Connect RPC client with `QQLClient` wrapper, `exec()`, `exec_batch()`, `explain()`, `health()`.
+- **TypeScript SDK (`sdks/typescript/`)** — Connect RPC client with `QQLClient` wrapper, dual CJS/ESM build.
+- **Formula / Score Boosting (`BOOST`)** — Pratt parser expression engine for Qdrant's Score Builder API. All 19 Qdrant Expression variants covered: arithmetic (`+`, `-`, `*`, `/`), math functions (`ABS`, `SQRT`, `LOG`, `LN`, `EXP`, `POW`), geo-distance with dict syntax, decay functions (`EXP_DECAY`, `GAUSS_DECAY`, `LIN_DECAY`) with keyword arguments, datetime expressions (`datetime('...')`, `datetime_key('...')`), and `CASE WHEN <filter> THEN <expr> ELSE <expr> END` conditionals. `DEFAULTS (key = value, ...)` for fallback variables.
+- **`QUERY SAMPLE`** — `QUERY SAMPLE FROM <collection> LIMIT <n>` for random point sampling via `Sample_Random`.
+- **Unified config syntax** — All `WITH` blocks (`HNSW`, `OPTIMIZERS`, `PARAMS`, `VECTORS`, `QUANTIZATION`) use `(key = value)` instead of `{key: value}`.
+- **`WITH QUANTIZATION`** — Replaces `QUANTIZE SCALAR` chain. Supports `type`, `quantile`, `always_ram`, `bits`, `disabled`. Per-vector quantization on vector definitions.
+- **Per-prefetch lookup overrides** — `PREFETCH (cte LOOKUP FROM col VECTOR 'vec')`.
+- **Per-vector HNSW config** — `dense VECTOR(384, COSINE) WITH QUANTIZATION (type = 'scalar')`.
+- **Qdrant-native per-request timeout** — `Config.RequestTimeout` (seconds) sets `Timeout` on all Qdrant request types and controls Go context deadline.
+- **`ExecWithConfig`, `ExecBatchWithConfig`, `BatchQueryWithConfig`** — SDK functions accepting explicit `*config.Config`.
+- **Error chain support** — `QQLSyntaxError` and `QQLRuntimeError` implement `Unwrap()` with `Err error` field. Added `WrapQQLSyntaxError` and `WrapQQLRuntimeError`.
+- **Comprehensive ExplainResult** — `EXPLAIN` shows all parsed fields: USING, MODEL, WITH params, PAYLOAD, VECTORS, WHERE, OFFSET, SCORE THRESHOLD, LOOKUP FROM, GROUP BY/SIZE, WITH LOOKUP, RERANK, STRATEGY, RECOMMEND IDs, CONTEXT pairs, DISCOVER target, CTEs, PREFETCH refs, FUSION, BOOST formula.
+
+### Changed
+
+- **BREAKING:** `QUANTIZE SCALAR [QUANTILE <f>] [ALWAYS RAM]` removed. Use `WITH QUANTIZATION (type = 'scalar', ...)`.
+- **BREAKING:** `WITH HNSW { m: 16 }` removed. Use `WITH HNSW (m = 16)`.
+- **BREAKING:** `WITH OPTIMIZERS { ... }` removed. Use `WITH OPTIMIZERS (...)`.
+- **BREAKING:** `WITH PARAMS { ... }` removed. Use `WITH PARAMS (...)`.
+- **BREAKING:** `WITH VECTORS { on_disk: true }` removed. Use `WITH VECTORS (on_disk = true)`.
+- **BREAKING:** `CREATE INDEX ... WITH { ... }` removed. Use `CREATE INDEX ... WITH (...)`.
+- **BREAKING:** `QUANTIZE DISABLED` removed. Use `WITH QUANTIZATION (disabled = true)`.
+- **BREAKING:** `Result.DataJSON()` returns `([]byte, error)` instead of `[]byte`.
+- **BREAKING:** Port 6333 rejected with error. Use port 6334 or omit.
+- **BREAKING:** `INSERT` without `id` field errors instead of generating UUID.
+- **Performance:** Lexer O(1) stack-buffer keyword lookup (~8x). Parser zero-allocation `asciiEqual`/`asciiEqualLower`. Filters removed `reflect`. Sparse byte-level ASCII fast path. BM25 params cached with `atomic.Pointer`. Pipeline cached `buildDocumentOptions`.
+- `doQuery`/`BuildQueryPoints` deduplicated into `buildQueryStateAndPipeline`. CTE resolution shared. `BuildQueryPoints` accepts `context.Context`.
+- Handler passes server config to SDK execution functions.
+- Embedding client uses `http.Client{Timeout: 30s}` instead of `http.DefaultClient`.
+- `CollectionConfig` AST embeds `Quantization` directly.
+- Dump output uses unified `(key = value)` syntax.
+- Multiple `WITH` clauses merge correctly.
+- `FormulaNode` pushes `TargetQuery` into `Prefetches` before setting Formula.
+
+### Fixed
+
+- `BatchQuery` panicked on empty queries slice.
+- Cross-collection `BatchQuery` silently sent all queries to first collection. Now groups by collection.
+- SDK `Exec`/`BatchQuery` used empty `config.Config{}`, breaking model resolution.
+- Server handler swallowed `json.Marshal` errors.
+- `CREATE INDEX ... TYPE typo` silently created keyword index. Now errors.
+- Script runner did not detect unmatched delimiters.
+- Dump output used old `{key: value}` and `QUANTIZE SCALAR` syntax.
+- Formula subtraction and conditional logic corrected for Qdrant's expression model.
+
 ## [0.3.0] - 2026-06-17
 
 ### Added

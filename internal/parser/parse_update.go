@@ -57,7 +57,7 @@ func (p *Parser) parseUpdate() (ast.ASTNode, error) {
 		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
 			return nil, err
 		}
-		payload, err := p.parseDict()
+		payload, err := p.parsePayloadDict()
 		if err != nil {
 			return nil, err
 		}

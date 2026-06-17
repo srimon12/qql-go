@@ -2,7 +2,6 @@ package parser
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
@@ -278,11 +277,10 @@ func (p *Parser) parseLiteral() (any, error) {
 		return parseFloatToken(tok)
 	case lexer.TokenKindIdentifier:
 		p.advance()
-		upper := strings.ToUpper(tok.Value)
-		if upper == "TRUE" {
+		if asciiEqual(tok.Value, "TRUE") {
 			return true, nil
 		}
-		if upper == "FALSE" {
+		if asciiEqual(tok.Value, "FALSE") {
 			return false, nil
 		}
 	}
@@ -381,12 +379,11 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 			return nil, errors.NewQQLSyntaxError("Expected a WITH parameter name, got '"+keyTok.Value+"'", keyTok.Pos)
 		}
 		p.advance()
-		key := strings.ToLower(keyTok.Value)
 		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
 			return nil, err
 		}
-		switch key {
-		case "hnsw_ef":
+		switch {
+		case asciiEqualLower(keyTok.Value, "hnsw_ef"):
 			intTok, err := p.expect(lexer.TokenKindInteger)
 			if err != nil {
 				return nil, err
@@ -395,27 +392,27 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 			if err != nil {
 				return nil, err
 			}
-		case "exact":
+		case asciiEqualLower(keyTok.Value, "exact"):
 			exact, err = p.parseBool()
 			if err != nil {
 				return nil, err
 			}
-		case "acorn":
+		case asciiEqualLower(keyTok.Value, "acorn"):
 			acorn, err = p.parseBool()
 			if err != nil {
 				return nil, err
 			}
-		case "indexed_only":
+		case asciiEqualLower(keyTok.Value, "indexed_only"):
 			indexedOnly, err = p.parseBool()
 			if err != nil {
 				return nil, err
 			}
-		case "quantization":
+		case asciiEqualLower(keyTok.Value, "quantization"):
 			quantization, err = p.parseQuantizationSearchWith()
 			if err != nil {
 				return nil, err
 			}
-		case "mmr_diversity":
+		case asciiEqualLower(keyTok.Value, "mmr_diversity"):
 			value, err := p.parseNumber()
 			if err != nil {
 				return nil, err
@@ -433,7 +430,7 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 				return nil, errors.NewQQLSyntaxError("mmr_diversity must be between 0 and 1, got '"+fmt.Sprintf("%v", diversity)+"'", keyTok.Pos)
 			}
 			mmrDiversity = &diversity
-		case "mmr_candidates":
+		case asciiEqualLower(keyTok.Value, "mmr_candidates"):
 			intTok, err := p.expect(lexer.TokenKindInteger)
 			if err != nil {
 				return nil, err
@@ -446,7 +443,7 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 				return nil, errors.NewQQLSyntaxError("mmr_candidates must be a positive integer, got '"+intTok.Value+"'", intTok.Pos)
 			}
 			mmrCandidates = &candidates
-		case "rrf_k":
+		case asciiEqualLower(keyTok.Value, "rrf_k"):
 			intTok, err := p.expect(lexer.TokenKindInteger)
 			if err != nil {
 				return nil, err
@@ -459,7 +456,7 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 				return nil, errors.NewQQLSyntaxError("rrf_k must be a positive integer, got '"+intTok.Value+"'", intTok.Pos)
 			}
 			rrfK = &k
-		case "rrf_weights":
+		case asciiEqualLower(keyTok.Value, "rrf_weights"):
 			if _, err := p.expect(lexer.TokenKindLbracket); err != nil {
 				return nil, err
 			}
@@ -488,7 +485,7 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 			if _, err := p.expect(lexer.TokenKindRbracket); err != nil {
 				return nil, err
 			}
-		case "model":
+		case asciiEqualLower(keyTok.Value, "model"):
 			tok, err := p.expect(lexer.TokenKindString)
 			if err != nil {
 				return nil, err
@@ -496,7 +493,7 @@ func (p *Parser) parseWithClause() (*ast.SearchWith, error) {
 			// model is handled elsewhere; skip for WITH params
 			_ = tok
 		default:
-			return nil, errors.NewQQLSyntaxError("Unknown WITH parameter '"+key+"'. Expected: hnsw_ef, exact, acorn, indexed_only, quantization, mmr_diversity, mmr_candidates, rrf_k, rrf_weights", keyTok.Pos)
+			return nil, errors.NewQQLSyntaxError("Unknown WITH parameter '"+keyTok.Value+"'. Expected: hnsw_ef, exact, acorn, indexed_only, quantization, mmr_diversity, mmr_candidates, rrf_k, rrf_weights", keyTok.Pos)
 		}
 		if p.peek().Kind == lexer.TokenKindComma {
 			p.advance()
@@ -538,25 +535,24 @@ func (p *Parser) parseQuantizationSearchWith() (*ast.QuantizationSearchWith, err
 			return nil, errors.NewQQLSyntaxError("Expected a quantization parameter name, got '"+keyTok.Value+"'", keyTok.Pos)
 		}
 		p.advance()
-		key := strings.ToLower(keyTok.Value)
 		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
 			return nil, err
 		}
 
-		switch key {
-		case "ignore":
+		switch {
+		case asciiEqualLower(keyTok.Value, "ignore"):
 			value, err := p.parseBool()
 			if err != nil {
 				return nil, err
 			}
 			ignore = &value
-		case "rescore":
+		case asciiEqualLower(keyTok.Value, "rescore"):
 			value, err := p.parseBool()
 			if err != nil {
 				return nil, err
 			}
 			rescore = &value
-		case "oversampling":
+		case asciiEqualLower(keyTok.Value, "oversampling"):
 			value, err := p.parseNumber()
 			if err != nil {
 				return nil, err
@@ -572,7 +568,7 @@ func (p *Parser) parseQuantizationSearchWith() (*ast.QuantizationSearchWith, err
 				return nil, errors.NewQQLSyntaxError("oversampling must be numeric", keyTok.Pos)
 			}
 		default:
-			return nil, errors.NewQQLSyntaxError("Unknown quantization parameter '"+key+"'. Expected: ignore, rescore, oversampling", keyTok.Pos)
+			return nil, errors.NewQQLSyntaxError("Unknown quantization parameter '"+keyTok.Value+"'. Expected: ignore, rescore, oversampling", keyTok.Pos)
 		}
 
 		if p.peek().Kind == lexer.TokenKindComma {
@@ -638,10 +634,10 @@ func mergeSearchWith(dst **ast.SearchWith, src *ast.SearchWith) {
 }
 
 func (p *Parser) parseWithPayload() (*ast.PayloadSelector, error) {
-	if p.peek().Kind == lexer.TokenKindIdentifier && (strings.ToUpper(p.peek().Value) == "TRUE" || strings.ToUpper(p.peek().Value) == "FALSE") {
+	if p.peek().Kind == lexer.TokenKindIdentifier && (asciiEqual(p.peek().Value, "TRUE") || asciiEqual(p.peek().Value, "FALSE")) {
 		tok := p.peek()
 		p.advance()
-		val := strings.ToUpper(tok.Value) == "TRUE"
+		val := asciiEqual(tok.Value, "TRUE")
 		return &ast.PayloadSelector{Enable: &val}, nil
 	}
 	if _, err := p.expect(lexer.TokenKindLparen); err != nil {
@@ -675,9 +671,9 @@ func (p *Parser) parseWithPayload() (*ast.PayloadSelector, error) {
 		if _, err := p.expect(lexer.TokenKindRbracket); err != nil {
 			return nil, err
 		}
-		if strings.ToLower(keyTok.Value) == "include" {
+		if asciiEqualLower(keyTok.Value, "include") {
 			include = fields
-		} else if strings.ToLower(keyTok.Value) == "exclude" {
+		} else if asciiEqualLower(keyTok.Value, "exclude") {
 			exclude = fields
 		} else {
 			return nil, errors.NewQQLSyntaxError("Expected 'include' or 'exclude', got '"+keyTok.Value+"'", keyTok.Pos)
@@ -695,10 +691,10 @@ func (p *Parser) parseWithPayload() (*ast.PayloadSelector, error) {
 }
 
 func (p *Parser) parseWithVectors() (*ast.VectorsSelector, error) {
-	if p.peek().Kind == lexer.TokenKindIdentifier && (strings.ToUpper(p.peek().Value) == "TRUE" || strings.ToUpper(p.peek().Value) == "FALSE") {
+	if p.peek().Kind == lexer.TokenKindIdentifier && (asciiEqual(p.peek().Value, "TRUE") || asciiEqual(p.peek().Value, "FALSE")) {
 		tok := p.peek()
 		p.advance()
-		val := strings.ToUpper(tok.Value) == "TRUE"
+		val := asciiEqual(tok.Value, "TRUE")
 		return &ast.VectorsSelector{Enable: &val}, nil
 	}
 	if _, err := p.expect(lexer.TokenKindLparen); err != nil {

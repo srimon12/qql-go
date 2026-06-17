@@ -65,7 +65,7 @@ func (e *Executor) doUpdatePayload(n *ast.UpdatePayloadStmt) (*ExecResponse, err
 		return nil, fmt.Errorf("collection '%s' does not exist", n.Collection)
 	}
 
-	request, err := buildUpdatePayloadRequest(n)
+	request, err := buildUpdatePayloadRequest(n, e.requestTimeout())
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func (e *Executor) doDelete(n *ast.DeleteStmt) (*ExecResponse, error) {
 		return nil, fmt.Errorf("collection '%s' does not exist", n.Collection)
 	}
 
-	request, err := buildDeleteRequest(n)
+	request, err := buildDeleteRequest(n, e.requestTimeout())
 	if err != nil {
 		return nil, err
 	}
@@ -155,6 +155,7 @@ func (e *Executor) buildUpdateVectorRequest(ctx context.Context, n *ast.UpdateVe
 	return &qdrant.UpdatePointVectors{
 		CollectionName: n.Collection,
 		Wait:           &wait,
+		Timeout:        e.requestTimeout(),
 		Points: []*qdrant.PointVectors{
 			{
 				Id:      pID,
@@ -164,12 +165,13 @@ func (e *Executor) buildUpdateVectorRequest(ctx context.Context, n *ast.UpdateVe
 	}, nil
 }
 
-func buildUpdatePayloadRequest(n *ast.UpdatePayloadStmt) (*qdrant.SetPayloadPoints, error) {
+func buildUpdatePayloadRequest(n *ast.UpdatePayloadStmt, timeout *uint64) (*qdrant.SetPayloadPoints, error) {
 	wait := true
 	request := &qdrant.SetPayloadPoints{
 		CollectionName: n.Collection,
 		Payload:        qdrant.NewValueMap(n.Payload),
 		Wait:           &wait,
+		Timeout:        timeout,
 	}
 
 	if n.QueryFilter != nil {
@@ -189,7 +191,7 @@ func buildUpdatePayloadRequest(n *ast.UpdatePayloadStmt) (*qdrant.SetPayloadPoin
 	return request, nil
 }
 
-func buildDeleteRequest(n *ast.DeleteStmt) (*qdrant.DeletePoints, error) {
+func buildDeleteRequest(n *ast.DeleteStmt, timeout *uint64) (*qdrant.DeletePoints, error) {
 	wait := true
 
 	if n.Field != "" {
@@ -205,6 +207,7 @@ func buildDeleteRequest(n *ast.DeleteStmt) (*qdrant.DeletePoints, error) {
 			CollectionName: n.Collection,
 			Points:         qdrant.NewPointsSelectorFilter(filter),
 			Wait:           &wait,
+			Timeout:        timeout,
 		}, nil
 	}
 
@@ -217,5 +220,6 @@ func buildDeleteRequest(n *ast.DeleteStmt) (*qdrant.DeletePoints, error) {
 		CollectionName: n.Collection,
 		Points:         qdrant.NewPointsSelector(pid),
 		Wait:           &wait,
+		Timeout:        timeout,
 	}, nil
 }

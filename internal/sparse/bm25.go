@@ -3,6 +3,7 @@ package sparse
 import (
 	"math"
 	"slices"
+	"sync/atomic"
 
 	"github.com/srimon12/qql-go/internal/config"
 )
@@ -11,6 +12,41 @@ import (
 type Vector struct {
 	Indices []uint32
 	Values  []float32
+}
+
+type bm25Params struct {
+	k1    float64
+	b     float64
+	avgdl float64
+}
+
+var cachedBM25 atomic.Pointer[bm25Params]
+
+func loadBM25Params() bm25Params {
+	if p := cachedBM25.Load(); p != nil {
+		return *p
+	}
+	cfg := config.GetConfig()
+	p := bm25Params{k1: 1.2, b: 0.75, avgdl: 256.0}
+	if cfg != nil {
+		if cfg.BM25K1 != nil {
+			p.k1 = *cfg.BM25K1
+		}
+		if cfg.BM25B != nil {
+			p.b = *cfg.BM25B
+		}
+		if cfg.BM25AvgDL != nil {
+			p.avgdl = *cfg.BM25AvgDL
+		}
+	}
+	cachedBM25.Store(&p)
+	return p
+}
+
+// InvalidateBM25Cache forces re-reading BM25 params from config on next call.
+// Call this after saving config with new BM25 values.
+func InvalidateBM25Cache() {
+	cachedBM25.Store(nil)
 }
 
 // BuildQuery creates a sparse query vector using log-TF weighting.
@@ -55,6 +91,10 @@ func BuildDocument(text string) Vector {
 	}
 
 	docLen := float64(len(tokens))
+	params := loadBM25Params()
+	denomScale := params.k1 * (1.0 - params.b + params.b*docLen/params.avgdl)
+	k1p1 := params.k1 + 1.0
+
 	indices := make([]uint32, 0, len(counts))
 	for idx := range counts {
 		indices = append(indices, idx)
@@ -63,30 +103,10 @@ func BuildDocument(text string) Vector {
 
 	values := make([]float32, len(indices))
 	for i, idx := range indices {
-		values[i] = bm25TF(float64(counts[idx]), docLen)
+		tfCount := float64(counts[idx])
+		denom := tfCount + denomScale
+		values[i] = float32(tfCount * k1p1 / denom)
 	}
 
 	return Vector{Indices: indices, Values: values}
-}
-
-func bm25TF(tfCount, docLen float64) float32 {
-	cfg := config.GetConfig()
-	k1 := 1.2
-	b := 0.75
-	avgdl := 256.0
-
-	if cfg != nil {
-		if cfg.BM25K1 != nil {
-			k1 = *cfg.BM25K1
-		}
-		if cfg.BM25B != nil {
-			b = *cfg.BM25B
-		}
-		if cfg.BM25AvgDL != nil {
-			avgdl = *cfg.BM25AvgDL
-		}
-	}
-
-	denom := tfCount + k1*(1.0-b+b*docLen/avgdl)
-	return float32(tfCount * (k1 + 1) / denom)
 }

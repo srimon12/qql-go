@@ -45,7 +45,7 @@ EXAMPLES = [
         "when": "Use when you want to tune RRF parameters — K controls rank smoothing, weights control source influence.",
         "query": (
             "QUERY 'vector search performance' FROM articles "
-            "LIMIT 10 USING HYBRID WITH (rrf_k = 30, rrf_weights: [0.7, 0.3])"
+            "LIMIT 10 USING HYBRID WITH (rrf_k = 30, rrf_weights = [0.7, 0.3])"
         ),
         "setup": [],
         "requires_index": [],
@@ -102,7 +102,7 @@ EXAMPLES = [
         "when": "Use when hybrid search results are too redundant and you want semantic diversity on the dense leg before fusion.",
         "query": (
             "QUERY 'vector database performance tuning' FROM articles "
-            "LIMIT 10 USING HYBRID WITH (mmr_diversity = 0.5, mmr_candidates: 25)"
+            "LIMIT 10 USING HYBRID WITH (mmr_diversity = 0.5, mmr_candidates = 25)"
         ),
         "setup": [],
         "requires_index": [],
@@ -139,8 +139,8 @@ EXAMPLES = [
             "LIMIT 5 WHERE tenant_id = 'tenant-a'"
         ),
         "setup": [
-            "CREATE COLLECTION tenant_docs HYBRID WITH HNSW { payload_m: 16 }",
-            "CREATE INDEX ON COLLECTION tenant_docs FOR tenant_id TYPE keyword WITH (is_tenant = true, on_disk: true)",
+            "CREATE COLLECTION tenant_docs HYBRID WITH HNSW (payload_m = 16)",
+            "CREATE INDEX ON COLLECTION tenant_docs FOR tenant_id TYPE keyword WITH (is_tenant = true, on_disk = true)",
         ],
         "requires_index": ["tenant_id"],
     },
@@ -297,6 +297,62 @@ EXAMPLES = [
         "setup": [],
         "requires_index": [],
         "requires_cloud": True,
+    },
+    {
+        "mode": "sample-random",
+        "when": "Use when you need random point sampling for exploration, testing, or dashboards.",
+        "query": "QUERY SAMPLE FROM articles LIMIT 10",
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "order-by-field",
+        "when": "Use when you need paginated results ordered by a payload field instead of similarity score.",
+        "query": "QUERY ORDER BY created_at DESC FROM articles LIMIT 20",
+        "setup": [
+            "CREATE INDEX ON COLLECTION articles FOR created_at TYPE integer",
+        ],
+        "requires_index": ["created_at"],
+    },
+    {
+        "mode": "boost-arithmetic",
+        "when": "Use when you want to modify search scores using payload fields — e.g., boost by popularity or freshness.",
+        "query": (
+            "QUERY 'vector database' FROM articles LIMIT 10 "
+            "BOOST (score + 0.3 * popularity)"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "boost-conditional",
+        "when": "Use when you want different scoring logic for different categories — e.g., premium content gets 2x boost.",
+        "query": (
+            "QUERY 'kubernetes best practices' FROM docs LIMIT 10 "
+            "BOOST (CASE WHEN category = 'premium' THEN score * 2.0 ELSE score END)"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "boost-geo-decay",
+        "when": "Use when you want distance-based scoring decay — closer results score higher with a smooth falloff.",
+        "query": (
+            "QUERY 'restaurant' FROM places LIMIT 10 "
+            "BOOST (score * GAUSS_DECAY(GEO_DISTANCE(48.8566, 2.3522, location), 0, 5000, 0.5))"
+        ),
+        "setup": [],
+        "requires_index": [],
+    },
+    {
+        "mode": "boost-math-functions",
+        "when": "Use when you need non-linear score transformations — logarithmic dampening, square root for variance reduction.",
+        "query": (
+            "QUERY 'machine learning' FROM papers LIMIT 10 "
+            "BOOST (SQRT(score) * LOG(citation_count + 1)) DEFAULTS (citation_count = 0)"
+        ),
+        "setup": [],
+        "requires_index": [],
     },
     {
         "mode": "select-by-id",

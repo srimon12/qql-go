@@ -107,9 +107,9 @@ def main():
     # -- Schema --
     print("\n[1] Schema")
     run("Create HYBRID collection with TURBO quantization",
-        f"CREATE COLLECTION {COL} HYBRID WITH HNSW {{ payload_m: 16 }} QUANTIZE TURBO BITS 2 ALWAYS RAM", execute=args.execute)
+        f"CREATE COLLECTION {COL} HYBRID WITH HNSW (payload_m = 16) WITH QUANTIZATION (type = 'turbo', bits = 2, always_ram = true)", execute=args.execute)
     for f, ftype in [("specialty","keyword"),("priority","keyword"),("status","keyword"),("year","integer"),
-                 ("patient_id","keyword"),("diagnosis","text WITH { tokenizer: 'word', min_token_len: 2, lowercase: true, phrase_matching: true }")]:
+                 ("patient_id","keyword"),("diagnosis","text WITH (tokenizer = 'word', min_token_len = 2, lowercase = true, phrase_matching = true)")]:
         run(f"Index {f}",
             f"CREATE INDEX ON COLLECTION {COL} FOR {f} TYPE {ftype}", execute=args.execute)
 
@@ -120,9 +120,9 @@ def main():
             qql(f"DROP COLLECTION {COL}")
         except:
             pass
-        qql(f"CREATE COLLECTION {COL} HYBRID WITH HNSW {{ payload_m: 16 }} QUANTIZE TURBO BITS 2 ALWAYS RAM")
+        qql(f"CREATE COLLECTION {COL} HYBRID WITH HNSW (payload_m = 16) WITH QUANTIZATION (type = 'turbo', bits = 2, always_ram = true)")
         for f, ftype in [("specialty","keyword"),("priority","keyword"),("status","keyword"),("year","integer"),
-                     ("patient_id","keyword"),("diagnosis","text WITH { tokenizer: 'word', min_token_len: 2, lowercase: true, phrase_matching: true }")]:
+                     ("patient_id","keyword"),("diagnosis","text WITH (tokenizer = 'word', min_token_len = 2, lowercase = true, phrase_matching = true)")]:
             qql(f"CREATE INDEX ON COLLECTION {COL} FOR {f} TYPE {ftype}")
     for pid, text, spec, pri, stat, year in RECORDS:
         run(f"Insert #{pid} ({spec})",

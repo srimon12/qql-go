@@ -75,10 +75,12 @@ func TestCreateCollectionIncludesQuantizationConfig(t *testing.T) {
 
 	resp, err := exec.doCreateCollection(&ast.CreateCollectionStmt{
 		Collection: "docs",
-		Quantization: &ast.QuantizationConfig{
-			Type:      ast.QuantizationTypeScalar,
-			Quantile:  float64Ptr(0.99),
-			AlwaysRAM: true,
+		Config: &ast.CollectionConfig{
+			Quantization: &ast.QuantizationConfig{
+				Type:      ast.QuantizationTypeScalar,
+				Quantile:  float64Ptr(0.99),
+				AlwaysRAM: true,
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -101,9 +103,11 @@ func TestCreateCollectionHybridRerankIncludesBinaryQuantizationConfig(t *testing
 		Collection: "docs",
 		Hybrid:     true,
 		Rerank:     true,
-		Quantization: &ast.QuantizationConfig{
-			Type:      ast.QuantizationTypeBinary,
-			AlwaysRAM: true,
+		Config: &ast.CollectionConfig{
+			Quantization: &ast.QuantizationConfig{
+				Type:      ast.QuantizationTypeBinary,
+				AlwaysRAM: true,
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -154,9 +158,9 @@ func TestAlterCollectionPassesConfigBlocks(t *testing.T) {
 			Hnsw:       &ast.HnswRuntimeConfig{FullScanThreshold: uint64Ptr(5000)},
 			Optimizers: &ast.OptimizersRuntimeConfig{IndexingThreshold: uint64Ptr(10000)},
 			Params:     &ast.CollectionParamsConfig{OnDiskPayload: boolPtr(false), ReadFanOutFactor: uint64Ptr(4)},
-		},
-		Quantization: &ast.QuantizationUpdate{
-			Config: &ast.QuantizationConfig{Type: ast.QuantizationTypeBinary},
+			QuantizationUpdate: &ast.QuantizationUpdate{
+				Config: &ast.QuantizationConfig{Type: ast.QuantizationTypeBinary},
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -224,11 +228,13 @@ func TestAlterCollectionCanSetTurboQuantization(t *testing.T) {
 
 	resp, err := exec.doAlterCollection(&ast.AlterCollectionStmt{
 		Collection: "docs",
-		Quantization: &ast.QuantizationUpdate{
-			Config: &ast.QuantizationConfig{
-				Type:      ast.QuantizationTypeTurbo,
-				TurboBits: float64Ptr(2.0),
-				AlwaysRAM: true,
+		Config: &ast.CollectionConfig{
+			QuantizationUpdate: &ast.QuantizationUpdate{
+				Config: &ast.QuantizationConfig{
+					Type:      ast.QuantizationTypeTurbo,
+					TurboBits: float64Ptr(2.0),
+					AlwaysRAM: true,
+				},
 			},
 		},
 	})
@@ -248,10 +254,12 @@ func TestAlterCollectionRejectsInvalidTurboQuantization(t *testing.T) {
 
 	_, err := exec.doAlterCollection(&ast.AlterCollectionStmt{
 		Collection: "docs",
-		Quantization: &ast.QuantizationUpdate{
-			Config: &ast.QuantizationConfig{
-				Type:      ast.QuantizationTypeTurbo,
-				TurboBits: float64Ptr(3.0),
+		Config: &ast.CollectionConfig{
+			QuantizationUpdate: &ast.QuantizationUpdate{
+				Config: &ast.QuantizationConfig{
+					Type:      ast.QuantizationTypeTurbo,
+					TurboBits: float64Ptr(3.0),
+				},
 			},
 		},
 	})
@@ -266,8 +274,10 @@ func TestAlterCollectionCanDisableQuantization(t *testing.T) {
 	exec := NewExecutor(client, &config.Config{InferenceMode: "cloud"})
 
 	resp, err := exec.doAlterCollection(&ast.AlterCollectionStmt{
-		Collection:   "docs",
-		Quantization: &ast.QuantizationUpdate{Disabled: true},
+		Collection: "docs",
+		Config: &ast.CollectionConfig{
+			QuantizationUpdate: &ast.QuantizationUpdate{Disabled: true},
+		},
 	})
 	require.NoError(t, err)
 	require.True(t, resp.OK)
@@ -370,6 +380,7 @@ func TestBuildClientConfigNormalizesSchemeAndPort(t *testing.T) {
 		wantHost string
 		wantPort int
 		wantTLS  bool
+		wantErr  bool
 	}{
 		{
 			name:     "host only",
@@ -378,10 +389,9 @@ func TestBuildClientConfigNormalizesSchemeAndPort(t *testing.T) {
 			wantPort: 6334,
 		},
 		{
-			name:     "http with default rest port",
-			input:    "http://localhost:6333",
-			wantHost: "localhost",
-			wantPort: 6334,
+			name:    "http with default rest port",
+			input:   "http://localhost:6333",
+			wantErr: true,
 		},
 		{
 			name:     "https with trailing slash",
@@ -401,6 +411,10 @@ func TestBuildClientConfigNormalizesSchemeAndPort(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg, err := buildClientConfig(tt.input, "api-key", false, "")
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
 			require.NoError(t, err)
 			require.Equal(t, tt.wantHost, cfg.Host)
 			require.Equal(t, tt.wantPort, cfg.Port)

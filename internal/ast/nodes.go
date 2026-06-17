@@ -50,10 +50,12 @@ type CollectionParamsConfig struct {
 }
 
 type CollectionConfig struct {
-	Vectors    *VectorsConfig
-	Hnsw       *HnswRuntimeConfig
-	Optimizers *OptimizersRuntimeConfig
-	Params     *CollectionParamsConfig
+	Vectors            *VectorsConfig
+	Hnsw               *HnswRuntimeConfig
+	Optimizers         *OptimizersRuntimeConfig
+	Params             *CollectionParamsConfig
+	Quantization       *QuantizationConfig
+	QuantizationUpdate *QuantizationUpdate
 }
 
 type QuantizationUpdate struct {
@@ -71,9 +73,11 @@ const (
 )
 
 type VectorDef struct {
-	Name     string
-	Size     uint64
-	Distance VectorDistance
+	Name         string
+	Size         uint64
+	Distance     VectorDistance
+	Hnsw         *HnswRuntimeConfig
+	Quantization *QuantizationConfig
 }
 
 type SparseVectorDef struct {
@@ -91,14 +95,12 @@ type CreateCollectionStmt struct {
 	Vectors       []VectorDef
 	SparseVectors []SparseVectorDef
 
-	Quantization *QuantizationConfig
-	Config       *CollectionConfig
+	Config *CollectionConfig
 }
 
 type AlterCollectionStmt struct {
-	Collection   string
-	Config       *CollectionConfig
-	Quantization *QuantizationUpdate
+	Collection string
+	Config     *CollectionConfig
 }
 
 type QuantizationType string
@@ -154,6 +156,7 @@ const (
 	QueryModeDiscover  QueryMode = "DISCOVER"
 	QueryModeContext   QueryMode = "CONTEXT"
 	QueryModeOrderBy   QueryMode = "ORDER_BY"
+	QueryModeSample    QueryMode = "SAMPLE"
 )
 
 type ContextPair struct {
@@ -192,6 +195,8 @@ type PrefetchRef struct {
 	CTEName        string
 	Filter         FilterExpr // per-prefetch WHERE clause
 	ScoreThreshold *float64   // per-prefetch SCORE THRESHOLD
+	LookupFrom     string     // per-prefetch LOOKUP FROM <collection>
+	LookupVector   *string    // per-prefetch LOOKUP FROM ... VECTOR <name>
 }
 
 type QueryStmt struct {
@@ -242,6 +247,9 @@ type QueryStmt struct {
 
 	Rerank      bool
 	RerankModel *string
+
+	Formula         FormulaExpr
+	FormulaDefaults map[string]float64
 }
 
 type DeleteStmt struct {
