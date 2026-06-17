@@ -10,7 +10,15 @@ import (
 
 // Exec parses and executes a single QQL query against the given Qdrant client.
 func Exec(ctx context.Context, client QdrantClient, query string) (*Result, error) {
-	cfg := &config.Config{}
+	return ExecWithConfig(ctx, client, query, nil)
+}
+
+// ExecWithConfig parses and executes a single QQL query with explicit config
+// for model resolution, BM25 parameters, and cloud inference options.
+func ExecWithConfig(ctx context.Context, client QdrantClient, query string, cfg *config.Config) (*Result, error) {
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
 	executor := commands.NewExecutor(client, cfg)
 	resp, err := executor.ExecuteResult(query)
 	if err != nil {

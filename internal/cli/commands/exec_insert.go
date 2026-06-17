@@ -225,7 +225,7 @@ func insertPointIDAndPayload(values map[string]any) (any, map[string]any, error)
 	maps.Copy(payload, values)
 	rawID := extractID(payload)
 	if rawID == nil {
-		return uuid.New().String(), payload, nil
+		return nil, nil, fmt.Errorf("INSERT requires an 'id' field in VALUES (unsigned integer or UUID string)")
 	}
 	switch value := rawID.(type) {
 	case int:

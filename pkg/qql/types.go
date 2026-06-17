@@ -11,12 +11,11 @@ type Result struct {
 }
 
 // DataJSON returns the Data field as JSON bytes.
-func (r *Result) DataJSON() []byte {
+func (r *Result) DataJSON() ([]byte, error) {
 	if r.Data == nil {
-		return nil
+		return nil, nil
 	}
-	b, _ := json.Marshal(r.Data)
-	return b
+	return json.Marshal(r.Data)
 }
 
 // ErrorResult creates a Result from an error.

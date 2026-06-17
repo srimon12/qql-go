@@ -16,9 +16,14 @@ import (
 // For pure QUERY batches, use BatchQuery instead — it uses Qdrant's native
 // QueryBatch API for a single round-trip.
 func ExecBatch(ctx context.Context, client QdrantClient, queries []string, stopOnError bool) ([]*Result, error) {
+	return ExecBatchWithConfig(ctx, client, queries, stopOnError, nil)
+}
+
+// ExecBatchWithConfig executes multiple QQL queries with explicit config.
+func ExecBatchWithConfig(ctx context.Context, client QdrantClient, queries []string, stopOnError bool, cfg *config.Config) ([]*Result, error) {
 	results := make([]*Result, len(queries))
 	for i, query := range queries {
-		result, err := Exec(ctx, client, query)
+		result, err := ExecWithConfig(ctx, client, query, cfg)
 		if err != nil {
 			if stopOnError {
 				return results[:i], fmt.Errorf("query %d failed: %w", i, err)
@@ -32,52 +37,78 @@ func ExecBatch(ctx context.Context, client QdrantClient, queries []string, stopO
 }
 
 // BatchQuery executes multiple QQL QUERY statements using Qdrant's native
-// QueryBatch API. All queries are sent in a single round-trip.
+// QueryBatch API. All queries are sent in a single round-trip per collection.
 //
 // Only QUERY statements are supported. For mixed statement types (INSERT, CREATE, etc.),
 // use ExecBatch instead.
 func BatchQuery(ctx context.Context, client QdrantClient, queries []string) ([]*Result, error) {
-	cfg := &config.Config{}
+	return BatchQueryWithConfig(ctx, client, queries, nil)
+}
+
+// BatchQueryWithConfig executes multiple QQL QUERY statements with explicit config.
+func BatchQueryWithConfig(ctx context.Context, client QdrantClient, queries []string, cfg *config.Config) ([]*Result, error) {
+	if len(queries) == 0 {
+		return nil, fmt.Errorf("BatchQuery requires at least one query")
+	}
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
 	executor := commands.NewExecutor(client, cfg)
 
-	// Build all QueryPoints requests
-	var queryPoints []*qdrant.QueryPoints
+	type collectionBatch struct {
+		indices []int
+		points  []*qdrant.QueryPoints
+	}
+
+	batches := make(map[string]*collectionBatch)
+	var orderedKeys []string
 
 	for i, query := range queries {
 		qp, err := executor.BuildQueryPoints(query)
 		if err != nil {
 			return nil, fmt.Errorf("query %d parse error: %w", i, err)
 		}
-		queryPoints = append(queryPoints, qp)
-	}
-
-	// Single round-trip to Qdrant
-	batchResults, err := client.QueryBatch(ctx, &qdrant.QueryBatchPoints{
-		CollectionName: queryPoints[0].GetCollectionName(),
-		QueryPoints:    queryPoints,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("batch query failed: %w", err)
-	}
-
-	// Format results
-	results := make([]*Result, len(batchResults))
-	for i, br := range batchResults {
-		formatted := make([]map[string]any, len(br.GetResult()))
-		for j, hit := range br.GetResult() {
-			formatted[j] = map[string]any{
-				"id":    pointIDToString(hit.GetId()),
-				"score": hit.GetScore(),
-			}
-			if textVal, ok := hit.GetPayload()["text"]; ok {
-				formatted[j]["text"] = textVal.GetStringValue()
-			}
+		coll := qp.GetCollectionName()
+		b, ok := batches[coll]
+		if !ok {
+			b = &collectionBatch{}
+			batches[coll] = b
+			orderedKeys = append(orderedKeys, coll)
 		}
-		results[i] = &Result{
-			OK:        true,
-			Operation: "QUERY",
-			Message:   fmt.Sprintf("Found %d hits", len(formatted)),
-			Data:      formatted,
+		b.indices = append(b.indices, i)
+		b.points = append(b.points, qp)
+	}
+
+	results := make([]*Result, len(queries))
+
+	for _, coll := range orderedKeys {
+		batch := batches[coll]
+		batchResults, err := client.QueryBatch(ctx, &qdrant.QueryBatchPoints{
+			CollectionName: coll,
+			QueryPoints:    batch.points,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("batch query on '%s' failed: %w", coll, err)
+		}
+
+		for j, br := range batchResults {
+			origIdx := batch.indices[j]
+			formatted := make([]map[string]any, len(br.GetResult()))
+			for k, hit := range br.GetResult() {
+				formatted[k] = map[string]any{
+					"id":    pointIDToString(hit.GetId()),
+					"score": hit.GetScore(),
+				}
+				if textVal, ok := hit.GetPayload()["text"]; ok {
+					formatted[k]["text"] = textVal.GetStringValue()
+				}
+			}
+			results[origIdx] = &Result{
+				OK:        true,
+				Operation: "QUERY",
+				Message:   fmt.Sprintf("Found %d hits", len(formatted)),
+				Data:      formatted,
+			}
 		}
 	}
 

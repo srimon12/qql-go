@@ -73,7 +73,7 @@ func buildQdrantConfig(rawURL, apiKey string, noVerify bool) (*qdrant.Config, er
 		return nil, fmt.Errorf("missing host")
 	}
 
-	port := 6333
+	port := 6334
 	if parsedPort := parsed.Port(); parsedPort != "" {
 		port, err = strconv.Atoi(parsedPort)
 		if err != nil {
@@ -81,7 +81,7 @@ func buildQdrantConfig(rawURL, apiKey string, noVerify bool) (*qdrant.Config, er
 		}
 	}
 	if port == 6333 {
-		port = 6334
+		return nil, fmt.Errorf("port 6333 is the Qdrant REST API port; QQL uses gRPC on port 6334 — use %s:6334 or omit the port", host)
 	}
 
 	var tlsConf *tls.Config
