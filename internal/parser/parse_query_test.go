@@ -503,3 +503,42 @@ func TestParseQueryWithPayloadVectorsErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestParseQueryRawVector(t *testing.T) {
+	input := "QUERY [0.1, 0.2, 0.3] FROM docs LIMIT 5"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+	assert.Equal(t, "docs", stmt.Collection)
+	assert.Len(t, stmt.RawVector, 3)
+	assert.InDelta(t, 0.1, stmt.RawVector[0], 1e-9)
+	assert.InDelta(t, 0.2, stmt.RawVector[1], 1e-9)
+	assert.InDelta(t, 0.3, stmt.RawVector[2], 1e-9)
+	assert.Equal(t, 5, stmt.Limit)
+}
+
+func TestParseCTEQueryRawVector(t *testing.T) {
+	input := "WITH _pf0 AS (QUERY [0.5, 0.6] LIMIT 100) QUERY 'search' FROM docs LIMIT 10 PREFETCH (_pf0)"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+	require.Len(t, stmt.CTEs, 1)
+	cte := stmt.CTEs[0]
+	assert.Equal(t, "_pf0", cte.Name)
+	assert.Len(t, cte.Stmt.RawVector, 2)
+	assert.InDelta(t, 0.5, cte.Stmt.RawVector[0], 1e-9)
+}

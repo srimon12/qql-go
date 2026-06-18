@@ -65,6 +65,24 @@ func (n *DenseEmbedNode) Execute(ctx context.Context, state *QueryState) error {
 	return nil
 }
 
+type RawVectorNode struct {
+	Vector     []float64
+	VectorName string
+}
+
+func (n *RawVectorNode) Execute(_ context.Context, state *QueryState) error {
+	raw := make([]float32, len(n.Vector))
+	for i, v := range n.Vector {
+		raw[i] = float32(v)
+	}
+	query := qdrant.NewQueryDense(raw)
+	state.TargetQuery = query
+	if n.VectorName != "" {
+		state.VectorName = n.VectorName
+	}
+	return nil
+}
+
 type SparseEmbedNode struct {
 	Model      string
 	VectorName string

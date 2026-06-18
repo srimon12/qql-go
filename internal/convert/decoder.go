@@ -94,6 +94,30 @@ func convertRESTPrefetchToAST(pf *RESTPrefetch, collection string) (*ast.QuerySt
 					}
 				}
 			}
+		} else if vec, ok := pf.Query.Nearest.([]interface{}); ok && len(vec) > 0 {
+			raw := make([]float64, len(vec))
+			for i, v := range vec {
+				switch f := v.(type) {
+				case float64:
+					raw[i] = f
+				case int:
+					raw[i] = float64(f)
+				}
+			}
+			stmt.RawVector = raw
+		}
+	} else if pf.Vector != nil {
+		if vec, ok := pf.Vector.([]interface{}); ok && len(vec) > 0 {
+			raw := make([]float64, len(vec))
+			for i, v := range vec {
+				switch f := v.(type) {
+				case float64:
+					raw[i] = f
+				case int:
+					raw[i] = float64(f)
+				}
+			}
+			stmt.RawVector = raw
 		}
 	}
 

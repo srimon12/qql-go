@@ -101,7 +101,13 @@ func FormatQueryStmt(q *QueryStmt) string {
 	// QUERY type
 	switch q.Mode {
 	case QueryModeNearest:
-		if q.QueryText != nil {
+		if len(q.RawVector) > 0 {
+			vals := make([]string, len(q.RawVector))
+			for i, v := range q.RawVector {
+				vals[i] = fmt.Sprintf("%v", v)
+			}
+			parts = append(parts, fmt.Sprintf("QUERY [%s]", strings.Join(vals, ", ")))
+		} else if q.QueryText != nil {
 			parts = append(parts, fmt.Sprintf("QUERY %s", formatValue(*q.QueryText)))
 		} else if q.QueryID != nil {
 			parts = append(parts, fmt.Sprintf("QUERY %s", formatValue(q.QueryID)))

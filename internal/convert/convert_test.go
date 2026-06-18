@@ -241,3 +241,17 @@ func TestConvertFormulaWithDocumentPrefetch(t *testing.T) {
 	assert.Contains(t, stmts[0], "BOOST")
 	assert.Contains(t, stmts[0], "PREFETCH")
 }
+
+func TestConvertFormulaRawVectorPrefetch(t *testing.T) {
+	input := `{
+		"prefetch": {"query": [0.2, 0.8, 0.3], "limit": 50},
+		"query": {"formula": {"sum": ["$score", {"mult": [0.5, {"key": "tag", "match": {"any": ["h1", "h2"]}}]}]}},
+		"limit": 10
+	}`
+	stmts, err := JSONToQQL(input)
+	require.NoError(t, err)
+	require.Len(t, stmts, 1)
+	assert.Contains(t, stmts[0], "QUERY [0.2, 0.8, 0.3]")
+	assert.Contains(t, stmts[0], "BOOST")
+	assert.Contains(t, stmts[0], "PREFETCH")
+}

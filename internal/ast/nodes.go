@@ -229,6 +229,7 @@ type QueryStmt struct {
 	// For NEAREST
 	QueryText *string
 	QueryID   any
+	RawVector []float64
 
 	// For RECOMMEND
 	PositiveIDs []any

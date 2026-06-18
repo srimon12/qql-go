@@ -146,8 +146,14 @@ func (p *Parser) parseQueryBody() (*ast.QueryStmt, error) {
 				return nil, err
 			}
 			stmt.QueryID = id
+		case lexer.TokenKindLbracket:
+			vec, err := p.parseRawVector()
+			if err != nil {
+				return nil, err
+			}
+			stmt.RawVector = vec
 		default:
-			return nil, errors.NewQQLSyntaxError("Expected a string query, a point ID, or a query mode (RECOMMEND/DISCOVER/CONTEXT) after QUERY", tok.Pos)
+			return nil, errors.NewQQLSyntaxError("Expected a string query, a point ID, a raw vector [...], or a query mode (RECOMMEND/DISCOVER/CONTEXT) after QUERY", tok.Pos)
 		}
 	}
 
@@ -257,8 +263,14 @@ func (p *Parser) parseCTEQuery() (*ast.QueryStmt, error) {
 				return nil, err
 			}
 			stmt.QueryID = id
+		case lexer.TokenKindLbracket:
+			vec, err := p.parseRawVector()
+			if err != nil {
+				return nil, err
+			}
+			stmt.RawVector = vec
 		default:
-			return nil, errors.NewQQLSyntaxError("Expected string, integer, or query mode for CTE QUERY", tok.Pos)
+			return nil, errors.NewQQLSyntaxError("Expected string, integer, raw vector [...], or query mode for CTE QUERY", tok.Pos)
 		}
 	}
 
