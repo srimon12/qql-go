@@ -27,7 +27,7 @@ func BenchmarkConvertLargeUpsert(b *testing.B) {
 	for i := range vector {
 		vector[i] = float64(i) * 0.01
 	}
-	
+
 	// Create payload
 	req := struct {
 		Points []struct {
@@ -35,14 +35,14 @@ func BenchmarkConvertLargeUpsert(b *testing.B) {
 			Vector []float64 `json:"vector"`
 		} `json:"points"`
 	}{
-		Points: []struct{
-			ID int `json:"id"`
+		Points: []struct {
+			ID     int       `json:"id"`
 			Vector []float64 `json:"vector"`
 		}{
 			{ID: 1, Vector: vector},
 		},
 	}
-	
+
 	importJson, _ := json.Marshal(req)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

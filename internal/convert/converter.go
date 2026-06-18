@@ -1,6 +1,6 @@
 package convert
 
-	import (
+import (
 	"bytes"
 	"encoding/json"
 	"fmt"

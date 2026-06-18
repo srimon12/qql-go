@@ -49,11 +49,11 @@ func CollectionWithModel(ctx context.Context, client Client, collection, outputP
 	}
 
 	var header strings.Builder
-	header.WriteString(fmt.Sprintf("-- QQL dump for %s\n", collection))
+	fmt.Fprintf(&header, "-- QQL dump for %s\n", collection)
 	if denseModel != "" {
-		header.WriteString(fmt.Sprintf("-- Default model: %s\n", denseModel))
+		fmt.Fprintf(&header, "-- Default model: %s\n", denseModel)
 		if hybrid && sparseModel != "" {
-			header.WriteString(fmt.Sprintf("-- Sparse model : %s\n", sparseModel))
+			fmt.Fprintf(&header, "-- Sparse model : %s\n", sparseModel)
 		}
 	}
 
@@ -109,7 +109,7 @@ func CollectionWithModel(ctx context.Context, client Client, collection, outputP
 		}
 
 		if len(batch) > 0 {
-			builder.WriteString(fmt.Sprintf("INSERT INTO %s VALUES\n", collection))
+			fmt.Fprintf(&builder, "INSERT INTO %s VALUES\n", collection)
 			for idx, record := range batch {
 				builder.WriteString(indent(serializeMap(record), "  "))
 				if idx+1 < len(batch) {
@@ -128,7 +128,7 @@ func CollectionWithModel(ctx context.Context, client Client, collection, outputP
 		offset = nextOffset
 	}
 
-	header.WriteString(fmt.Sprintf("-- Points: %d\n\n", written))
+	fmt.Fprintf(&header, "-- Points: %d\n\n", written)
 
 	finalOutput := header.String() + builder.String() + fmt.Sprintf("-- Written: %d\n-- Skipped: %d\n", written, skipped)
 
@@ -298,7 +298,7 @@ func serializeMap(values map[string]any) string {
 	var builder strings.Builder
 	builder.WriteString("{\n")
 	for idx, key := range keys {
-		builder.WriteString(fmt.Sprintf("  '%s': %s", escapeString(key), serializeValue(values[key])))
+		fmt.Fprintf(&builder, "  '%s': %s", escapeString(key), serializeValue(values[key]))
 		if idx+1 < len(keys) {
 			builder.WriteString(",")
 		}
@@ -358,20 +358,20 @@ func buildDumpCreateLine(collection string, hybrid bool, denseName, sparseName, 
 	if hybrid {
 		if denseModel != "" {
 			b.WriteString(" HYBRID")
-			b.WriteString(fmt.Sprintf(" DENSE MODEL '%s'", escapeString(denseModel)))
+			fmt.Fprintf(&b, " DENSE MODEL '%s'", escapeString(denseModel))
 			if sparseModel != "" {
-				b.WriteString(fmt.Sprintf(" SPARSE MODEL '%s'", escapeString(sparseModel)))
+				fmt.Fprintf(&b, " SPARSE MODEL '%s'", escapeString(sparseModel))
 			}
 		} else {
 			b.WriteString(" HYBRID")
 			if denseName != "dense" || sparseName != "sparse" {
-				b.WriteString(fmt.Sprintf(" DENSE VECTOR '%s' SPARSE VECTOR '%s'", escapeString(denseName), escapeString(sparseName)))
+				fmt.Fprintf(&b, " DENSE VECTOR '%s' SPARSE VECTOR '%s'", escapeString(denseName), escapeString(sparseName))
 			}
 		}
 	} else if denseModel != "" {
-		b.WriteString(fmt.Sprintf(" USING MODEL '%s'", escapeString(denseModel)))
+		fmt.Fprintf(&b, " USING MODEL '%s'", escapeString(denseModel))
 	} else if denseName != "dense" && denseName != "" {
-		b.WriteString(fmt.Sprintf(" VECTOR '%s'", escapeString(denseName)))
+		fmt.Fprintf(&b, " VECTOR '%s'", escapeString(denseName))
 	}
 
 	config := info.GetConfig()
@@ -502,7 +502,7 @@ func buildDumpCreateLine(collection string, hybrid bool, denseName, sparseName, 
 			scalar := qc.GetScalar()
 			b.WriteString(" WITH QUANTIZATION (type = 'scalar'")
 			if scalar.Quantile != nil {
-				b.WriteString(fmt.Sprintf(", quantile = %v", *scalar.Quantile))
+				fmt.Fprintf(&b, ", quantile = %v", *scalar.Quantile)
 			}
 			if scalar.GetAlwaysRam() {
 				b.WriteString(", always_ram = true")
@@ -526,7 +526,7 @@ func buildDumpCreateLine(collection string, hybrid bool, denseName, sparseName, 
 			turbo := qc.GetTurboquant()
 			b.WriteString(" WITH QUANTIZATION (type = 'turbo'")
 			if turbo.Bits != nil {
-				b.WriteString(fmt.Sprintf(", bits = %g", turboBitsValue(*turbo.Bits)))
+				fmt.Fprintf(&b, ", bits = %g", turboBitsValue(*turbo.Bits))
 			}
 			if turbo.GetAlwaysRam() {
 				b.WriteString(", always_ram = true")
