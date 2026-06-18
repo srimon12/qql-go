@@ -56,8 +56,7 @@ func convertRESTQueryToAST(req *RESTQueryRequest, collection string) (*ast.Query
 
 func convertRESTPrefetchToAST(pf *RESTPrefetch, collection, prefix string) (*ast.QueryStmt, error) {
 	stmt := &ast.QueryStmt{
-		Collection: collection,
-		Mode:       ast.QueryModeNearest,
+		Mode: ast.QueryModeNearest,
 	}
 	if pf.Limit != nil {
 		stmt.Limit = *pf.Limit
@@ -94,7 +93,12 @@ func convertRESTPrefetchToAST(pf *RESTPrefetch, collection, prefix string) (*ast
 		}
 	}
 
-	if pf.Document != nil {
+	if pf.Query.Text != "" {
+		stmt.QueryText = &pf.Query.Text
+		if pf.Query.Model != "" {
+			stmt.Model = &pf.Query.Model
+		}
+	} else if pf.Document != nil {
 		if docMap, ok := pf.Document.(map[string]any); ok {
 			if text, ok := docMap["text"]; ok {
 				if s, ok := text.(string); ok {
@@ -215,6 +219,12 @@ func convertRESTCondition(c RESTCondition) ast.FilterExpr {
 			}
 			if val, ok := c.Match["text"]; ok {
 				return ast.MatchTextExpr{Field: c.Key, Text: fmt.Sprintf("%v", val)}
+			}
+			if val, ok := c.Match["text_any"]; ok {
+				return ast.MatchAnyExpr{Field: c.Key, Text: fmt.Sprintf("%v", val)}
+			}
+			if val, ok := c.Match["phrase"]; ok {
+				return ast.MatchPhraseExpr{Field: c.Key, Text: fmt.Sprintf("%v", val)}
 			}
 			if anyList, ok := c.Match["any"].([]any); ok {
 				return ast.InExpr{Field: c.Key, Values: anyList}

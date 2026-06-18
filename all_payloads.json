@@ -1,0 +1,166 @@
+[
+  {
+    "label": "Score Boosting with MATCH",
+    "json": "{\"prefetch\":{\"query\":[0.2,0.8,0.3],\"limit\":50},\"query\":{\"formula\":{\"sum\":[\"$score\",{\"mult\":[0.5,{\"key\":\"tag\",\"match\":{\"any\":[\"h1\",\"h2\",\"h3\",\"h4\"]}}]},{\"mult\":[0.25,{\"key\":\"tag\",\"match\":{\"any\":[\"p\",\"li\"]}}]}]}},\"limit\":10}"
+  },
+  {
+    "label": "Geo Distance Decay",
+    "json": "{\"prefetch\":{\"query\":[0.2,0.8,0.3],\"limit\":50},\"query\":{\"formula\":{\"sum\":[\"$score\",{\"gauss_decay\":{\"x\":{\"geo_distance\":{\"origin\":{\"lat\":52.504043,\"lon\":13.393236},\"to\":\"geo.location\"}},\"scale\":5000}}]}},\"defaults\":{\"geo.location\":{\"lat\":48.137154,\"lon\":11.576124}}}"
+  },
+  {
+    "label": "Time-Based Score Boosting",
+    "json": "{\"prefetch\":{\"query\":[0.2,0.8,0.3],\"limit\":50},\"query\":{\"formula\":{\"sum\":[\"$score\",{\"exp_decay\":{\"x\":{\"datetime_key\":\"update_time\"},\"target\":{\"datetime\":\"2025-01-01T00:00:00Z\"},\"scale\":86400,\"midpoint\":0.5}}]}}}"
+  },
+  {
+    "label": "MMR Query",
+    "json": "{\"query\":{\"nearest\":[0.01,0.45,0.67],\"mmr\":{\"diversity\":0.5,\"candidates_limit\":100}},\"limit\":10}"
+  },
+  {
+    "label": "Relevance Feedback",
+    "json": "{\"query\":{\"relevance_feedback\":{\"target\":[0.1,0.9,0.23],\"feedback\":[{\"example\":111,\"score\":0.68},{\"example\":222,\"score\":0.72},{\"example\":333,\"score\":0.61}],\"strategy\":{\"naive\":{\"a\":0.12,\"b\":0.43,\"c\":0.03}}}}}"
+  },
+  {
+    "label": "Search with vector",
+    "json": "{\"vector\":[0.1,0.2,0.3],\"limit\":10,\"filter\":{\"must\":[{\"key\":\"category\",\"match\":{\"value\":\"tech\"}}]},\"with_payload\":{\"include\":[\"title\",\"body\"]},\"with_vector\":[\"dense\",\"sparse\"],\"score_threshold\":0.5,\"using\":\"dense\",\"params\":{\"hnsw_ef\":128}}"
+  },
+  {
+    "label": "Query with text/model",
+    "json": "{\"query\":{\"text\":\"time travel\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true}"
+  },
+  {
+    "label": "Filter exact keyword",
+    "json": "{\"query\":{\"text\":\"time travel\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must\":[{\"key\":\"author\",\"match\":{\"value\":\"H.G. Wells\"}}]}}"
+  },
+  {
+    "label": "Filter must_not",
+    "json": "{\"query\":{\"text\":\"time travel\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must_not\":[{\"key\":\"author\",\"match\":{\"value\":\"H.G. Wells\"}}]}}"
+  },
+  {
+    "label": "Filter multi must AND",
+    "json": "{\"query\":{\"text\":\"space opera\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must\":[{\"key\":\"author\",\"match\":{\"value\":\"Larry Niven\"}},{\"key\":\"author\",\"match\":{\"value\":\"Jerry Pournelle\"}}]}}"
+  },
+  {
+    "label": "Filter should OR",
+    "json": "{\"query\":{\"text\":\"space opera\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"should\":[{\"key\":\"author\",\"match\":{\"value\":\"Larry Niven\"}},{\"key\":\"author\",\"match\":{\"value\":\"Jerry Pournelle\"}}]}}"
+  },
+  {
+    "label": "Filter match any",
+    "json": "{\"query\":{\"text\":\"space opera\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must\":[{\"key\":\"author\",\"match\":{\"any\":[\"Larry Niven\",\"Jerry Pournelle\"]}}]}}"
+  },
+  {
+    "label": "Filter text match",
+    "json": "{\"query\":{\"text\":\"space opera\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must\":[{\"key\":\"title\",\"match\":{\"text\":\"space\"}}]}}"
+  },
+  {
+    "label": "Filter text_any",
+    "json": "{\"query\":{\"text\":\"space opera\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must\":[{\"key\":\"title\",\"match\":{\"text_any\":\"space war\"}}]}}"
+  },
+  {
+    "label": "Filter phrase",
+    "json": "{\"query\":{\"text\":\"time travel\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must\":[{\"key\":\"title\",\"match\":{\"phrase\":\"time machine\"}}]}}"
+  },
+  {
+    "label": "Batch search 3 queries",
+    "json": "{\"searches\":[{\"query\":{\"text\":\"time travel\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must\":[{\"key\":\"title\",\"match\":{\"text\":\"time travel\"}}]}},{\"query\":{\"text\":\"time travel\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must\":[{\"key\":\"title\",\"match\":{\"text_any\":\"time travel\"}}]}},{\"query\":{\"text\":\"time travel\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true}]}"
+  },
+  {
+    "label": "Hybrid prefetch + fusion",
+    "json": "{\"prefetch\":[{\"query\":{\"text\":\"9780553213515\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"score_threshold\":0.5},{\"query\":{\"text\":\"9780553213515\",\"model\":\"Qdrant/bm25\"},\"using\":\"isbn-bm25\"}],\"query\":{\"fusion\":\"rrf\"},\"limit\":10,\"with_payload\":true}"
+  },
+  {
+    "label": "Wrapped endpoint formula",
+    "json": "{\"method\":\"POST\",\"path\":\"/collections/docs/points/query\",\"body\":{\"prefetch\":{\"query\":[0.2,0.8],\"limit\":50},\"query\":{\"formula\":{\"sum\":[\"$score\",{\"mult\":[2,{\"key\":\"priority\",\"match\":{\"value\":\"high\"}}]}]}},\"limit\":5}}"
+  },
+  {
+    "label": "DISCOVER query",
+    "json": "{\"target\":100,\"context\":[{\"positive\":1,\"negative\":2},{\"positive\":3,\"negative\":4}],\"limit\":20,\"filter\":{\"must\":[{\"key\":\"status\",\"match\":{\"value\":\"active\"}}]}}"
+  },
+  {
+    "label": "RECOMMEND query",
+    "json": "{\"positive\":[\"abc\",\"def\"],\"negative\":[\"xyz\"],\"limit\":5,\"strategy\":\"average_vector\",\"filter\":{\"must_not\":[{\"key\":\"deleted\",\"match\":{\"value\":true}}]}}"
+  },
+  {
+    "label": "Upsert points",
+    "json": "{\"points\":[{\"id\":1,\"vector\":{\"description-dense\":{\"text\":\"A Victorian scientist builds a device\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"}},\"payload\":{\"title\":\"The Time Machine\",\"author\":\"H.G. Wells\",\"isbn\":\"9780553213515\"}}]}"
+  },
+  {
+    "label": "Recommend with context + filter",
+    "json": "{\"query\":{\"recommend\":{\"positive\":[100,231],\"negative\":[718,[0.2,0.3,0.4,0.5]],\"strategy\":\"average_vector\"}},\"filter\":{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}}]}}"
+  },
+  {
+    "label": "Recommend with using",
+    "json": "{\"query\":{\"recommend\":{\"positive\":[100,231],\"negative\":[718]}},\"using\":\"image\",\"limit\":10}"
+  },
+  {
+    "label": "Recommend with lookup_from",
+    "json": "{\"query\":{\"recommend\":{\"positive\":[100,231],\"negative\":[718]}},\"limit\":10,\"lookup_from\":{\"collection\":\"external_collection\",\"vector\":\"external_vector\"}}"
+  },
+  {
+    "label": "Batch recommend",
+    "json": "{\"searches\":[{\"query\":{\"recommend\":{\"positive\":[100,231],\"negative\":[718]}},\"filter\":{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}}]},\"limit\":10},{\"query\":{\"recommend\":{\"positive\":[200,67],\"negative\":[300]}},\"filter\":{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}}]},\"limit\":10}]}"
+  },
+  {
+    "label": "Discovery target + context",
+    "json": "{\"query\":{\"discover\":{\"target\":[0.2,0.1,0.9,0.7],\"context\":[{\"positive\":100,\"negative\":718},{\"positive\":200,\"negative\":300}]}},\"limit\":10}"
+  },
+  {
+    "label": "Context search (no target)",
+    "json": "{\"query\":{\"context\":[{\"positive\":100,\"negative\":718},{\"positive\":200,\"negative\":300}]},\"limit\":10}"
+  },
+  {
+    "label": "Create books collection",
+    "json": "{\"vectors\":{\"description-dense\":{\"size\":384,\"distance\":\"Cosine\"}}}"
+  },
+  {
+    "label": "Create index text",
+    "json": "{\"field_name\":\"title\",\"field_schema\":{\"type\":\"text\",\"ascii_folding\":true}}"
+  },
+  {
+    "label": "Distance matrix pairs",
+    "json": "{\"sample\":10,\"limit\":2,\"filter\":{\"must\":{\"key\":\"color\",\"match\":{\"value\":\"red\"}}}}"
+  },
+  {
+    "label": "Set payload by filter",
+    "json": "{\"payload\":{\"status\":\"archived\"},\"filter\":{\"must\":[{\"key\":\"status\",\"match\":{\"value\":\"discharged\"}}]}}"
+  },
+  {
+    "label": "Scroll with range",
+    "json": "{\"limit\":10,\"filter\":{\"must\":[{\"key\":\"year\",\"range\":{\"gte\":2024,\"lte\":2026}}]}}"
+  },
+  {
+    "label": "Delete by filter",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"status\",\"match\":{\"value\":\"inactive\"}}]}}"
+  },
+  {
+    "label": "Get points",
+    "json": "{\"ids\":[1,\"uuid-123\"]}"
+  },
+  {
+    "label": "Delete points",
+    "json": "{\"points\":[1,2,3]}"
+  },
+  {
+    "label": "E-Commerce Product Catalog",
+    "json": "{\"id\":101,\"vector\":[0.23,-0.45,0.89,0.12],\"payload\":{\"product_details\":{\"brand\":\"FlexFit\",\"sku\":\"XYZ-9876-BL\",\"dimensions\":{\"weight_kg\":0.45,\"box\":{\"h\":10,\"w\":20,\"l\":30}}},\"marketplace\":{\"total_sellers\":3,\"sellers\":[{\"name\":\"Alpha Retail\",\"price\":89.99,\"shipping\":{\"free\":true,\"days\":2},\"badges\":[\"top_seller\",\"authorized_dealer\"]},{\"name\":\"Omega Goods\",\"price\":84.50,\"shipping\":{\"free\":false,\"days\":5},\"badges\":[]}]},\"history\":{\"release_date\":\"2025-11-12\",\"price_drops_2026\":[89.99,87.00,84.50]},\"search_tags\":[\"footwear\",\"running\",\"breathable\"]}}"
+  },
+  {
+    "label": "Healthcare Patient Records",
+    "json": "{\"id\":\"patient-f8c32\",\"vector\":[-0.11,0.76,0.34,-0.92],\"payload\":{\"demographics\":{\"age\":42,\"gender\":\"female\",\"habits\":{\"smoker\":false,\"exercise_days_week\":4}},\"clinical_data\":{\"primary_diagnosis\":\"Type 2 Diabetes\",\"vitals_log\":[{\"date\":\"2026-01-10\",\"blood_pressure\":\"120/80\",\"bmi\":24.5},{\"date\":\"2026-05-14\",\"blood_pressure\":\"118/79\",\"bmi\":24.1}],\"active_prescriptions\":[\"Metformin\",\"Vitamin D3\"]},\"care_facilities\":[{\"clinic_id\":\"NYC-MED-01\",\"primary\":true,\"location\":{\"lat\":40.7128,\"lon\":-74.0060}}]}}"
+  },
+  {
+    "label": "Financial Fraud Detection",
+    "json": "{\"id\":99942,\"vector\":[0.65,0.11,-0.54,0.33],\"payload\":{\"account\":{\"user_id\":\"usr_7721\",\"tier\":\"platinum\",\"risk_profile\":{\"score\":12.5,\"flagged_actions_30d\":0}},\"transaction\":{\"amount_usd\":1250.00,\"category\":\"luxury_goods\",\"terminal_location\":{\"lat\":48.8566,\"lon\":2.3522}},\"device_telemetry\":{\"os\":\"iOS\",\"vpn_detected\":false,\"known_ips\":[\"192.168.1.5\",\"10.0.0.12\"],\"session_tokens\":[{\"token_id\":\"tok_a1\",\"expires\":\"2026-07-01\"}]}}}"
+  },
+  {
+    "label": "Smart City IoT Sensor",
+    "json": "{\"id\":\"sensor-grid-east-04\",\"vector\":[0.02,-0.88,0.41,0.19],\"payload\":{\"hardware\":{\"model\":\"EnviroNode-X1\",\"firmware\":{\"version\":\"4.2.1\",\"last_patch\":\"2026-02-18\"}},\"deployment\":{\"zone\":\"District 9\",\"placement\":\"pole_mount\",\"geo\":{\"lat\":1.29027,\"lon\":103.85195}},\"metrics_stream\":{\"air_quality\":{\"pm2_5\":12.4,\"co2_ppm\":415},\"hourly_traffic_counts\":[142,198,310,285]},\"maintenance_logs\":[{\"technician\":\"Tech_7\",\"action\":\"sensor_cleaned\",\"status\":\"passed\"}]}}"
+  },
+  {
+    "label": "Media Streaming Engine",
+    "json": "{\"id\":\"video-content-771\",\"vector\":[0.51,0.52,-0.11,-0.74],\"payload\":{\"show_info\":{\"title\":\"Cyber Horizon\",\"type\":\"series\",\"attributes\":{\"duration_mins\":45,\"language\":\"en\",\"maturity_rating\":\"TV-MA\"}},\"localization\":{\"available_audio\":[\"en\",\"es\",\"fr\",\"de\"],\"available_subtitles\":[\"en\",\"es\",\"fr\",\"de\",\"ja\",\"zh\"]},\"user_engagement\":{\"total_global_views\":4500000,\"completion_rate_percent\":82.4,\"watch_history_nodes\":[{\"user_segment\":\"sci-fi-fans\",\"avg_rating\":4.9},{\"user_segment\":\"action-fans\",\"avg_rating\":4.1}]}}}"
+  },
+  {
+    "label": "Complex point from earlier",
+    "json": "{\"id\":42,\"vector\":[0.15,0.88,-0.23,0.45],\"payload\":{\"metadata\":{\"merchant\":\"TechZone\",\"category\":\"electronics\"},\"inventory\":{\"stock_count\":150,\"warehouses\":[{\"city\":\"Berlin\",\"coordinates\":{\"lon\":13.405,\"lat\":52.520}},{\"city\":\"Tokyo\",\"coordinates\":{\"lon\":139.65,\"lat\":35.67}}]},\"reviews\":[{\"user\":\"alice\",\"rating\":4.8,\"verified\":true},{\"user\":\"bob\",\"rating\":3.5,\"verified\":false}],\"tags\":[\"premium\",\"wireless\",\"noise-canceling\"]}}"
+  }
+]

@@ -45,6 +45,10 @@ func convertUpsert(input, collection string) ([]string, error) {
 func convertSearch(input, collection string) ([]string, error) {
 	var req struct {
 		Vector         any         `json:"vector"`
+		Query          struct {
+			Text  string `json:"text"`
+			Model string `json:"model"`
+		} `json:"query"`
 		Limit          int         `json:"limit"`
 		Offset         int         `json:"offset"`
 		Filter         *RESTFilter `json:"filter"`
@@ -65,8 +69,13 @@ func convertSearch(input, collection string) ([]string, error) {
 		Offset:     req.Offset,
 	}
 
-	// Vector
-	if vec, ok := req.Vector.([]any); ok && len(vec) > 0 {
+	// Query text (new format)
+	if req.Query.Text != "" {
+		stmt.QueryText = &req.Query.Text
+		if req.Query.Model != "" {
+			stmt.Model = &req.Query.Model
+		}
+	} else if vec, ok := req.Vector.([]any); ok && len(vec) > 0 {
 		raw := make([]float64, len(vec))
 		for i, v := range vec {
 			switch f := v.(type) {
@@ -119,21 +128,41 @@ func convertSearch(input, collection string) ([]string, error) {
 
 func convertRecommend(input, collection string) ([]string, error) {
 	var req struct {
-		Positive []any       `json:"positive"`
-		Negative []any       `json:"negative"`
-		Limit    int         `json:"limit"`
-		Strategy string      `json:"strategy"`
-		Filter   *RESTFilter `json:"filter"`
+		Query      struct {
+			Recommend struct {
+				Positive []any  `json:"positive"`
+				Negative []any  `json:"negative"`
+				Strategy string `json:"strategy"`
+			} `json:"recommend"`
+		} `json:"query"`
+		Positive   []any       `json:"positive"`
+		Negative   []any       `json:"negative"`
+		Limit      int         `json:"limit"`
+		Strategy   string      `json:"strategy"`
+		Filter     *RESTFilter `json:"filter"`
+		Using      string      `json:"using"`
+		LookupFrom any         `json:"lookup_from"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid recommend JSON: %w", err)
 	}
 
-	posIDs := formatIDList(req.Positive)
-	negIDs := formatIDList(req.Negative)
+	positive := req.Positive
+	negative := req.Negative
+	strategy := req.Strategy
+	if len(req.Query.Recommend.Positive) > 0 || len(req.Query.Recommend.Negative) > 0 {
+		positive = req.Query.Recommend.Positive
+		negative = req.Query.Recommend.Negative
+		if req.Query.Recommend.Strategy != "" {
+			strategy = req.Query.Recommend.Strategy
+		}
+	}
+
+	posIDs := formatIDList(positive)
+	negIDs := formatIDList(negative)
 
 	withClause := fmt.Sprintf("positive = (%s)", posIDs)
-	if len(req.Negative) > 0 {
+	if len(negative) > 0 {
 		withClause += fmt.Sprintf(", negative = (%s)", negIDs)
 	}
 
@@ -143,8 +172,26 @@ func convertRecommend(input, collection string) ([]string, error) {
 	if req.Limit > 0 {
 		parts = append(parts, fmt.Sprintf("LIMIT %d", req.Limit))
 	}
-	if req.Strategy != "" {
-		parts = append(parts, fmt.Sprintf("STRATEGY '%s'", req.Strategy))
+	if strategy != "" {
+		parts = append(parts, fmt.Sprintf("STRATEGY '%s'", strategy))
+	}
+	if req.Using != "" {
+		parts = append(parts, fmt.Sprintf("USING '%s'", req.Using))
+	}
+	if req.LookupFrom != nil {
+			if lookupMap, ok := req.LookupFrom.(map[string]interface{}); ok {
+			if coll, ok := lookupMap["collection"]; ok {
+				if cn, ok := coll.(string); ok {
+					if vec, ok := lookupMap["vector"]; ok {
+						if vn, ok := vec.(string); ok {
+							parts = append(parts, fmt.Sprintf("LOOKUP FROM %s VECTOR '%s'", cn, vn))
+						}
+					} else {
+						parts = append(parts, fmt.Sprintf("LOOKUP FROM %s", cn))
+					}
+				}
+			}
+		}
 	}
 	if req.Filter != nil {
 		filterStr, err := convertFilter(req.Filter)
@@ -158,6 +205,19 @@ func convertRecommend(input, collection string) ([]string, error) {
 
 func convertDiscover(input, collection string) ([]string, error) {
 	var req struct {
+		Query struct {
+			Discover struct {
+				Target  any `json:"target"`
+				Context []struct {
+					Positive any `json:"positive"`
+					Negative any `json:"negative"`
+				} `json:"context"`
+			} `json:"discover"`
+			Context []struct {
+				Positive any `json:"positive"`
+				Negative any `json:"negative"`
+			} `json:"context"`
+		} `json:"query"`
 		Target  any `json:"target"`
 		Context []struct {
 			Positive any `json:"positive"`
@@ -170,15 +230,32 @@ func convertDiscover(input, collection string) ([]string, error) {
 		return nil, fmt.Errorf("invalid discover JSON: %w", err)
 	}
 
-	var parts []string
-	parts = append(parts, fmt.Sprintf("QUERY DISCOVER TARGET %s", formatID(req.Target)))
+	target := req.Target
+	ctxPairs := req.Context
+	if req.Query.Discover.Target != nil || len(req.Query.Discover.Context) > 0 {
+		target = req.Query.Discover.Target
+		ctxPairs = req.Query.Discover.Context
+	} else if len(req.Query.Context) > 0 {
+		target = nil
+		ctxPairs = req.Query.Context
+	}
 
-	if len(req.Context) > 0 {
+	var parts []string
+	if target != nil {
+		parts = append(parts, fmt.Sprintf("QUERY DISCOVER TARGET %s", formatID(target)))
+	} else {
+		parts = append(parts, "QUERY CONTEXT")
+	}
+	if len(ctxPairs) > 0 {
 		var pairs []string
-		for _, c := range req.Context {
+		for _, c := range ctxPairs {
 			pairs = append(pairs, fmt.Sprintf("(%s, %s)", formatID(c.Positive), formatID(c.Negative)))
 		}
-		parts = append(parts, fmt.Sprintf("CONTEXT PAIRS %s", strings.Join(pairs, ", ")))
+		if target != nil {
+			parts = append(parts, fmt.Sprintf("CONTEXT PAIRS %s", strings.Join(pairs, ", ")))
+		} else {
+			parts = append(parts, fmt.Sprintf("PAIRS %s", strings.Join(pairs, ", ")))
+		}
 	}
 
 	parts = append(parts, fmt.Sprintf("FROM %s", collection))
@@ -359,7 +436,7 @@ func convertCreateIndex(input, collection string) ([]string, error) {
 		}
 	}
 
-	return []string{fmt.Sprintf("CREATE INDEX ON %s FOR %s TYPE %s", collection, field, schema)}, nil
+	return []string{fmt.Sprintf("CREATE INDEX ON COLLECTION %s FOR %s TYPE %s", collection, field, schema)}, nil
 }
 
 // --- Formula / MMR / Relevance Feedback ---
@@ -429,4 +506,25 @@ func buildWithClause(input any) *ast.SearchWith {
 		return w
 	}
 	return nil
+}
+
+func convertBatchSearch(input string) ([]string, error) {
+	var req struct {
+		Searches []json.RawMessage `json:"searches"`
+	}
+	if err := json.Unmarshal([]byte(input), &req); err != nil {
+		return nil, fmt.Errorf("invalid batch search JSON: %w", err)
+	}
+	if len(req.Searches) == 0 {
+		return nil, fmt.Errorf("batch search requires at least one search")
+	}
+	var stmts []string
+	for _, search := range req.Searches {
+		subStmts, err := JSONToQQL(string(search))
+		if err != nil {
+			return nil, fmt.Errorf("batch search entry: %w", err)
+		}
+		stmts = append(stmts, subStmts...)
+	}
+	return stmts, nil
 }

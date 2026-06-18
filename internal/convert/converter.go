@@ -115,6 +115,7 @@ func convertByStructure(input string) ([]string, error) {
 		VectorsConfig json.RawMessage `json:"vectors_config"`
 		FieldName     json.RawMessage `json:"field_name"`
 		Limit         json.RawMessage `json:"limit"`
+		Searches      json.RawMessage `json:"searches"`
 	}
 	if err := json.Unmarshal([]byte(input), &raw); err != nil {
 		return nil, fmt.Errorf("invalid JSON: %w", err)
@@ -126,29 +127,54 @@ func convertByStructure(input string) ([]string, error) {
 			Formula           json.RawMessage `json:"formula"`
 			Nearest           json.RawMessage `json:"nearest"`
 			RelevanceFeedback json.RawMessage `json:"relevance_feedback"`
+			Text              json.RawMessage `json:"text"`
+			Fusion            json.RawMessage `json:"fusion"`
+			Recommend         json.RawMessage `json:"recommend"`
+			Discover          json.RawMessage `json:"discover"`
+			Context           json.RawMessage `json:"context"`
 		}
 		if json.Unmarshal(raw.Query, &queryObj) == nil {
 			if len(queryObj.Formula) > 0 {
-				return convertFormulaQuery(input, "collection")
+				return convertFormulaQuery(input, "unknown")
 			}
 			if len(queryObj.Nearest) > 0 {
-				return convertMMRQuery(input, "collection")
+				return convertMMRQuery(input, "unknown")
 			}
 			if len(queryObj.RelevanceFeedback) > 0 {
-				return convertRelevanceFeedback(input, "collection")
+				return convertRelevanceFeedback(input, "unknown")
+			}
+			if len(queryObj.Text) > 0 {
+				return convertSearch(input, "unknown")
+			}
+			if len(queryObj.Fusion) > 0 {
+				return convertFormulaQuery(input, "unknown")
+			}
+			if len(queryObj.Recommend) > 0 {
+				return convertRecommend(input, "unknown")
+			}
+			if len(queryObj.Discover) > 0 {
+				return convertDiscover(input, "unknown")
+			}
+			if len(queryObj.Context) > 0 {
+				return convertDiscover(input, "unknown")
 			}
 		}
 	}
 
 	// Check for top-level prefetch (formula query with prefetch)
 	if len(raw.Prefetch) > 0 {
-		return convertFormulaQuery(input, "collection")
+		return convertFormulaQuery(input, "unknown")
+	}
+
+	// Check for batch searches
+	if len(raw.Searches) > 0 {
+		return convertBatchSearch(input)
 	}
 
 	// Check for set payload first (has "payload" field with "points" or "filter")
 	if len(raw.Payload) > 0 {
 		if len(raw.Points) > 0 || len(raw.Filter) > 0 {
-			return convertSetPayload(input, "collection")
+			return convertSetPayload(input, "unknown")
 		}
 	}
 
@@ -166,44 +192,44 @@ func convertByStructure(input string) ([]string, error) {
 			}
 			if json.Unmarshal(probe.Points[0], &pointProbe) == nil {
 				if len(pointProbe.Vector) > 0 || len(pointProbe.Payload) > 0 {
-					return convertUpsert(input, "collection")
+					return convertUpsert(input, "unknown")
 				}
 			}
 			// Points without vectors = delete by IDs
-			return convertDeletePoints(input, "collection")
+			return convertDeletePoints(input, "unknown")
 		}
 	}
 
 	if len(raw.Vector) > 0 {
-		return convertSearch(input, "collection")
+		return convertSearch(input, "unknown")
 	}
 
 	if len(raw.Positive) > 0 {
-		return convertRecommend(input, "collection")
+		return convertRecommend(input, "unknown")
 	}
 
 	if len(raw.Target) > 0 {
-		return convertDiscover(input, "collection")
+		return convertDiscover(input, "unknown")
 	}
 
 	if len(raw.Ids) > 0 {
-		return convertGetPoints(input, "collection")
+		return convertGetPoints(input, "unknown")
 	}
 
 	if len(raw.Vectors) > 0 || len(raw.VectorsConfig) > 0 {
-		return convertCreateCollection(input, "collection")
+		return convertCreateCollection(input, "unknown")
 	}
 
 	if len(raw.FieldName) > 0 {
-		return convertCreateIndex(input, "collection")
+		return convertCreateIndex(input, "unknown")
 	}
 
 	if len(raw.Filter) > 0 {
 		// Could be scroll or delete by filter
 		if len(raw.Limit) > 0 {
-			return convertScroll(input, "collection")
+			return convertScroll(input, "unknown")
 		}
-		return convertDeleteByFilter(input, "collection")
+		return convertDeleteByFilter(input, "unknown")
 	}
 
 	return nil, fmt.Errorf("cannot detect operation from JSON structure")

@@ -559,10 +559,10 @@ func buildPayloadIndexStatements(collection string, schema map[string]*qdrant.Pa
 				parts = append(parts, fmt.Sprintf("%s = %s", k, serializeIndexValue(v)))
 			}
 			sort.Strings(parts)
-			stmts = append(stmts, fmt.Sprintf("CREATE INDEX ON %s FOR %s TYPE %s WITH (%s)",
+			stmts = append(stmts, fmt.Sprintf("CREATE INDEX ON COLLECTION %s FOR %s TYPE %s WITH (%s)",
 				collection, fieldName, fieldType, strings.Join(parts, ", ")))
 		} else {
-			stmts = append(stmts, fmt.Sprintf("CREATE INDEX ON %s FOR %s TYPE %s",
+			stmts = append(stmts, fmt.Sprintf("CREATE INDEX ON COLLECTION %s FOR %s TYPE %s",
 				collection, fieldName, fieldType))
 		}
 	}

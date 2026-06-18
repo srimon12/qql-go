@@ -49,6 +49,12 @@ func formatValue(v any) string {
 			return fmt.Sprintf("%d", int64(val))
 		}
 		return fmt.Sprintf("%v", val)
+	case int:
+		return fmt.Sprintf("%d", val)
+	case int64:
+		return fmt.Sprintf("%d", val)
+	case uint64:
+		return fmt.Sprintf("%d", val)
 	case bool:
 		if val {
 			return "true"
@@ -62,6 +68,12 @@ func formatValue(v any) string {
 			items = append(items, formatValue(item))
 		}
 		return "[" + strings.Join(items, ", ") + "]"
+	case map[string]any:
+		var entries []string
+		for k, item := range val {
+			entries = append(entries, fmt.Sprintf("'%s': %s", k, formatValue(item)))
+		}
+		return "{" + strings.Join(entries, ", ") + "}"
 	default:
 		return fmt.Sprintf("'%v'", val)
 	}

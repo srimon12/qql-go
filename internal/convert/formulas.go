@@ -20,7 +20,12 @@ func convertFormulaQuery(input, collection string) ([]string, error) {
 	}
 
 	// Extract query text if present
-	if req.Query.Document != nil {
+	if req.Query.Text != "" {
+		stmt.QueryText = &req.Query.Text
+		if req.Query.Model != "" {
+			stmt.Model = &req.Query.Model
+		}
+	} else if req.Query.Document != nil {
 		if docMap, ok := req.Query.Document.(map[string]any); ok {
 			if text, ok := docMap["text"]; ok {
 				if s, ok := text.(string); ok {
@@ -213,26 +218,22 @@ func convertDecayExpr(name string, input any) (string, error) {
 
 	var args []string
 
-	// x parameter
 	if x, ok := decayMap["x"]; ok {
 		xStr, _ := convertFormulaExpression(x)
-		args = append(args, xStr)
+		args = append(args, "x = "+xStr)
 	}
 
-	// target
 	if target, ok := decayMap["target"]; ok {
 		targetStr, _ := convertFormulaExpression(target)
-		args = append(args, fmt.Sprintf("target: %s", targetStr))
+		args = append(args, "target = "+targetStr)
 	}
 
-	// scale
 	if scale, ok := decayMap["scale"]; ok {
-		args = append(args, fmt.Sprintf("scale: %v", scale))
+		args = append(args, fmt.Sprintf("scale = %v", scale))
 	}
 
-	// midpoint
 	if midpoint, ok := decayMap["midpoint"]; ok {
-		args = append(args, fmt.Sprintf("midpoint: %v", midpoint))
+		args = append(args, fmt.Sprintf("midpoint = %v", midpoint))
 	}
 
 	return fmt.Sprintf("%s(%s)", name, strings.Join(args, ", ")), nil

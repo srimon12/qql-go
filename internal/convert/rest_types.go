@@ -23,8 +23,10 @@ type RESTPrefetch struct {
 
 type RESTQuery struct {
 	Formula           json.RawMessage        `json:"formula"`
-	Nearest           any                    `json:"nearest"`
-	Document          any                    `json:"document"`
+	Nearest           interface{}            `json:"nearest"`
+	Document          interface{}            `json:"document"`
+	Text              string                 `json:"text"`
+	Model             string                 `json:"model"`
 	Recommend         *RESTRecommend         `json:"recommend"`
 	Discover          *RESTDiscover          `json:"discover"`
 	Context           []RESTContextPair      `json:"context"`
@@ -107,6 +109,38 @@ type RESTFilter struct {
 	Must    []RESTCondition `json:"must"`
 	Should  []RESTCondition `json:"should"`
 	MustNot []RESTCondition `json:"must_not"`
+}
+
+func (f *RESTFilter) UnmarshalJSON(data []byte) error {
+	type Alias RESTFilter
+	var raw struct {
+		Must    json.RawMessage `json:"must"`
+		Should  json.RawMessage `json:"should"`
+		MustNot json.RawMessage `json:"must_not"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	f.Must = parseConditionList(raw.Must)
+	f.Should = parseConditionList(raw.Should)
+	f.MustNot = parseConditionList(raw.MustNot)
+	return nil
+}
+
+func parseConditionList(raw json.RawMessage) []RESTCondition {
+	if len(raw) == 0 {
+		return nil
+	}
+	if raw[0] == '[' {
+		var arr []RESTCondition
+		json.Unmarshal(raw, &arr)
+		return arr
+	}
+	var single RESTCondition
+	if err := json.Unmarshal(raw, &single); err == nil {
+		return []RESTCondition{single}
+	}
+	return nil
 }
 
 type RESTCondition struct {

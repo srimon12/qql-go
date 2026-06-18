@@ -195,9 +195,9 @@ func TestCollectionDumpsPayloadIndexes(t *testing.T) {
 	data, err := os.ReadFile(outputPath)
 	require.NoError(t, err)
 	text := string(data)
-	require.Contains(t, text, "CREATE INDEX ON docs FOR title TYPE text WITH (")
-	require.Contains(t, text, "CREATE INDEX ON docs FOR uuid_field TYPE uuid WITH (")
-	require.NotContains(t, text, "CREATE INDEX ON docs FOR category")
+	require.Contains(t, text, "CREATE INDEX ON COLLECTION docs FOR title TYPE text WITH (")
+	require.Contains(t, text, "CREATE INDEX ON COLLECTION docs FOR uuid_field TYPE uuid WITH (")
+	require.NotContains(t, text, "CREATE INDEX ON COLLECTION docs FOR category")
 }
 
 func TestCollectionWithModel(t *testing.T) {

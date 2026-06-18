@@ -1,8 +1,6 @@
 package parser
 
 import (
-	"strconv"
-
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
 	"github.com/srimon12/qql-go/internal/lexer"
@@ -753,16 +751,11 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 				if _, err := p.expect(lexer.TokenKindEquals); err != nil {
 					return
 				}
-				valTok := p.peek()
-				if valTok.Kind != lexer.TokenKindFloat && valTok.Kind != lexer.TokenKindInteger {
-					return
-				}
-				p.advance()
-				f, err := strconv.ParseFloat(valTok.Value, 64)
+				val, err := p.parseValue()
 				if err != nil {
 					return
 				}
-				defaults[key] = f
+				defaults[key] = val
 				if p.peek().Kind == lexer.TokenKindComma {
 					p.advance()
 				} else {

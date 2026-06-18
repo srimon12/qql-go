@@ -166,6 +166,10 @@ func FormatQueryStmt(q *QueryStmt) string {
 		parts = append(parts, "FUSION "+*q.FusionType)
 	}
 
+	if q.Model != nil {
+		parts = append(parts, "WITH MODEL "+formatValue(*q.Model))
+	}
+
 	// Strategy
 	if q.FeedbackStrategy != nil {
 		if q.FeedbackStrategy.Type == FeedbackStrategyNaive {
