@@ -182,7 +182,7 @@ func TestConvertFormulaGeoDecay(t *testing.T) {
 	assert.Contains(t, stmts[0], "x = GEO_DISTANCE")
 	assert.Contains(t, stmts[0], "scale = 5000")
 	assert.Contains(t, stmts[0], "DEFAULTS")
-	assert.Contains(t, stmts[0], "geo.location = {lat: 48.1, lon: 11.5}")
+	assert.Contains(t, stmts[0], "geo.location = {'lat': 48.1, 'lon': 11.5}")
 }
 
 func TestConvertFormulaTimeDecay(t *testing.T) {

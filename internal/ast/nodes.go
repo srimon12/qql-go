@@ -281,10 +281,11 @@ type QueryStmt struct {
 }
 
 type DeleteStmt struct {
-	Collection string
-	PointID    any
-	Field      string
-	Value      any
+	Collection  string
+	PointID     any
+	Field       string
+	Value       any
+	QueryFilter FilterExpr
 }
 
 type UpdateVectorStmt struct {

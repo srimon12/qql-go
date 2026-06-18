@@ -162,5 +162,181 @@
   {
     "label": "Complex point from earlier",
     "json": "{\"id\":42,\"vector\":[0.15,0.88,-0.23,0.45],\"payload\":{\"metadata\":{\"merchant\":\"TechZone\",\"category\":\"electronics\"},\"inventory\":{\"stock_count\":150,\"warehouses\":[{\"city\":\"Berlin\",\"coordinates\":{\"lon\":13.405,\"lat\":52.520}},{\"city\":\"Tokyo\",\"coordinates\":{\"lon\":139.65,\"lat\":35.67}}]},\"reviews\":[{\"user\":\"alice\",\"rating\":4.8,\"verified\":true},{\"user\":\"bob\",\"rating\":3.5,\"verified\":false}],\"tags\":[\"premium\",\"wireless\",\"noise-canceling\"]}}"
+  },
+  {
+    "label": "Filter must (scroll)",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}},{\"key\":\"color\",\"match\":{\"value\":\"red\"}}]}}"
+  },
+  {
+    "label": "Filter should (scroll)",
+    "json": "{\"filter\":{\"should\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}},{\"key\":\"color\",\"match\":{\"value\":\"red\"}}]}}"
+  },
+  {
+    "label": "Filter must_not (scroll)",
+    "json": "{\"filter\":{\"must_not\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}},{\"key\":\"color\",\"match\":{\"value\":\"red\"}}]}}"
+  },
+  {
+    "label": "Filter combined must+must_not",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}}],\"must_not\":[{\"key\":\"color\",\"match\":{\"value\":\"red\"}}]}}"
+  },
+  {
+    "label": "Filter nested must_not wrapping must",
+    "json": "{\"filter\":{\"must_not\":[{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}},{\"key\":\"color\",\"match\":{\"value\":\"red\"}}]}]}}"
+  },
+  {
+    "label": "Filter nested key dot notation",
+    "json": "{\"filter\":{\"should\":[{\"key\":\"country.name\",\"match\":{\"value\":\"Germany\"}}]}}"
+  },
+  {
+    "label": "Filter array projection range",
+    "json": "{\"filter\":{\"should\":[{\"key\":\"country.cities[].population\",\"range\":{\"gte\":9.0}}]}}"
+  },
+  {
+    "label": "Filter nested array match",
+    "json": "{\"filter\":{\"should\":[{\"key\":\"country.cities[].sightseeing\",\"match\":{\"value\":\"Osaka Castle\"}}]}}"
+  },
+  {
+    "label": "Filter nested object",
+    "json": "{\"filter\":{\"must\":[{\"nested\":{\"key\":\"diet\",\"filter\":{\"must\":[{\"key\":\"food\",\"match\":{\"value\":\"meat\"}},{\"key\":\"likes\",\"match\":{\"value\":true}}]}}}]}}"
+  },
+  {
+    "label": "Filter has_id",
+    "json": "{\"filter\":{\"must\":[{\"has_id\":[1,3,5,7,9,11]}]}}"
+  },
+  {
+    "label": "Filter has_vector",
+    "json": "{\"filter\":{\"must\":[{\"has_vector\":\"image\"}]}}"
+  },
+  {
+    "label": "Filter full text match",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"description\",\"match\":{\"text\":\"good cheap\"}}]}}"
+  },
+  {
+    "label": "Filter full text any",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"description\",\"match\":{\"text_any\":\"good cheap\"}}]}}"
+  },
+  {
+    "label": "Filter phrase match",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"description\",\"match\":{\"phrase\":\"brown fox\"}}]}}"
+  },
+  {
+    "label": "Filter range",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"price\",\"range\":{\"gte\":100.0,\"lte\":450.0}}]}}"
+  },
+  {
+    "label": "Filter datetime range",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"date\",\"range\":{\"gt\":\"2023-02-08T10:49:00Z\",\"lte\":\"2024-01-31T10:14:31Z\"}}]}}"
+  },
+  {
+    "label": "Filter UUID match",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"uuid\",\"match\":{\"value\":\"f47ac10b-58cc-4372-a567-0e02b2c3d479\"}}]}}"
+  },
+  {
+    "label": "Filter geo bounding box",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"location\",\"geo_bounding_box\":{\"bottom_right\":{\"lon\":13.455868,\"lat\":52.495862},\"top_left\":{\"lon\":13.403683,\"lat\":52.520711}}}]}}"
+  },
+  {
+    "label": "Filter geo radius",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"location\",\"geo_radius\":{\"center\":{\"lon\":13.403683,\"lat\":52.520711},\"radius\":1000.0}}]}}"
+  },
+  {
+    "label": "Filter values count",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"comments\",\"values_count\":{\"gt\":2}}]}}"
+  },
+  {
+    "label": "Filter is_empty",
+    "json": "{\"filter\":{\"must\":[{\"is_empty\":{\"key\":\"reports\"}}]}}"
+  },
+  {
+    "label": "Filter is_null",
+    "json": "{\"filter\":{\"must\":[{\"is_null\":{\"key\":\"reports\"}}]}}"
+  },
+  {
+    "label": "Search by ID query",
+    "json": "{\"query\":\"43cf51e2-8777-4f52-bc74-c2cbde0c8b04\"}"
+  },
+  {
+    "label": "Search with vector + filter + params",
+    "json": "{\"query\":[0.2,0.1,0.9,0.79],\"filter\":{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}}]},\"params\":{\"hnsw_ef\":128,\"exact\":false},\"limit\":3}"
+  },
+  {
+    "label": "Search with using named vector",
+    "json": "{\"query\":[0.2,0.1,0.9,0.7],\"using\":\"image\",\"limit\":3}"
+  },
+  {
+    "label": "Sparse vector query",
+    "json": "{\"query\":{\"indices\":[1,3,5,7],\"values\":[0.1,0.2,0.3,0.4]},\"using\":\"text\"}"
+  },
+  {
+    "label": "Search with_vectors + with_payload true",
+    "json": "{\"query\":[0.2,0.1,0.9,0.7],\"with_vectors\":true,\"with_payload\":true}"
+  },
+  {
+    "label": "Search with_payload array",
+    "json": "{\"query\":[0.2,0.1,0.9,0.7],\"with_payload\":[\"city\",\"village\",\"town\"]}"
+  },
+  {
+    "label": "Search with_payload exclude",
+    "json": "{\"query\":[0.2,0.1,0.9,0.7],\"with_payload\":{\"exclude\":[\"city\"]}}"
+  },
+  {
+    "label": "Search ACORN params",
+    "json": "{\"query\":[0.2,0.1,0.9,0.7],\"params\":{\"acorn\":{\"enable\":true,\"max_selectivity\":0.4}},\"limit\":10}"
+  },
+  {
+    "label": "Batch search 2 queries",
+    "json": "{\"searches\":[{\"query\":[0.2,0.1,0.9,0.7],\"filter\":{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}}]},\"limit\":3},{\"query\":[0.5,0.3,0.2,0.3],\"filter\":{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}}]},\"limit\":3}]}"
+  },
+  {
+    "label": "Query by ID with lookup_from",
+    "json": "{\"query\":\"43cf51e2-8777-4f52-bc74-c2cbde0c8b04\",\"using\":\"512d-vector\",\"lookup_from\":{\"collection\":\"another_collection\",\"vector\":\"image-512\"}}"
+  },
+  {
+    "label": "Pagination with offset",
+    "json": "{\"query\":[0.2,0.1,0.9,0.7],\"with_vectors\":true,\"with_payload\":true,\"limit\":10,\"offset\":100}"
+  },
+  {
+    "label": "Search groups",
+    "json": "{\"query\":[1.1],\"group_by\":\"document_id\",\"limit\":4,\"group_size\":2}"
+  },
+  {
+    "label": "Groups with lookup",
+    "json": "{\"query\":[0.2,0.1,0.9,0.7],\"group_by\":\"document_id\",\"limit\":2,\"group_size\":2,\"with_lookup\":{\"collection\":\"documents\",\"with_payload\":[\"title\",\"text\"],\"with_vectors\":false}}"
+  },
+  {
+    "label": "Random sample",
+    "json": "{\"query\":{\"sample\":\"random\"}}"
+  },
+  {
+    "label": "RRF fusion sparse+dense",
+    "json": "{\"prefetch\":[{\"query\":{\"indices\":[1,42],\"values\":[0.22,0.8]},\"using\":\"sparse\",\"limit\":20},{\"query\":[0.01,0.45,0.67],\"using\":\"dense\",\"limit\":20}],\"query\":{\"rrf\":{}},\"limit\":10}"
+  },
+  {
+    "label": "RRF with k=60",
+    "json": "{\"prefetch\":[{\"query\":[0.01,0.45],\"using\":\"dense\",\"limit\":20},{\"query\":[0.01,0.45],\"using\":\"sparse\",\"limit\":20}],\"query\":{\"rrf\":{\"k\":60}},\"limit\":10}"
+  },
+  {
+    "label": "Weighted RRF",
+    "json": "{\"prefetch\":[{\"query\":[0.01,0.45],\"using\":\"dense\",\"limit\":20},{\"query\":[0.01,0.45],\"using\":\"sparse\",\"limit\":20}],\"query\":{\"rrf\":{\"weights\":[3.0,1.0]}},\"limit\":10}"
+  },
+  {
+    "label": "DBSF fusion",
+    "json": "{\"prefetch\":[{\"query\":[0.01,0.45,0.67],\"using\":\"dense\",\"limit\":20},{\"query\":[0.01,0.45,0.67],\"using\":\"sparse\",\"limit\":20}],\"query\":{\"fusion\":\"dbsf\"},\"limit\":10}"
+  },
+  {
+    "label": "Multi-stage rescore",
+    "json": "{\"prefetch\":{\"query\":[1,23,45,67],\"using\":\"mrl_byte\",\"limit\":1000},\"query\":[0.01,0.299,0.45,0.67],\"using\":\"full\",\"limit\":10}"
+  },
+  {
+    "label": "Multi-vector rescore",
+    "json": "{\"prefetch\":{\"query\":[0.01,0.45,0.67],\"limit\":100},\"query\":[[0.1,0.2],[0.2,0.1],[0.8,0.9]],\"using\":\"colbert\",\"limit\":10}"
+  },
+  {
+    "label": "Nested 3-level prefetch",
+    "json": "{\"prefetch\":{\"prefetch\":{\"query\":[1,23,45,67],\"using\":\"mrl_byte\",\"limit\":1000},\"query\":[0.01,0.45,0.67],\"using\":\"full\",\"limit\":100},\"query\":[[0.1,0.2],[0.2,0.1],[0.8,0.9]],\"using\":\"colbert\",\"limit\":10}"
+  },
+  {
+    "label": "Formula + RRF fusion",
+    "json": "{\"prefetch\":{\"prefetch\":[{\"query\":{\"indices\":[1,42],\"values\":[0.22,0.8]},\"using\":\"sparse\",\"limit\":100},{\"query\":[0.01,0.45,0.67],\"using\":\"dense\",\"limit\":100}],\"query\":{\"rrf\":{}},\"limit\":100},\"query\":{\"formula\":{\"sum\":[\"$score\",{\"mult\":[0.1,{\"exp_decay\":{\"x\":{\"datetime_key\":\"published_at\"},\"target\":{\"datetime\":\"2026-01-01\"},\"scale\":15552000,\"midpoint\":0.5}}]}]}},\"limit\":10}"
   }
 ]

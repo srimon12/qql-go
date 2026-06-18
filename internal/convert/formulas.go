@@ -3,6 +3,7 @@ package convert
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/srimon12/qql-go/internal/ast"
@@ -229,11 +230,19 @@ func convertDecayExpr(name string, input any) (string, error) {
 	}
 
 	if scale, ok := decayMap["scale"]; ok {
-		args = append(args, fmt.Sprintf("scale = %v", scale))
+		if f, isFloat := scale.(float64); isFloat {
+			args = append(args, "scale = "+strconv.FormatFloat(f, 'f', -1, 64))
+		} else {
+			args = append(args, fmt.Sprintf("scale = %v", scale))
+		}
 	}
 
 	if midpoint, ok := decayMap["midpoint"]; ok {
-		args = append(args, fmt.Sprintf("midpoint = %v", midpoint))
+		if f, isFloat := midpoint.(float64); isFloat {
+			args = append(args, "midpoint = "+strconv.FormatFloat(f, 'f', -1, 64))
+		} else {
+			args = append(args, fmt.Sprintf("midpoint = %v", midpoint))
+		}
 	}
 
 	return fmt.Sprintf("%s(%s)", name, strings.Join(args, ", ")), nil

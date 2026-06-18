@@ -202,11 +202,21 @@ func (p *Parser) parseCTEList() ([]ast.CTE, error) {
 
 // parseCTEQuery parses a QUERY statement inside a CTE body.
 func (p *Parser) parseCTEQuery() (*ast.QueryStmt, error) {
+	var ctes []ast.CTE
+	var err error
+	if p.peek().Kind == lexer.TokenKindWith {
+		p.advance()
+		ctes, err = p.parseCTEList()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if _, err := p.expect(lexer.TokenKindQuery); err != nil {
 		return nil, err
 	}
 
-	stmt := &ast.QueryStmt{}
+	stmt := &ast.QueryStmt{CTEs: ctes}
 	tok := p.peek()
 	if tok.Kind == lexer.TokenKindNearest {
 		p.advance()

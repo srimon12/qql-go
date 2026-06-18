@@ -144,17 +144,61 @@ func parseConditionList(raw json.RawMessage) []RESTCondition {
 }
 
 type RESTCondition struct {
-	HasID   []any           `json:"has_id"`
-	IsEmpty *RESTBoolVal    `json:"is_empty"`
-	IsNull  *RESTBoolVal    `json:"is_null"`
-	Key     string          `json:"key"`
-	Match   map[string]any  `json:"match"`
-	Range   map[string]any  `json:"range"`
-	Must    []RESTCondition `json:"must"`
-	Should  []RESTCondition `json:"should"`
-	MustNot []RESTCondition `json:"must_not"`
+	HasID          []any                `json:"has_id"`
+	IsEmpty        *RESTKeyCondition    `json:"is_empty"`
+	IsNull         *RESTKeyCondition    `json:"is_null"`
+	Key            string               `json:"key"`
+	Match          map[string]any       `json:"match"`
+	Range          map[string]any       `json:"range"`
+	Must           []RESTCondition      `json:"must"`
+	Should         []RESTCondition      `json:"should"`
+	MustNot        []RESTCondition      `json:"must_not"`
+	Nested         *RESTNestedCondition `json:"nested"`
+	GeoBoundingBox *RESTGeoBox          `json:"geo_bounding_box"`
+	GeoRadius      *RESTGeoRadius       `json:"geo_radius"`
+	ValuesCount    map[string]any       `json:"values_count"`
+	HasVector      *RESTHasVector       `json:"has_vector"`
 }
 
-type RESTBoolVal struct {
-	Value bool `json:"value"`
+type RESTNestedCondition struct {
+	Key    json.RawMessage `json:"key"`
+	Filter json.RawMessage `json:"filter"`
+}
+
+type RESTGeoBox struct {
+	TopLeft     RESTGeoPoint `json:"top_left"`
+	BottomRight RESTGeoPoint `json:"bottom_right"`
+}
+
+type RESTGeoRadius struct {
+	Center RESTGeoPoint `json:"center"`
+	Radius float64      `json:"radius"`
+}
+
+type RESTGeoPoint struct {
+	Lat float64 `json:"lat"`
+	Lon float64 `json:"lon"`
+}
+
+type RESTHasVector struct {
+	Vector string `json:"vector"` // or just a plain string
+}
+
+func (h *RESTHasVector) UnmarshalJSON(data []byte) error {
+	if len(data) > 0 && data[0] == '"' {
+		var s string
+		json.Unmarshal(data, &s)
+		h.Vector = s
+		return nil
+	}
+	var obj struct {
+		Vector string `json:"vector"`
+	}
+	json.Unmarshal(data, &obj)
+	h.Vector = obj.Vector
+	return nil
+}
+
+type RESTKeyCondition struct {
+	Key string `json:"key"`
 }

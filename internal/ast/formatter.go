@@ -2,6 +2,8 @@ package ast
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -13,7 +15,7 @@ func formatValue(v any) string {
 		if val == float64(int64(val)) {
 			return fmt.Sprintf("%d", int64(val))
 		}
-		return fmt.Sprintf("%v", val)
+		return strconv.FormatFloat(val, 'f', -1, 64)
 	case int, int32, int64, uint, uint32, uint64:
 		return fmt.Sprintf("%d", val)
 	case bool:
@@ -34,13 +36,16 @@ func formatValue(v any) string {
 		}
 		return "[" + strings.Join(items, ", ") + "]"
 	case map[string]any:
-		// Format as {lat: 48.1, lon: 11.5}
-		if lat, ok := val["lat"]; ok {
-			if lon, ok := val["lon"]; ok {
-				return fmt.Sprintf("{lat: %v, lon: %v}", lat, lon)
-			}
+		var keys []string
+		for k := range val {
+			keys = append(keys, k)
 		}
-		return fmt.Sprintf("%v", val)
+		sort.Strings(keys)
+		var items []string
+		for _, k := range keys {
+			items = append(items, fmt.Sprintf("'%s': %s", k, formatValue(val[k])))
+		}
+		return "{" + strings.Join(items, ", ") + "}"
 	default:
 		return fmt.Sprintf("%v", val)
 	}
@@ -145,6 +150,16 @@ func FormatQueryStmt(q *QueryStmt) string {
 			}
 			parts = append(parts, fmt.Sprintf("FEEDBACK (%s)", strings.Join(fbParts, ", ")))
 		}
+	case QueryModeSample:
+		parts = append(parts, "QUERY SAMPLE")
+	case QueryModeOrderBy:
+		if q.OrderByField != nil {
+			dir := "ASC"
+			if q.OrderByAsc != nil && !*q.OrderByAsc { dir = "DESC" }
+			parts = append(parts, fmt.Sprintf("QUERY ORDER BY %s %s", *q.OrderByField, dir))
+		} else {
+			parts = append(parts, "QUERY ORDER BY")
+		}
 	default:
 		parts = append(parts, "QUERY")
 	}
@@ -224,28 +239,20 @@ func FormatQueryStmt(q *QueryStmt) string {
 
 	if q.LookupFrom != "" {
 		if q.LookupVector != nil {
-			parts = append(parts, fmt.Sprintf("LOOKUP %s FROM %s", *q.LookupVector, q.LookupFrom))
+			parts = append(parts, fmt.Sprintf("LOOKUP FROM %s VECTOR %s", q.LookupFrom, formatValue(*q.LookupVector)))
 		} else {
 			parts = append(parts, fmt.Sprintf("LOOKUP FROM %s", q.LookupFrom))
 		}
 	}
 
 	if q.GroupBy != nil {
-		parts = append(parts, "GROUP BY "+*q.GroupBy)
+		parts = append(parts, "GROUP BY "+formatValue(*q.GroupBy))
 		if q.WithLookupCollection != nil {
 			parts = append(parts, "WITH LOOKUP FROM "+*q.WithLookupCollection)
 		}
 		if q.GroupSize != nil {
-			parts = append(parts, fmt.Sprintf("GROUP SIZE %d", *q.GroupSize))
+			parts = append(parts, fmt.Sprintf("GROUP_SIZE %d", *q.GroupSize))
 		}
-	}
-
-	if q.OrderByField != nil {
-		dir := "ASC"
-		if q.OrderByAsc != nil && !*q.OrderByAsc {
-			dir = "DESC"
-		}
-		parts = append(parts, fmt.Sprintf("ORDER BY %s %s", *q.OrderByField, dir))
 	}
 
 	if q.WithPayload != nil {

@@ -44,19 +44,21 @@ func convertUpsert(input, collection string) ([]string, error) {
 
 func convertSearch(input, collection string) ([]string, error) {
 	var req struct {
-		Vector         any         `json:"vector"`
-		Query          struct {
-			Text  string `json:"text"`
-			Model string `json:"model"`
-		} `json:"query"`
+		Vector         any    `json:"vector"`
+		QueryRaw       any    `json:"query"`
 		Limit          int         `json:"limit"`
 		Offset         int         `json:"offset"`
 		Filter         *RESTFilter `json:"filter"`
 		WithPayload    any         `json:"with_payload"`
 		WithVector     any         `json:"with_vector"`
+		WithVectors    any         `json:"with_vectors"`
 		ScoreThreshold *float64    `json:"score_threshold"`
 		Using          string      `json:"using"`
 		Params         any         `json:"params"`
+		GroupBy        string      `json:"group_by"`
+		GroupSize      int         `json:"group_size"`
+		WithLookup     any         `json:"with_lookup"`
+		LookupFrom     any         `json:"lookup_from"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid search JSON: %w", err)
@@ -69,59 +71,87 @@ func convertSearch(input, collection string) ([]string, error) {
 		Offset:     req.Offset,
 	}
 
-	// Query text (new format)
-	if req.Query.Text != "" {
-		stmt.QueryText = &req.Query.Text
-		if req.Query.Model != "" {
-			stmt.Model = &req.Query.Model
+	// Query handling: check raw query (ID string, vector array, object with text/model/indices)
+	if qm, ok := req.QueryRaw.(map[string]interface{}); ok {
+		if t, ok := qm["text"]; ok {
+			if s, ok := t.(string); ok { stmt.QueryText = &s }
 		}
-	} else if vec, ok := req.Vector.([]any); ok && len(vec) > 0 {
+		if m, ok := qm["model"]; ok {
+			if s, ok := m.(string); ok { stmt.Model = &s }
+		}
+		if _, ok := qm["sample"]; ok { stmt.Mode = ast.QueryModeSample }
+		if _, ok := qm["indices"]; ok {
+			str := "<sparse_query>"
+			stmt.QueryText = &str
+			stmt.Type = ast.QueryTypeSparse
+		}
+	} else if s, ok := req.QueryRaw.(string); ok && s != "" {
+		stmt.QueryID = s
+	} else if vec, ok := req.QueryRaw.([]interface{}); ok && len(vec) > 0 {
 		raw := make([]float64, len(vec))
 		for i, v := range vec {
-			switch f := v.(type) {
-			case float64:
-				raw[i] = f
-			case int:
-				raw[i] = float64(f)
-			}
+			switch f := v.(type) { case float64: raw[i] = f; case int: raw[i] = float64(f) }
 		}
 		stmt.RawVector = raw
-	} else if req.Vector != nil {
-		str := "<query_text>"
-		stmt.QueryText = &str
+	} else if vec, ok := req.Vector.([]interface{}); ok && len(vec) > 0 {
+		raw := make([]float64, len(vec))
+		for i, v := range vec {
+			switch f := v.(type) { case float64: raw[i] = f; case int: raw[i] = float64(f) }
+		}
+		stmt.RawVector = raw
 	}
 
 	// Using
 	switch strings.ToLower(req.Using) {
-	case "hybrid":
-		stmt.Type = ast.QueryTypeHybrid
-	case "sparse":
-		stmt.Type = ast.QueryTypeSparse
+	case "hybrid": stmt.Type = ast.QueryTypeHybrid
+	case "sparse": stmt.Type = ast.QueryTypeSparse
 	default:
-		if req.Using != "" {
-			using := req.Using
-			stmt.Using = &using
-		}
+		if req.Using != "" { using := req.Using; stmt.Using = &using }
 	}
 
 	// Filter
-	if req.Filter != nil {
-		stmt.QueryFilter = convertRESTFilter(req.Filter)
-	}
+	if req.Filter != nil { stmt.QueryFilter = convertRESTFilter(req.Filter) }
 
 	// Score threshold
-	if req.ScoreThreshold != nil {
-		stmt.ScoreThreshold = req.ScoreThreshold
-	}
+	if req.ScoreThreshold != nil { stmt.ScoreThreshold = req.ScoreThreshold }
 
 	// Params
-	if req.Params != nil {
-		stmt.WithClause = buildWithClause(req.Params)
+	if req.Params != nil { stmt.WithClause = buildWithClause(req.Params) }
+
+	// Group by / group size
+	if req.GroupBy != "" {
+		stmt.GroupBy = &req.GroupBy
+		if req.GroupSize > 0 { stmt.GroupSize = &req.GroupSize }
 	}
 
-	// WithPayload and WithVectors
-	stmt.WithPayload = buildPayloadSelector(req.WithPayload)
-	stmt.WithVectors = buildVectorsSelector(req.WithVector)
+	// WithLookup
+	if req.WithLookup != nil {
+		if lookupMap, ok := req.WithLookup.(map[string]interface{}); ok {
+			if coll, ok := lookupMap["collection"]; ok {
+				if s, ok := coll.(string); ok { stmt.WithLookupCollection = &s }
+			}
+		}
+	}
+
+	// Lookup from
+	if req.LookupFrom != nil {
+		if lookupMap, ok := req.LookupFrom.(map[string]interface{}); ok {
+			if coll, ok := lookupMap["collection"]; ok {
+				if s, ok := coll.(string); ok { stmt.LookupFrom = s }
+			}
+			if vec, ok := lookupMap["vector"]; ok {
+				if s, ok := vec.(string); ok { stmt.LookupVector = &s }
+			}
+		}
+	}
+
+	// WithPayload and WithVectors (prefer newer "with_vectors" over "with_vector")
+	wp := req.WithPayload
+	if wp == nil { wp = true } // default
+	stmt.WithPayload = buildPayloadSelector(wp)
+	wv := req.WithVector
+	if wv == nil { wv = req.WithVectors }
+	stmt.WithVectors = buildVectorsSelector(wv)
 
 	return []string{ast.FormatQueryStmt(stmt)}, nil
 }

@@ -5,7 +5,11 @@ import (
 )
 
 var keywords = map[string]TokenKind{
-	"BOOST":       TokenKindBoost,
+	"GEO_BBOX":     TokenKindGeoBbox,
+	"GEO_RADIUS":   TokenKindGeoRadius,
+	"VALUES_COUNT": TokenKindValuesCount,
+	"HAS_VECTOR":   TokenKindHasVector,
+	"BOOST":        TokenKindBoost,
 	"DEFAULTS":    TokenKindDefaults,
 	"CASE":        TokenKindCase,
 	"WHEN":        TokenKindWhen,

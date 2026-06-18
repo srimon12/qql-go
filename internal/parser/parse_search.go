@@ -202,14 +202,14 @@ func (p *Parser) parsePredicate() (ast.FilterExpr, error) {
 
 	if tok.Kind == lexer.TokenKindBetween {
 		p.advance()
-		low, err := p.parseNumber()
+		low, err := p.parseValue()
 		if err != nil {
 			return nil, err
 		}
 		if _, err := p.expect(lexer.TokenKindAnd); err != nil {
 			return nil, err
 		}
-		high, err := p.parseNumber()
+		high, err := p.parseValue()
 		if err != nil {
 			return nil, err
 		}
@@ -244,7 +244,7 @@ func (p *Parser) parsePredicate() (ast.FilterExpr, error) {
 	op := tokenKindToOp(tok.Kind)
 	if op != "" {
 		p.advance()
-		value, err := p.parseLiteral()
+		value, err := p.parseValue()
 		if err != nil {
 			return nil, err
 		}

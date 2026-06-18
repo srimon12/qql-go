@@ -203,6 +203,52 @@ func convertRESTCondition(c RESTCondition) ast.FilterExpr {
 	if len(c.Must) > 0 || len(c.Should) > 0 || len(c.MustNot) > 0 {
 		return convertRESTFilter(&RESTFilter{Must: c.Must, Should: c.Should, MustNot: c.MustNot})
 	}
+	if c.IsEmpty != nil {
+		if c.IsEmpty.Key != "" {
+			return ast.IsEmptyExpr{Field: c.IsEmpty.Key}
+		}
+	}
+	if c.IsNull != nil {
+		if c.IsNull.Key != "" {
+			return ast.IsNullExpr{Field: c.IsNull.Key}
+		}
+	}
+	if c.Nested != nil {
+		var nestedFilter RESTFilter
+		if err := json.Unmarshal(c.Nested.Filter, &nestedFilter); err == nil {
+			var key string
+			json.Unmarshal(c.Nested.Key, &key)
+			return convertRESTFilter(&nestedFilter)
+		}
+		return nil
+	}
+	if c.GeoBoundingBox != nil {
+		return ast.CompareExpr{Field: c.Key, Op: "GEO_BBOX", Value: map[string]any{
+			"top_left": map[string]any{
+				"lat": c.GeoBoundingBox.TopLeft.Lat,
+				"lon": c.GeoBoundingBox.TopLeft.Lon,
+			},
+			"bottom_right": map[string]any{
+				"lat": c.GeoBoundingBox.BottomRight.Lat,
+				"lon": c.GeoBoundingBox.BottomRight.Lon,
+			},
+		}}
+	}
+	if c.GeoRadius != nil {
+		return ast.CompareExpr{Field: c.Key, Op: "GEO_RADIUS", Value: map[string]any{
+			"center": map[string]any{
+				"lat": c.GeoRadius.Center.Lat,
+				"lon": c.GeoRadius.Center.Lon,
+			},
+			"radius": c.GeoRadius.Radius,
+		}}
+	}
+	if c.ValuesCount != nil {
+		return ast.CompareExpr{Field: c.Key, Op: "VALUES_COUNT", Value: c.ValuesCount}
+	}
+	if c.HasVector != nil && c.HasVector.Vector != "" {
+		return ast.CompareExpr{Field: c.HasVector.Vector, Op: "HAS_VECTOR", Value: true}
+	}
 	if c.Key != "" {
 		if c.Match != nil {
 			if val, ok := c.Match["value"]; ok {
@@ -262,12 +308,6 @@ func convertRESTCondition(c RESTCondition) ast.FilterExpr {
 			if hasLt {
 				return ast.CompareExpr{Field: c.Key, Op: "<", Value: lt}
 			}
-		}
-		if c.IsEmpty != nil && c.IsEmpty.Value {
-			return ast.IsEmptyExpr{Field: c.Key}
-		}
-		if c.IsNull != nil && c.IsNull.Value {
-			return ast.IsNullExpr{Field: c.Key}
 		}
 	}
 	if len(c.HasID) > 0 {

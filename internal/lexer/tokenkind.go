@@ -104,6 +104,10 @@ const (
 	TokenKindGte
 	TokenKindLt
 	TokenKindLte
+	TokenKindGeoBbox
+	TokenKindGeoRadius
+	TokenKindValuesCount
+	TokenKindHasVector
 	TokenKindPrefetch
 	TokenKindFusion
 	TokenKindSample
@@ -224,6 +228,10 @@ var tokenKindStrings = map[TokenKind]string{
 	TokenKindGte:         "GTE",
 	TokenKindLt:          "LT",
 	TokenKindLte:         "LTE",
+	TokenKindGeoBbox:     "GEO_BBOX",
+	TokenKindGeoRadius:   "GEO_RADIUS",
+	TokenKindValuesCount: "VALUES_COUNT",
+	TokenKindHasVector:   "HAS_VECTOR",
 	TokenKindPrefetch:    "PREFETCH",
 	TokenKindFusion:      "FUSION",
 	TokenKindSample:      "SAMPLE",

@@ -123,6 +123,14 @@ func convertByStructure(input string) ([]string, error) {
 
 	// Check for query with formula/MMR/relevance_feedback (top-level "query" object)
 	if len(raw.Query) > 0 {
+		// Raw vector array: [0.2, 0.1, 0.9, 0.7]
+		if raw.Query[0] == '[' {
+			return convertSearch(input, "unknown")
+		}
+		// Raw string ID: "43cf51e2-8777-..."
+		if raw.Query[0] == '"' {
+			return convertSearch(input, "unknown")
+		}
 		var queryObj struct {
 			Formula           json.RawMessage `json:"formula"`
 			Nearest           json.RawMessage `json:"nearest"`
@@ -132,6 +140,8 @@ func convertByStructure(input string) ([]string, error) {
 			Recommend         json.RawMessage `json:"recommend"`
 			Discover          json.RawMessage `json:"discover"`
 			Context           json.RawMessage `json:"context"`
+			Sample            json.RawMessage `json:"sample"`
+			Indices           json.RawMessage `json:"indices"`
 		}
 		if json.Unmarshal(raw.Query, &queryObj) == nil {
 			if len(queryObj.Formula) > 0 {
@@ -157,6 +167,12 @@ func convertByStructure(input string) ([]string, error) {
 			}
 			if len(queryObj.Context) > 0 {
 				return convertDiscover(input, "unknown")
+			}
+			if len(queryObj.Sample) > 0 {
+				return convertSearch(input, "unknown")
+			}
+			if len(queryObj.Indices) > 0 {
+				return convertSearch(input, "unknown")
 			}
 		}
 	}

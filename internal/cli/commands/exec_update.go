@@ -194,6 +194,19 @@ func buildUpdatePayloadRequest(n *ast.UpdatePayloadStmt, timeout *uint64) (*qdra
 func buildDeleteRequest(n *ast.DeleteStmt, timeout *uint64) (*qdrant.DeletePoints, error) {
 	wait := true
 
+	if n.QueryFilter != nil {
+		qdrantFilter, err := filters.NewFilterConverter().BuildFilter(n.QueryFilter)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build delete filter: %w", err)
+		}
+		return &qdrant.DeletePoints{
+			CollectionName: n.Collection,
+			Points:         qdrant.NewPointsSelectorFilter(qdrantFilter),
+			Wait:           &wait,
+			Timeout:        timeout,
+		}, nil
+	}
+
 	if n.Field != "" {
 		filter, err := filters.NewFilterConverter().BuildFilter(&ast.CompareExpr{
 			Field: n.Field,
