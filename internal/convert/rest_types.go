@@ -32,7 +32,7 @@ func (l *RESTPrefetchList) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || string(data) == "null" {
 		return nil
 	}
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		switch data[i] {
 		case ' ', '\t', '\n', '\r':
 			continue
@@ -57,8 +57,8 @@ func (l *RESTPrefetchList) UnmarshalJSON(data []byte) error {
 
 type RESTQuery struct {
 	Formula           json.RawMessage        `json:"formula"`
-	Nearest           interface{}            `json:"nearest"`
-	Document          interface{}            `json:"document"`
+	Nearest           any                    `json:"nearest"`
+	Document          any                    `json:"document"`
 	Text              string                 `json:"text"`
 	Model             string                 `json:"model"`
 	Recommend         *RESTRecommend         `json:"recommend"`
@@ -72,7 +72,7 @@ func (q *RESTQuery) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		switch data[i] {
 		case ' ', '\t', '\n', '\r':
 			continue
@@ -152,7 +152,7 @@ func (l *RESTConditionList) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || string(data) == "null" {
 		return nil
 	}
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		switch data[i] {
 		case ' ', '\t', '\n', '\r':
 			continue
@@ -217,7 +217,7 @@ type RESTHasVector struct {
 }
 
 func (h *RESTHasVector) UnmarshalJSON(data []byte) error {
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		switch data[i] {
 		case ' ', '\t', '\n', '\r':
 			continue

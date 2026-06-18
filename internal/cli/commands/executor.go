@@ -54,7 +54,12 @@ func (e *Executor) ExecuteResult(query string) (*ExecResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	return e.ExecuteNode(node)
+}
 
+// ExecuteNode executes a pre-parsed AST node. This allows the gateway to
+// transform the AST (e.g. inject policy filters) before execution.
+func (e *Executor) ExecuteNode(node ast.ASTNode) (*ExecResponse, error) {
 	switch n := node.(type) {
 	case *ast.ShowCollectionsStmt:
 		return e.doShowCollections()

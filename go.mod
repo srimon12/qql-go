@@ -9,6 +9,8 @@ require (
 	github.com/stretchr/testify v1.11.1
 )
 
+require github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
+
 require (
 	connectrpc.com/connect v1.20.0
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect

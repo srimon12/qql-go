@@ -31,7 +31,7 @@ func NewHandlerWithConfig(client qql.QdrantClient, cfg *config.Config) *Handler 
 	return &Handler{client: client, config: cfg}
 }
 
-// Exec parses and executes a single QQL query.
+// Exec parses and executes a single QQL query with policy enforcement.
 func (h *Handler) Exec(
 	ctx context.Context,
 	req *connect.Request[qqlpb.ExecRequest],
@@ -41,7 +41,49 @@ func (h *Handler) Exec(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("query is required"))
 	}
 
-	result, err := qql.ExecWithConfig(ctx, h.client, query, h.config)
+	claims := ExtractClaimsFromContext(ctx)
+	policy := ExtractEvaluatedPolicy(ctx)
+
+	// Parse the query into AST.
+	node, err := qql.Parse(query)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("parse error: %w", err))
+	}
+
+	// Apply policy enforcement if we have a policy.
+	if policy != nil {
+		injector := NewASTInjector(*policy, claims)
+
+		// Enforce operation permission.
+		if err := injector.EnforceOperation(node); err != nil {
+			return nil, connect.NewError(connect.CodePermissionDenied, err)
+		}
+
+		// Transform the AST based on node type.
+		if err := transformNode(injector, node); err != nil {
+			return nil, connect.NewError(connect.CodePermissionDenied, err)
+		}
+	}
+
+	if meta := ExtractAuditMeta(ctx); meta != nil {
+		meta.Collection = collectionFromNode(node)
+		meta.Query = query
+		if policy != nil {
+			meta.RuleIndex = policy.MatchedRule
+			if policy.InjectField != "" {
+				meta.FiltersInjected = []string{
+					fmt.Sprintf("%s %s %s", policy.InjectField, policy.InjectOp, policy.InjectValue),
+				}
+			}
+			if policy.MaxLimit > 0 {
+				lim := policy.MaxLimit
+				meta.LimitCapped = &lim
+			}
+		}
+	}
+
+	// Execute the (possibly transformed) AST.
+	result, err := qql.ExecAST(ctx, h.client, node, h.config)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -59,7 +101,7 @@ func (h *Handler) Exec(
 	}), nil
 }
 
-// ExecBatch executes multiple queries in one round-trip.
+// ExecBatch executes multiple queries with policy enforcement.
 func (h *Handler) ExecBatch(
 	ctx context.Context,
 	req *connect.Request[qqlpb.ExecBatchRequest],
@@ -69,9 +111,85 @@ func (h *Handler) ExecBatch(
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("at least one query is required"))
 	}
 
+	claims := ExtractClaimsFromContext(ctx)
+	policy := ExtractEvaluatedPolicy(ctx)
+
 	queries := make([]string, len(batchReq.GetQueries()))
 	for i, q := range batchReq.GetQueries() {
 		queries[i] = q.GetQuery()
+	}
+
+	// If policy is active, parse and transform each query individually.
+	if policy != nil {
+		injector := NewASTInjector(*policy, claims)
+		nodes := make([]ast.ASTNode, len(queries))
+		for i, q := range queries {
+			node, err := qql.Parse(q)
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("parse error in query %d: %w", i, err))
+			}
+			if err := injector.EnforceOperation(node); err != nil {
+				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("query %d: %w", i, err))
+			}
+			if err := transformNode(injector, node); err != nil {
+				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("query %d: %w", i, err))
+			}
+			nodes[i] = node
+		}
+
+		// Execute each transformed AST.
+		if meta := ExtractAuditMeta(ctx); meta != nil {
+			meta.Query = fmt.Sprintf("[Batch of %d queries]", len(queries))
+			if len(nodes) > 0 {
+				meta.Collection = collectionFromNode(nodes[0])
+			}
+			meta.RuleIndex = policy.MatchedRule
+			if policy.InjectField != "" {
+				meta.FiltersInjected = []string{
+					fmt.Sprintf("%s %s %s", policy.InjectField, policy.InjectOp, policy.InjectValue),
+				}
+			}
+			if policy.MaxLimit > 0 {
+				lim := policy.MaxLimit
+				meta.LimitCapped = &lim
+			}
+		}
+
+		results := make([]*qqlpb.ExecResponse, len(nodes))
+		for i, node := range nodes {
+			result, err := qql.ExecAST(ctx, h.client, node, h.config)
+			if err != nil {
+				if batchReq.GetStopOnError() {
+					return nil, connect.NewError(connect.CodeInternal, err)
+				}
+				results[i] = &qqlpb.ExecResponse{
+					Ok:      false,
+					Message: err.Error(),
+				}
+				continue
+			}
+			data, err := json.Marshal(result.Data)
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal batch result %d: %w", i, err))
+			}
+			results[i] = &qqlpb.ExecResponse{
+				Ok:        result.OK,
+				Operation: result.Operation,
+				Message:   result.Message,
+				Data:      data,
+			}
+		}
+		return connect.NewResponse(&qqlpb.ExecBatchResponse{Results: results}), nil
+	}
+
+	// No policy — use the original fast path.
+	if meta := ExtractAuditMeta(ctx); meta != nil {
+		meta.Query = fmt.Sprintf("[Batch of %d queries]", len(queries))
+		if len(queries) > 0 {
+			if node, err := qql.Parse(queries[0]); err == nil {
+				meta.Collection = collectionFromNode(node)
+			}
+		}
 	}
 
 	allQuery := true
@@ -188,4 +306,77 @@ func (h *Handler) Convert(
 		Ok:         true,
 		Statements: statements,
 	}), nil
+}
+
+// transformNode applies policy-based transformations to an AST node.
+func transformNode(injector *ASTInjector, node ast.ASTNode) error {
+	switch n := node.(type) {
+	case *ast.QueryStmt:
+		return injector.TransformQuery(n)
+	case *ast.ScrollStmt:
+		return injector.TransformScroll(n)
+	case *ast.DeleteStmt:
+		return injector.TransformDelete(n)
+	case *ast.InsertStmt:
+		return injector.TransformInsert(n)
+	case *ast.UpdatePayloadStmt:
+		return injector.TransformUpdatePayload(n)
+	case *ast.UpdateVectorStmt:
+		return injector.TransformUpdateVector(n)
+	case *ast.CreateCollectionStmt:
+		return injector.TransformCreateCollection(n)
+	case *ast.DropCollectionStmt:
+		return injector.TransformDropCollection(n)
+	case *ast.AlterCollectionStmt:
+		return injector.TransformAlterCollection(n)
+	case *ast.CreateIndexStmt:
+		return injector.TransformCreateIndex(n)
+	case *ast.SelectStmt:
+		return injector.EnforceCollection(n.Collection)
+	case *ast.ShowCollectionsStmt, *ast.ShowCollectionStmt:
+		return nil // always allowed
+	default:
+		return nil
+	}
+}
+
+
+
+// collectionFromNode extracts the collection name from an AST node.
+func collectionFromNode(node ast.ASTNode) string {
+	switch n := node.(type) {
+	case *ast.QueryStmt:
+		return n.Collection
+	case *ast.InsertStmt:
+		return n.Collection
+	case *ast.DeleteStmt:
+		return n.Collection
+	case *ast.UpdatePayloadStmt:
+		return n.Collection
+	case *ast.UpdateVectorStmt:
+		return n.Collection
+	case *ast.ScrollStmt:
+		return n.Collection
+	case *ast.SelectStmt:
+		return n.Collection
+	case *ast.CreateCollectionStmt:
+		return n.Collection
+	case *ast.DropCollectionStmt:
+		return n.Collection
+	case *ast.AlterCollectionStmt:
+		return n.Collection
+	case *ast.CreateIndexStmt:
+		return n.Collection
+	case *ast.ShowCollectionStmt:
+		return n.Collection
+	default:
+		return ""
+	}
+}
+
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

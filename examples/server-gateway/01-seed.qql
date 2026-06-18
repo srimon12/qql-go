@@ -1,0 +1,169 @@
+-- 01-seed.qql
+-- Gateway demo: multi-tenant data for policy enforcement showcase.
+-- Run: qql-go execute 01-seed.qql
+
+CREATE COLLECTION docs HYBRID
+
+CREATE INDEX ON COLLECTION docs FOR tenant_id TYPE keyword
+CREATE INDEX ON COLLECTION docs FOR department TYPE keyword
+CREATE INDEX ON COLLECTION docs FOR access_level TYPE keyword
+CREATE INDEX ON COLLECTION docs FOR topic TYPE keyword
+CREATE INDEX ON COLLECTION docs FOR source TYPE keyword
+
+INSERT INTO docs VALUES
+  {
+    'id': 1,
+    'text': 'ACME engineering onboarding: set up your dev environment with Go 1.24, clone the monorepo, and run make bootstrap.',
+    'tenant_id': 'acme-corp',
+    'department': 'engineering',
+    'access_level': 'internal',
+    'topic': 'onboarding',
+    'source': 'engineering_handbook.md'
+  },
+  {
+    'id': 2,
+    'text': 'ACME tech stack: Go microservices on Kubernetes, Postgres for OLTP, Qdrant for vector search, Grafana for observability.',
+    'tenant_id': 'acme-corp',
+    'department': 'engineering',
+    'access_level': 'internal',
+    'topic': 'architecture',
+    'source': 'tech_stack.md'
+  },
+  {
+    'id': 3,
+    'text': 'ACME incident response: P1 triggers PagerDuty, war room in #incident channel, postmortem within 48 hours.',
+    'tenant_id': 'acme-corp',
+    'department': 'engineering',
+    'access_level': 'internal',
+    'topic': 'operations',
+    'source': 'incident_playbook.md'
+  },
+  {
+    'id': 4,
+    'text': 'ACME API rate limits: free tier 100 req/min, pro tier 1000 req/min, enterprise unlimited with dedicated support.',
+    'tenant_id': 'acme-corp',
+    'department': 'engineering',
+    'access_level': 'public',
+    'topic': 'product',
+    'source': 'api_docs.md'
+  },
+  {
+    'id': 5,
+    'text': 'ACME Q4 2025 revenue was $14.2M, up 23% QoQ. Monthly cash burn is $1.1M, giving 26 months of runway.',
+    'tenant_id': 'acme-corp',
+    'department': 'finance',
+    'access_level': 'confidential',
+    'topic': 'financials',
+    'source': 'q4_report.pdf'
+  },
+  {
+    'id': 6,
+    'text': 'ACME headcount plan: hire 8 engineers and 2 sales reps in Q1 2026. Total comp budget increase: $1.8M.',
+    'tenant_id': 'acme-corp',
+    'department': 'finance',
+    'access_level': 'confidential',
+    'topic': 'planning',
+    'source': 'headcount_plan.xlsx'
+  },
+  {
+    'id': 7,
+    'text': 'ACME pricing: Starter $49/mo, Pro $199/mo, Enterprise custom. Annual discount 20%.',
+    'tenant_id': 'acme-corp',
+    'department': 'finance',
+    'access_level': 'public',
+    'topic': 'pricing',
+    'source': 'pricing_page.md'
+  },
+  {
+    'id': 8,
+    'text': 'ACME company all-hands is every Friday 3pm. Submit questions via the #all-hands Slack channel.',
+    'tenant_id': 'acme-corp',
+    'department': 'all',
+    'access_level': 'internal',
+    'topic': 'company',
+    'source': 'company_wiki.md'
+  },
+  {
+    'id': 9,
+    'text': 'ACME holiday schedule 2026: office closed Dec 24-Jan 1, Memorial Day, July 4th, Thanksgiving.',
+    'tenant_id': 'acme-corp',
+    'department': 'all',
+    'access_level': 'public',
+    'topic': 'hr',
+    'source': 'hr_policies.md'
+  },
+  {
+    'id': 10,
+    'text': 'Globex platform runs on Rust services with a React frontend. Deployment is via GitLab CI to AWS EKS.',
+    'tenant_id': 'globex-corp',
+    'department': 'engineering',
+    'access_level': 'internal',
+    'topic': 'architecture',
+    'source': 'platform_overview.md'
+  },
+  {
+    'id': 11,
+    'text': 'Globex security audit findings: 3 critical, 12 high, 45 medium. Critical items due by end of sprint.',
+    'tenant_id': 'globex-corp',
+    'department': 'engineering',
+    'access_level': 'confidential',
+    'topic': 'security',
+    'source': 'security_audit.pdf'
+  },
+  {
+    'id': 12,
+    'text': 'Globex Series B closed at $50M valuation. Cash position: $12M. Burn rate: $800K/month.',
+    'tenant_id': 'globex-corp',
+    'department': 'finance',
+    'access_level': 'confidential',
+    'topic': 'financials',
+    'source': 'investor_update.pdf'
+  },
+  {
+    'id': 13,
+    'text': 'Globex enterprise deals: Acme Industries $240K ARR, Wayne Enterprises $180K ARR, Stark Corp pending $500K.',
+    'tenant_id': 'globex-corp',
+    'department': 'finance',
+    'access_level': 'confidential',
+    'topic': 'sales',
+    'source': 'pipeline_report.xlsx'
+  },
+  {
+    'id': 14,
+    'text': 'Globex remote work policy: 3 days in-office minimum. Core hours 10am-4pm local time.',
+    'tenant_id': 'globex-corp',
+    'department': 'all',
+    'access_level': 'internal',
+    'topic': 'hr',
+    'source': 'employee_handbook.md'
+  },
+  {
+    'id': 100,
+    'text': 'Welcome to the qql-go documentation. QQL is a SQL-like query language for Qdrant vector databases.',
+    'tenant_id': 'public',
+    'department': 'all',
+    'access_level': 'public',
+    'topic': 'documentation',
+    'source': 'docs/index.md'
+  },
+  {
+    'id': 101,
+    'text': 'QQL supports dense, sparse, and hybrid search with score boosting, CTEs, and multi-stage retrieval pipelines.',
+    'tenant_id': 'public',
+    'department': 'all',
+    'access_level': 'public',
+    'topic': 'documentation',
+    'source': 'docs/features.md'
+  },
+  {
+    'id': 102,
+    'text': 'qql-go gateway adds JWT authentication, policy enforcement, and tenant isolation on top of Qdrant.',
+    'tenant_id': 'public',
+    'department': 'all',
+    'access_level': 'public',
+    'topic': 'documentation',
+    'source': 'docs/gateway.md'
+  }
+USING HYBRID
+
+SHOW COLLECTION docs
