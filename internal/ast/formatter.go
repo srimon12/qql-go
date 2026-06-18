@@ -27,7 +27,13 @@ func formatValue(v any) string {
 			items = append(items, formatValue(item))
 		}
 		return "(" + strings.Join(items, ", ") + ")"
-	case map[string]interface{}:
+	case []string:
+		var items []string
+		for _, item := range val {
+			items = append(items, formatValue(item))
+		}
+		return "[" + strings.Join(items, ", ") + "]"
+	case map[string]any:
 		// Format as {lat: 48.1, lon: 11.5}
 		if lat, ok := val["lat"]; ok {
 			if lon, ok := val["lon"]; ok {
@@ -147,6 +153,19 @@ func FormatQueryStmt(q *QueryStmt) string {
 		parts = append(parts, "FROM "+q.Collection)
 	}
 
+	// USING + FUSION
+	if q.Type == QueryTypeHybrid {
+		parts = append(parts, "USING HYBRID")
+	} else if q.Using != nil {
+		parts = append(parts, "USING "+formatValue(*q.Using))
+	} else if q.Type == QueryTypeSparse {
+		parts = append(parts, "USING SPARSE")
+	}
+
+	if q.FusionType != nil {
+		parts = append(parts, "FUSION "+*q.FusionType)
+	}
+
 	// Strategy
 	if q.FeedbackStrategy != nil {
 		if q.FeedbackStrategy.Type == FeedbackStrategyNaive {
@@ -195,8 +214,80 @@ func FormatQueryStmt(q *QueryStmt) string {
 		parts = append(parts, fmt.Sprintf("DEFAULTS (%s)", strings.Join(defs, ", ")))
 	}
 
+	if q.ScoreThreshold != nil {
+		parts = append(parts, fmt.Sprintf("SCORE THRESHOLD %g", *q.ScoreThreshold))
+	}
+
+	if q.LookupFrom != "" {
+		if q.LookupVector != nil {
+			parts = append(parts, fmt.Sprintf("LOOKUP %s FROM %s", *q.LookupVector, q.LookupFrom))
+		} else {
+			parts = append(parts, fmt.Sprintf("LOOKUP FROM %s", q.LookupFrom))
+		}
+	}
+
+	if q.GroupBy != nil {
+		parts = append(parts, "GROUP BY "+*q.GroupBy)
+		if q.WithLookupCollection != nil {
+			parts = append(parts, "WITH LOOKUP FROM "+*q.WithLookupCollection)
+		}
+		if q.GroupSize != nil {
+			parts = append(parts, fmt.Sprintf("GROUP SIZE %d", *q.GroupSize))
+		}
+	}
+
+	if q.OrderByField != nil {
+		dir := "ASC"
+		if q.OrderByAsc != nil && !*q.OrderByAsc {
+			dir = "DESC"
+		}
+		parts = append(parts, fmt.Sprintf("ORDER BY %s %s", *q.OrderByField, dir))
+	}
+
+	if q.WithPayload != nil {
+		if q.WithPayload.Enable != nil {
+			if *q.WithPayload.Enable {
+				parts = append(parts, "WITH PAYLOAD true")
+			} else {
+				parts = append(parts, "WITH PAYLOAD false")
+			}
+		} else if len(q.WithPayload.Include) > 0 {
+			parts = append(parts, fmt.Sprintf("WITH PAYLOAD (include = %s)", formatValue(q.WithPayload.Include)))
+		} else if len(q.WithPayload.Exclude) > 0 {
+			parts = append(parts, fmt.Sprintf("WITH PAYLOAD (exclude = %s)", formatValue(q.WithPayload.Exclude)))
+		}
+	}
+
+	if q.WithVectors != nil {
+		if q.WithVectors.Enable != nil {
+			if *q.WithVectors.Enable {
+				parts = append(parts, "WITH VECTORS true")
+			} else {
+				parts = append(parts, "WITH VECTORS false")
+			}
+		} else if len(q.WithVectors.Vectors) > 0 {
+			quoted := make([]string, len(q.WithVectors.Vectors))
+			for i, v := range q.WithVectors.Vectors {
+				quoted[i] = fmt.Sprintf("'%s'", strings.ReplaceAll(v, "'", "\\'"))
+			}
+			parts = append(parts, fmt.Sprintf("WITH VECTORS (%s)", strings.Join(quoted, ", ")))
+		}
+	}
+
+	if q.Rerank {
+		if q.RerankModel != nil {
+			parts = append(parts, "RERANK MODEL "+formatValue(*q.RerankModel))
+		} else {
+			parts = append(parts, "RERANK")
+		}
+	}
+
 	if q.Limit > 0 {
 		parts = append(parts, fmt.Sprintf("LIMIT %d", q.Limit))
+	}
+
+	if q.Offset > 0 {
+		parts = append(parts, fmt.Sprintf("OFFSET %d", q.Offset))
 	}
 
 	if len(q.PrefetchRefs) > 0 {

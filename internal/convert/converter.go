@@ -102,12 +102,12 @@ func extractCollection(path string) string {
 
 func convertByStructure(input string) ([]string, error) {
 	var raw struct {
-		Query    json.RawMessage `json:"query"`
-		Prefetch json.RawMessage `json:"prefetch"`
-		Payload  json.RawMessage `json:"payload"`
-		Points   json.RawMessage `json:"points"`
-		Filter   json.RawMessage `json:"filter"`
-		Vector   json.RawMessage `json:"vector"`
+		Query         json.RawMessage `json:"query"`
+		Prefetch      json.RawMessage `json:"prefetch"`
+		Payload       json.RawMessage `json:"payload"`
+		Points        json.RawMessage `json:"points"`
+		Filter        json.RawMessage `json:"filter"`
+		Vector        json.RawMessage `json:"vector"`
 		Positive      json.RawMessage `json:"positive"`
 		Target        json.RawMessage `json:"target"`
 		Ids           json.RawMessage `json:"ids"`

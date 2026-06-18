@@ -154,7 +154,7 @@ const (
 	QueryModeNearest           QueryMode = "NEAREST"
 	QueryModeRecommend         QueryMode = "RECOMMEND"
 	QueryModeDiscover          QueryMode = "DISCOVER"
-	QueryModeContext            QueryMode = "CONTEXT"
+	QueryModeContext           QueryMode = "CONTEXT"
 	QueryModeOrderBy           QueryMode = "ORDER_BY"
 	QueryModeSample            QueryMode = "SAMPLE"
 	QueryModeRelevanceFeedback QueryMode = "RELEVANCE_FEEDBACK"
@@ -202,7 +202,7 @@ type PrefetchRef struct {
 
 // FeedbackItem represents a single scored example for relevance feedback.
 type FeedbackItem struct {
-	Example any     // point ID or vector
+	Example any // point ID or vector
 	Score   float64
 }
 
@@ -275,7 +275,7 @@ type QueryStmt struct {
 	FormulaDefaults map[string]any
 
 	// For RELEVANCE FEEDBACK
-	FeedbackTarget   any             // point ID or vector
+	FeedbackTarget   any // point ID or vector
 	FeedbackItems    []FeedbackItem
 	FeedbackStrategy *FeedbackStrategy
 }

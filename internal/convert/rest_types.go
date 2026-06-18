@@ -5,26 +5,26 @@ import (
 )
 
 type RESTQueryRequest struct {
-	Prefetch json.RawMessage        `json:"prefetch"`
-	Query    RESTQuery              `json:"query"`
-	Filter   *RESTFilter            `json:"filter"`
-	Limit    *int                   `json:"limit"`
-	Defaults map[string]interface{} `json:"defaults"`
+	Prefetch json.RawMessage `json:"prefetch"`
+	Query    RESTQuery       `json:"query"`
+	Filter   *RESTFilter     `json:"filter"`
+	Limit    *int            `json:"limit"`
+	Defaults map[string]any  `json:"defaults"`
 }
 
 type RESTPrefetch struct {
 	Prefetch json.RawMessage `json:"prefetch"`
 	Query    RESTQuery       `json:"query"`
-	Document interface{}     `json:"document"`
-	Vector   interface{}     `json:"vector"`
+	Document any             `json:"document"`
+	Vector   any             `json:"vector"`
 	Filter   *RESTFilter     `json:"filter"`
 	Limit    *int            `json:"limit"`
 }
 
 type RESTQuery struct {
 	Formula           json.RawMessage        `json:"formula"`
-	Nearest           interface{}            `json:"nearest"`
-	Document          interface{}            `json:"document"`
+	Nearest           any                    `json:"nearest"`
+	Document          any                    `json:"document"`
 	Recommend         *RESTRecommend         `json:"recommend"`
 	Discover          *RESTDiscover          `json:"discover"`
 	Context           []RESTContextPair      `json:"context"`
@@ -35,17 +35,17 @@ func (q *RESTQuery) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
 		return nil
 	}
-	
+
 	// If it's an array, it's a raw nearest vector
 	if len(data) > 0 && data[0] == '[' {
-		var arr []interface{}
+		var arr []any
 		if err := json.Unmarshal(data, &arr); err != nil {
 			return err
 		}
 		q.Nearest = arr
 		return nil
 	}
-	
+
 	// If it's a string, it could be a point ID or raw query text (if we allow that)
 	if len(data) > 0 && data[0] == '"' {
 		var s string
@@ -71,26 +71,26 @@ func (q *RESTQuery) UnmarshalJSON(data []byte) error {
 }
 
 type RESTRecommend struct {
-	Positive []interface{} `json:"positive"`
-	Negative []interface{} `json:"negative"`
-	Strategy string        `json:"strategy"`
+	Positive []any  `json:"positive"`
+	Negative []any  `json:"negative"`
+	Strategy string `json:"strategy"`
 }
 
 type RESTDiscover struct {
-	Target  interface{}       `json:"target"`
+	Target  any               `json:"target"`
 	Context []RESTContextPair `json:"context"`
 }
 
 type RESTContextPair struct {
-	Positive interface{} `json:"positive"`
-	Negative interface{} `json:"negative"`
+	Positive any `json:"positive"`
+	Negative any `json:"negative"`
 }
 
 type RESTRelevanceFeedback struct {
-	Target   interface{} `json:"target"`
+	Target   any `json:"target"`
 	Feedback []struct {
-		Example interface{} `json:"example"`
-		Score   float64     `json:"score"`
+		Example any     `json:"example"`
+		Score   float64 `json:"score"`
 	} `json:"feedback"`
 	Strategy *RESTFeedbackStrategy `json:"strategy"`
 }
@@ -110,15 +110,15 @@ type RESTFilter struct {
 }
 
 type RESTCondition struct {
-	HasID   []interface{}          `json:"has_id"`
-	IsEmpty *RESTBoolVal           `json:"is_empty"`
-	IsNull  *RESTBoolVal           `json:"is_null"`
-	Key     string                 `json:"key"`
-	Match   map[string]interface{} `json:"match"`
-	Range   map[string]interface{} `json:"range"`
-	Must    []RESTCondition        `json:"must"`
-	Should  []RESTCondition        `json:"should"`
-	MustNot []RESTCondition        `json:"must_not"`
+	HasID   []any           `json:"has_id"`
+	IsEmpty *RESTBoolVal    `json:"is_empty"`
+	IsNull  *RESTBoolVal    `json:"is_null"`
+	Key     string          `json:"key"`
+	Match   map[string]any  `json:"match"`
+	Range   map[string]any  `json:"range"`
+	Must    []RESTCondition `json:"must"`
+	Should  []RESTCondition `json:"should"`
+	MustNot []RESTCondition `json:"must_not"`
 }
 
 type RESTBoolVal struct {

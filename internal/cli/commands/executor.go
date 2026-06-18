@@ -642,8 +642,14 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			plan.WriteString(fmt.Sprintf("Statement: QUERY %s FROM %s LIMIT %v\n", string(n.Mode), n.Collection, n.Limit))
 		}
 
-		// Query text or ID
-		if n.QueryText != nil {
+		// Query text, ID, or RawVector
+		if len(n.RawVector) > 0 {
+			var strs []string
+			for _, v := range n.RawVector {
+				strs = append(strs, fmt.Sprintf("%g", v))
+			}
+			plan.WriteString(fmt.Sprintf("Raw Vector: [%s]\n", strings.Join(strs, ", ")))
+		} else if n.QueryText != nil {
 			plan.WriteString(fmt.Sprintf("Query: '%s'\n", *n.QueryText))
 		} else if n.QueryID != nil {
 			plan.WriteString(fmt.Sprintf("Query ID: %v\n", n.QueryID))

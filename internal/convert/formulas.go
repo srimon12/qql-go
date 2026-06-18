@@ -21,7 +21,7 @@ func convertFormulaQuery(input, collection string) ([]string, error) {
 
 	// Extract query text if present
 	if req.Query.Document != nil {
-		if docMap, ok := req.Query.Document.(map[string]interface{}); ok {
+		if docMap, ok := req.Query.Document.(map[string]any); ok {
 			if text, ok := docMap["text"]; ok {
 				if s, ok := text.(string); ok {
 					stmt.QueryText = &s
@@ -29,9 +29,9 @@ func convertFormulaQuery(input, collection string) ([]string, error) {
 			}
 		}
 	} else if req.Query.Nearest != nil {
-		if nearestMap, ok := req.Query.Nearest.(map[string]interface{}); ok {
+		if nearestMap, ok := req.Query.Nearest.(map[string]any); ok {
 			if doc, ok := nearestMap["document"]; ok {
-				if docMap, ok := doc.(map[string]interface{}); ok {
+				if docMap, ok := doc.(map[string]any); ok {
 					if text, ok := docMap["text"]; ok {
 						if s, ok := text.(string); ok {
 							stmt.QueryText = &s
@@ -44,7 +44,7 @@ func convertFormulaQuery(input, collection string) ([]string, error) {
 
 	// Formula conversion
 	if req.Query.Formula != nil {
-		var formulaObj interface{}
+		var formulaObj any
 		if err := json.Unmarshal(req.Query.Formula, &formulaObj); err == nil {
 			formulaStr, err := convertFormulaExpression(formulaObj)
 			if err == nil && formulaStr != "" {
@@ -56,21 +56,21 @@ func convertFormulaQuery(input, collection string) ([]string, error) {
 	return []string{ast.FormatQueryStmt(stmt)}, nil
 }
 
-func convertFormulaExpression(input interface{}) (string, error) {
+func convertFormulaExpression(input any) (string, error) {
 	switch expr := input.(type) {
 	case string:
 		// Variable reference: "$score", "field_name"
 		return expr, nil
 	case float64:
 		return fmt.Sprintf("%v", expr), nil
-	case map[string]interface{}:
+	case map[string]any:
 		return convertFormulaObject(expr)
 	default:
 		return fmt.Sprintf("%v", input), nil
 	}
 }
 
-func convertFormulaObject(expr map[string]interface{}) (string, error) {
+func convertFormulaObject(expr map[string]any) (string, error) {
 	// Sum
 	if sum, ok := expr["sum"]; ok {
 		return convertNaryOp(" + ", sum)
@@ -81,7 +81,7 @@ func convertFormulaObject(expr map[string]interface{}) (string, error) {
 	}
 	// Div
 	if div, ok := expr["div"]; ok {
-		if arr, ok := div.([]interface{}); ok && len(arr) == 2 {
+		if arr, ok := div.([]any); ok && len(arr) == 2 {
 			left, _ := convertFormulaExpression(arr[0])
 			right, _ := convertFormulaExpression(arr[1])
 			return fmt.Sprintf("(%s / %s)", left, right), nil
@@ -99,7 +99,7 @@ func convertFormulaObject(expr map[string]interface{}) (string, error) {
 	}
 	// Pow
 	if pow, ok := expr["pow"]; ok {
-		if arr, ok := pow.([]interface{}); ok && len(arr) == 2 {
+		if arr, ok := pow.([]any); ok && len(arr) == 2 {
 			base, _ := convertFormulaExpression(arr[0])
 			exp, _ := convertFormulaExpression(arr[1])
 			return fmt.Sprintf("POW(%s, %s)", base, exp), nil
@@ -123,7 +123,7 @@ func convertFormulaObject(expr map[string]interface{}) (string, error) {
 	// Condition (match/key) - Qdrant formula inline condition
 	if key, ok := expr["key"]; ok {
 		if match, ok := expr["match"]; ok {
-			matchMap, ok := match.(map[string]interface{})
+			matchMap, ok := match.(map[string]any)
 			if ok {
 				if any, ok := matchMap["any"]; ok {
 					return convertMatchFormulaCondition(fmt.Sprintf("%v", key), any), nil
@@ -165,8 +165,8 @@ func convertFormulaObject(expr map[string]interface{}) (string, error) {
 	return fmt.Sprintf("%v", expr), nil
 }
 
-func convertNaryOp(op string, input interface{}) (string, error) {
-	arr, ok := input.([]interface{})
+func convertNaryOp(op string, input any) (string, error) {
+	arr, ok := input.([]any)
 	if !ok {
 		return "", fmt.Errorf("expected array")
 	}
@@ -178,7 +178,7 @@ func convertNaryOp(op string, input interface{}) (string, error) {
 	return "(" + strings.Join(parts, op) + ")", nil
 }
 
-func convertMatchFormulaCondition(field string, any interface{}) string {
+func convertMatchFormulaCondition(field string, any any) string {
 	values, ok := any.([]interface{})
 	if !ok {
 		return fmt.Sprintf("MATCH(%s, %s)", field, formatFormulaValue(any))
@@ -190,12 +190,12 @@ func convertMatchFormulaCondition(field string, any interface{}) string {
 	return fmt.Sprintf("MATCH(%s, [%s])", field, strings.Join(vals, ", "))
 }
 
-func convertGeoDistanceExpr(input interface{}) (string, error) {
-	geoMap, ok := input.(map[string]interface{})
+func convertGeoDistanceExpr(input any) (string, error) {
+	geoMap, ok := input.(map[string]any)
 	if !ok {
 		return "GEO_DISTANCE(...)", nil
 	}
-	origin, _ := geoMap["origin"].(map[string]interface{})
+	origin, _ := geoMap["origin"].(map[string]any)
 	to, _ := geoMap["to"].(string)
 	if origin != nil {
 		lat, _ := origin["lat"].(float64)
@@ -205,8 +205,8 @@ func convertGeoDistanceExpr(input interface{}) (string, error) {
 	return fmt.Sprintf("GEO_DISTANCE(origin, %s)", to), nil
 }
 
-func convertDecayExpr(name string, input interface{}) (string, error) {
-	decayMap, ok := input.(map[string]interface{})
+func convertDecayExpr(name string, input any) (string, error) {
+	decayMap, ok := input.(map[string]any)
 	if !ok {
 		return fmt.Sprintf("%s(...)", name), nil
 	}
@@ -241,54 +241,98 @@ func convertDecayExpr(name string, input interface{}) (string, error) {
 func convertMMRQuery(input, collection string) ([]string, error) {
 	var req struct {
 		Query struct {
-			Nearest interface{} `json:"nearest"`
+			Nearest any `json:"nearest"`
 			MMR     struct {
 				Diversity       float64 `json:"diversity"`
 				CandidatesLimit int     `json:"candidates_limit"`
 			} `json:"mmr"`
 		} `json:"query"`
-		Limit  int         `json:"limit"`
-		Filter *RESTFilter `json:"filter"`
+		Limit          int         `json:"limit"`
+		Offset         int         `json:"offset"`
+		Filter         *RESTFilter `json:"filter"`
+		WithPayload    any         `json:"with_payload"`
+		WithVector     any         `json:"with_vector"`
+		ScoreThreshold *float64    `json:"score_threshold"`
+		Using          string      `json:"using"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid MMR query JSON: %w", err)
 	}
 
-	var parts []string
-	parts = append(parts, fmt.Sprintf("QUERY '<query_text>' FROM %s", collection))
-
-	if req.Limit > 0 {
-		parts = append(parts, fmt.Sprintf("LIMIT %d", req.Limit))
+	stmt := &ast.QueryStmt{
+		Collection:     collection,
+		Mode:           ast.QueryModeNearest,
+		Limit:          req.Limit,
+		Offset:         req.Offset,
+		ScoreThreshold: req.ScoreThreshold,
 	}
 
-	mmrParams := []string{
-		fmt.Sprintf("mmr_diversity = %g", req.Query.MMR.Diversity),
+	// Nearest Vector or Text
+	if vec, ok := req.Query.Nearest.([]any); ok && len(vec) > 0 {
+		raw := make([]float64, len(vec))
+		for i, v := range vec {
+			switch f := v.(type) {
+			case float64:
+				raw[i] = f
+			case int:
+				raw[i] = float64(f)
+			}
+		}
+		stmt.RawVector = raw
+	} else if docMap, ok := req.Query.Nearest.(map[string]any); ok {
+		if text, ok := docMap["text"]; ok {
+			if s, ok := text.(string); ok {
+				stmt.QueryText = &s
+			}
+		}
+	} else if req.Query.Nearest != nil {
+		str := "<query_text>"
+		stmt.QueryText = &str
 	}
-	if req.Query.MMR.CandidatesLimit > 0 {
-		mmrParams = append(mmrParams, fmt.Sprintf("mmr_candidates = %d", req.Query.MMR.CandidatesLimit))
-	}
-	parts = append(parts, fmt.Sprintf("WITH (%s)", strings.Join(mmrParams, ", ")))
 
-	if req.Filter != nil {
-		filterStr, err := convertFilter(req.Filter)
-		if err == nil && filterStr != "" {
-			parts = append(parts, "WHERE "+filterStr)
+	// Using
+	switch strings.ToLower(req.Using) {
+	case "hybrid":
+		stmt.Type = ast.QueryTypeHybrid
+	case "sparse":
+		stmt.Type = ast.QueryTypeSparse
+	default:
+		if req.Using != "" {
+			using := req.Using
+			stmt.Using = &using
 		}
 	}
 
-	return []string{strings.Join(parts, " ")}, nil
+	// Filter
+	if req.Filter != nil {
+		stmt.QueryFilter = convertRESTFilter(req.Filter)
+	}
+
+	// MMR Params
+	stmt.WithClause = &ast.SearchWith{
+		MmrDiversity: &req.Query.MMR.Diversity,
+	}
+	if req.Query.MMR.CandidatesLimit > 0 {
+		stmt.WithClause.MmrCandidates = &req.Query.MMR.CandidatesLimit
+	}
+
+	// WithPayload and WithVectors
+	stmt.WithPayload = buildPayloadSelector(req.WithPayload)
+	stmt.WithVectors = buildVectorsSelector(req.WithVector)
+
+	return []string{ast.FormatQueryStmt(stmt)}, nil
 }
 
 func convertRelevanceFeedback(input, collection string) ([]string, error) {
 	var req struct {
 		Query struct {
 			RelevanceFeedback struct {
-				Target   interface{} `json:"target"`
+				Target   any `json:"target"`
 				Feedback []struct {
-					Example interface{} `json:"example"`
-					Score   float64     `json:"score"`
+					Example any     `json:"example"`
+					Score   float64 `json:"score"`
 				} `json:"feedback"`
-				Strategy interface{} `json:"strategy"`
+				Strategy any `json:"strategy"`
 			} `json:"relevance_feedback"`
 		} `json:"query"`
 	}
@@ -312,8 +356,8 @@ func convertRelevanceFeedback(input, collection string) ([]string, error) {
 
 	// Strategy
 	if rf.Strategy != nil {
-		if stratMap, ok := rf.Strategy.(map[string]interface{}); ok {
-			if naive, ok := stratMap["naive"].(map[string]interface{}); ok {
+		if stratMap, ok := rf.Strategy.(map[string]any); ok {
+			if naive, ok := stratMap["naive"].(map[string]any); ok {
 				a, _ := naive["a"].(float64)
 				b, _ := naive["b"].(float64)
 				c, _ := naive["c"].(float64)
@@ -325,17 +369,17 @@ func convertRelevanceFeedback(input, collection string) ([]string, error) {
 	return []string{strings.Join(parts, " ")}, nil
 }
 
-func formatFormulaValue(v interface{}) string {
+func formatFormulaValue(v any) string {
 	switch val := v.(type) {
 	case string:
 		return fmt.Sprintf("'%s'", val)
-	case []interface{}:
+	case []any:
 		var items []string
 		for _, item := range val {
 			items = append(items, formatFormulaValue(item))
 		}
 		return "[" + strings.Join(items, ", ") + "]"
-	case map[string]interface{}:
+	case map[string]any:
 		// Geo point
 		if lat, ok := val["lat"]; ok {
 			if lon, ok := val["lon"]; ok {

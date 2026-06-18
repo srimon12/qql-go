@@ -68,6 +68,8 @@ func (n *DenseEmbedNode) Execute(ctx context.Context, state *QueryState) error {
 type RawVectorNode struct {
 	Vector     []float64
 	VectorName string
+	AsPrefetch bool
+	Limit      uint64
 }
 
 func (n *RawVectorNode) Execute(_ context.Context, state *QueryState) error {
@@ -76,9 +78,19 @@ func (n *RawVectorNode) Execute(_ context.Context, state *QueryState) error {
 		raw[i] = float32(v)
 	}
 	query := qdrant.NewQueryDense(raw)
-	state.TargetQuery = query
-	if n.VectorName != "" {
-		state.VectorName = n.VectorName
+
+	if n.AsPrefetch {
+		state.Prefetches = append(state.Prefetches, &qdrant.PrefetchQuery{
+			Query:  query,
+			Using:  qdrant.PtrOf(n.VectorName),
+			Limit:  qdrant.PtrOf(n.Limit),
+			Params: state.Params,
+		})
+	} else {
+		state.TargetQuery = query
+		if n.VectorName != "" {
+			state.VectorName = n.VectorName
+		}
 	}
 	return nil
 }
@@ -486,7 +498,7 @@ func buildVectorInputFromValue(_ context.Context, _ *QueryState, val any) (*qdra
 	switch v := val.(type) {
 	case []float32:
 		return qdrant.NewVectorInputDense(v), nil
-	case []interface{}:
+	case []any:
 		vec := make([]float32, len(v))
 		for i, item := range v {
 			f, ok := item.(float64)
