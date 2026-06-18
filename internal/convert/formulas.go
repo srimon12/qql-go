@@ -9,9 +9,9 @@ import (
 	"github.com/srimon12/qql-go/internal/ast"
 )
 
-func convertFormulaQuery(input, collection string) ([]string, error) {
+func convertFormulaQuery(input []byte, collection string) ([]string, error) {
 	var req RESTQueryRequest
-	if err := json.Unmarshal([]byte(input), &req); err != nil {
+	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, fmt.Errorf("invalid formula query JSON: %w", err)
 	}
 
@@ -248,7 +248,7 @@ func convertDecayExpr(name string, input any) (string, error) {
 	return fmt.Sprintf("%s(%s)", name, strings.Join(args, ", ")), nil
 }
 
-func convertMMRQuery(input, collection string) ([]string, error) {
+func convertMMRQuery(input []byte, collection string) ([]string, error) {
 	var req struct {
 		Query struct {
 			Nearest any `json:"nearest"`
@@ -265,7 +265,7 @@ func convertMMRQuery(input, collection string) ([]string, error) {
 		ScoreThreshold *float64    `json:"score_threshold"`
 		Using          string      `json:"using"`
 	}
-	if err := json.Unmarshal([]byte(input), &req); err != nil {
+	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, fmt.Errorf("invalid MMR query JSON: %w", err)
 	}
 
@@ -333,7 +333,7 @@ func convertMMRQuery(input, collection string) ([]string, error) {
 	return []string{ast.FormatQueryStmt(stmt)}, nil
 }
 
-func convertRelevanceFeedback(input, collection string) ([]string, error) {
+func convertRelevanceFeedback(input []byte, collection string) ([]string, error) {
 	var req struct {
 		Query struct {
 			RelevanceFeedback struct {
@@ -346,7 +346,7 @@ func convertRelevanceFeedback(input, collection string) ([]string, error) {
 			} `json:"relevance_feedback"`
 		} `json:"query"`
 	}
-	if err := json.Unmarshal([]byte(input), &req); err != nil {
+	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, fmt.Errorf("invalid relevance feedback JSON: %w", err)
 	}
 

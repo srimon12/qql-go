@@ -11,7 +11,7 @@ import (
 
 func TestConvertUpsert(t *testing.T) {
 	input := `{"points":[{"id":1,"payload":{"text":"hello","topic":"search"}},{"id":2,"payload":{"text":"world"}}]}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 2)
 	assert.Contains(t, stmts[0], "INSERT INTO unknown VALUES")
@@ -22,7 +22,7 @@ func TestConvertUpsert(t *testing.T) {
 
 func TestConvertSearchWithVector(t *testing.T) {
 	input := `{"vector":[0.1,0.2],"limit":10,"filter":{"must":[{"key":"status","match":{"value":"active"}}]},"score_threshold":0.5}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "QUERY [0.1, 0.2]")
@@ -33,7 +33,7 @@ func TestConvertSearchWithVector(t *testing.T) {
 
 func TestConvertSearchWithTextQuery(t *testing.T) {
 	input := `{"query":{"text":"time travel","model":"sentence-transformers/all-minilm-l6-v2"},"using":"description-dense","with_payload":true}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "QUERY 'time travel'")
@@ -44,7 +44,7 @@ func TestConvertSearchWithTextQuery(t *testing.T) {
 
 func TestConvertSearchWithPayloadAndVectors(t *testing.T) {
 	input := `{"vector":[0.1,0.2],"limit":5,"with_payload":{"include":["title","body"]},"with_vector":["dense","sparse"],"using":"dense","params":{"hnsw_ef":128}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "QUERY [0.1, 0.2]")
@@ -58,7 +58,7 @@ func TestConvertSearchWithPayloadAndVectors(t *testing.T) {
 
 func TestConvertFilterMustNot(t *testing.T) {
 	input := `{"query":{"text":"time travel","model":"x"},"using":"dense","filter":{"must_not":[{"key":"author","match":{"value":"H.G. Wells"}}]}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "WHERE NOT author = 'H.G. Wells'")
@@ -66,7 +66,7 @@ func TestConvertFilterMustNot(t *testing.T) {
 
 func TestConvertFilterShould(t *testing.T) {
 	input := `{"query":{"text":"space opera","model":"x"},"using":"dense","filter":{"should":[{"key":"author","match":{"value":"Larry Niven"}},{"key":"author","match":{"value":"Jerry Pournelle"}}]}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "(author = 'Larry Niven' OR author = 'Jerry Pournelle')")
@@ -74,7 +74,7 @@ func TestConvertFilterShould(t *testing.T) {
 
 func TestConvertFilterMatchAny(t *testing.T) {
 	input := `{"query":{"text":"space opera","model":"x"},"using":"dense","filter":{"must":[{"key":"author","match":{"any":["Larry Niven","Jerry Pournelle"]}}]}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "author IN ('Larry Niven', 'Jerry Pournelle')")
@@ -82,7 +82,7 @@ func TestConvertFilterMatchAny(t *testing.T) {
 
 func TestConvertFilterTextMatch(t *testing.T) {
 	input := `{"query":{"text":"space opera","model":"x"},"using":"dense","filter":{"must":[{"key":"title","match":{"text":"space"}}]}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "title MATCH 'space'")
@@ -90,7 +90,7 @@ func TestConvertFilterTextMatch(t *testing.T) {
 
 func TestConvertFilterTextAny(t *testing.T) {
 	input := `{"query":{"text":"space opera","model":"x"},"using":"dense","filter":{"must":[{"key":"title","match":{"text_any":"space war"}}]}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "title MATCH ANY 'space war'")
@@ -98,7 +98,7 @@ func TestConvertFilterTextAny(t *testing.T) {
 
 func TestConvertFilterPhrase(t *testing.T) {
 	input := `{"query":{"text":"time travel","model":"x"},"using":"dense","filter":{"must":[{"key":"title","match":{"phrase":"time machine"}}]}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "title MATCH PHRASE 'time machine'")
@@ -106,7 +106,7 @@ func TestConvertFilterPhrase(t *testing.T) {
 
 func TestConvertComplexFilter(t *testing.T) {
 	input := `{"vector":[0.1],"limit":5,"filter":{"must":[{"key":"status","match":{"value":"active"}}],"should":[{"key":"priority","match":{"value":"high"}},{"key":"priority","match":{"value":"medium"}}],"must_not":[{"key":"archived","match":{"boolean":true}}]}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "status = 'active'")
@@ -118,7 +118,7 @@ func TestConvertComplexFilter(t *testing.T) {
 
 func TestConvertFilterOnlyBecomesScroll(t *testing.T) {
 	input := `{"filter":{"must":[{"key":"year","range":{"gte":2024,"lte":2026}}]},"limit":10}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "SCROLL FROM unknown")
@@ -127,7 +127,7 @@ func TestConvertFilterOnlyBecomesScroll(t *testing.T) {
 
 func TestConvertFilterOnlyBecomesDelete(t *testing.T) {
 	input := `{"filter":{"must":[{"key":"status","match":{"value":"inactive"}}]}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "DELETE FROM unknown")
@@ -138,7 +138,7 @@ func TestConvertFilterOnlyBecomesDelete(t *testing.T) {
 
 func TestConvertBatchSearch(t *testing.T) {
 	input := `{"searches":[{"query":{"text":"time travel","model":"x"},"using":"dense","filter":{"must":[{"key":"title","match":{"text":"time"}}]}},{"query":{"text":"time travel","model":"x"},"using":"dense"}]}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 2)
 	assert.Contains(t, stmts[0], "WHERE title MATCH 'time'")
@@ -149,7 +149,7 @@ func TestConvertBatchSearch(t *testing.T) {
 
 func TestConvertFormulaScoreBoost(t *testing.T) {
 	input := `{"prefetch":{"query":[0.2,0.8],"limit":50},"query":{"formula":{"sum":["$score",{"mult":[0.5,{"key":"tag","match":{"any":["h1","h2"]}}]}]}},"limit":10}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "QUERY [0.2, 0.8]")
@@ -161,7 +161,7 @@ func TestConvertFormulaScoreBoost(t *testing.T) {
 
 func TestConvertFormulaMultiMatch(t *testing.T) {
 	input := `{"prefetch":{"query":[0.2,0.8,0.3],"limit":50},"query":{"formula":{"sum":["$score",{"mult":[0.5,{"key":"tag","match":{"any":["h1","h2","h3","h4"]}}]},{"mult":[0.25,{"key":"tag","match":{"any":["p","li"]}}]}]}},"limit":10}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "BOOST")
@@ -174,7 +174,7 @@ func TestConvertFormulaMultiMatch(t *testing.T) {
 
 func TestConvertFormulaGeoDecay(t *testing.T) {
 	input := `{"prefetch":{"query":[0.2],"limit":50},"query":{"formula":{"sum":["$score",{"gauss_decay":{"x":{"geo_distance":{"origin":{"lat":52.5,"lon":13.3},"to":"geo.location"}},"scale":5000}}]}},"defaults":{"geo.location":{"lat":48.1,"lon":11.5}}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "GAUSS_DECAY")
@@ -187,7 +187,7 @@ func TestConvertFormulaGeoDecay(t *testing.T) {
 
 func TestConvertFormulaTimeDecay(t *testing.T) {
 	input := `{"query":{"formula":{"sum":["$score",{"exp_decay":{"x":{"datetime_key":"updated"},"target":{"datetime":"2026-01-01"},"scale":86400,"midpoint":0.5}}]}}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "EXP_DECAY")
@@ -199,7 +199,7 @@ func TestConvertFormulaTimeDecay(t *testing.T) {
 
 func TestConvertFormulaWithDocumentPrefetch(t *testing.T) {
 	input := `{"prefetch":{"document":{"text":"machine learning basics","model":"all-MiniLM-L6-v2"},"limit":50},"query":{"formula":{"mult":["$score",2.0]}},"limit":10}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "machine learning basics")
@@ -209,7 +209,7 @@ func TestConvertFormulaWithDocumentPrefetch(t *testing.T) {
 
 func TestConvertFormulaWithTextQueryPrefetch(t *testing.T) {
 	input := `{"prefetch":{"query":{"text":"9780553213515","model":"sentence-transformers/all-minilm-l6-v2"},"using":"description-dense"},"query":{"fusion":"rrf"},"limit":10}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "QUERY '9780553213515'")
@@ -219,7 +219,7 @@ func TestConvertFormulaWithTextQueryPrefetch(t *testing.T) {
 
 func TestConvertFormulaHybridPrefetchArray(t *testing.T) {
 	input := `{"prefetch":[{"query":{"text":"9780553213515","model":"x"},"using":"description-dense"},{"query":{"text":"9780553213515","model":"y"},"using":"isbn-bm25"}],"query":{"fusion":"rrf"},"limit":10,"with_payload":true}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "WITH _pf0 AS")
@@ -232,7 +232,7 @@ func TestConvertFormulaHybridPrefetchArray(t *testing.T) {
 
 func TestConvertMMRQuery(t *testing.T) {
 	input := `{"query":{"nearest":[0.01,0.45],"mmr":{"diversity":0.5,"candidates_limit":100}},"limit":10}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "QUERY [0.01, 0.45]")
@@ -243,7 +243,7 @@ func TestConvertMMRQuery(t *testing.T) {
 
 func TestConvertRelevanceFeedback(t *testing.T) {
 	input := `{"query":{"relevance_feedback":{"target":[0.1,0.9],"feedback":[{"example":111,"score":0.68},{"example":222,"score":0.72}],"strategy":{"naive":{"a":0.12,"b":0.43,"c":0.03}}}}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "QUERY RELEVANCE FEEDBACK")
@@ -255,7 +255,7 @@ func TestConvertRelevanceFeedback(t *testing.T) {
 
 func TestConvertWrappedRequest(t *testing.T) {
 	input := `{"method":"POST","path":"/collections/docs/points/search","body":{"vector":[0.1],"limit":5}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "FROM docs")
@@ -264,7 +264,7 @@ func TestConvertWrappedRequest(t *testing.T) {
 
 func TestConvertWrappedEndpointFormula(t *testing.T) {
 	input := `{"method":"POST","path":"/collections/docs/points/query","body":{"prefetch":{"query":[0.2,0.8],"limit":50},"query":{"formula":{"sum":["$score",{"mult":[2,{"key":"priority","match":{"value":"high"}}]}]}},"limit":5}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "FROM docs")
@@ -276,7 +276,7 @@ func TestConvertWrappedEndpointFormula(t *testing.T) {
 
 func TestConvertRecommend(t *testing.T) {
 	input := `{"positive":["id-1","id-2"],"negative":["id-3"],"limit":5,"strategy":"best_score"}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "QUERY RECOMMEND WITH (positive = ('id-1', 'id-2'), negative = ('id-3'))")
@@ -286,7 +286,7 @@ func TestConvertRecommend(t *testing.T) {
 
 func TestConvertDiscover(t *testing.T) {
 	input := `{"target":"id-1","context":[{"positive":"id-2","negative":"id-3"}],"limit":5}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "QUERY DISCOVER TARGET 'id-1'")
@@ -296,7 +296,7 @@ func TestConvertDiscover(t *testing.T) {
 
 func TestConvertScroll(t *testing.T) {
 	input := `{"limit":10,"filter":{"must":[{"key":"year","range":{"gte":2024,"lte":2026}}]}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "SCROLL FROM unknown")
@@ -306,7 +306,7 @@ func TestConvertScroll(t *testing.T) {
 
 func TestConvertGetPoints(t *testing.T) {
 	input := `{"ids":[1,"uuid-123"]}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 2)
 	assert.Contains(t, stmts[0], "SELECT * FROM unknown WHERE id = 1")
@@ -315,7 +315,7 @@ func TestConvertGetPoints(t *testing.T) {
 
 func TestConvertDeletePoints(t *testing.T) {
 	input := `{"points":[1,2,3]}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 3)
 	assert.Contains(t, stmts[0], "DELETE FROM unknown WHERE id = 1")
@@ -323,7 +323,7 @@ func TestConvertDeletePoints(t *testing.T) {
 
 func TestConvertCreateCollection(t *testing.T) {
 	input := `{"vectors":{"size":384,"distance":"Cosine"}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "CREATE COLLECTION unknown")
@@ -332,7 +332,7 @@ func TestConvertCreateCollection(t *testing.T) {
 
 func TestConvertCreateIndex(t *testing.T) {
 	input := `{"field_name":"status","field_schema":"keyword"}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "CREATE INDEX ON COLLECTION unknown FOR status TYPE keyword")
@@ -340,7 +340,7 @@ func TestConvertCreateIndex(t *testing.T) {
 
 func TestConvertSetPayload(t *testing.T) {
 	input := `{"payload":{"status":"reviewed"},"points":[1,2]}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 2)
 	assert.Contains(t, stmts[0], "UPDATE unknown SET PAYLOAD = {'status': 'reviewed'} WHERE id = 1")
@@ -348,7 +348,7 @@ func TestConvertSetPayload(t *testing.T) {
 
 func TestConvertSetPayloadByFilter(t *testing.T) {
 	input := `{"payload":{"status":"archived"},"filter":{"must":[{"key":"status","match":{"value":"discharged"}}]}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "UPDATE unknown SET PAYLOAD =")
@@ -359,7 +359,7 @@ func TestConvertSetPayloadByFilter(t *testing.T) {
 
 func TestConvertNamedCollection(t *testing.T) {
 	input := `{"method":"POST","path":"/collections/books/points/query","body":{"query":{"text":"time travel","model":"x"},"using":"dense"}}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "FROM books")
@@ -370,7 +370,7 @@ func TestConvertNamedCollection(t *testing.T) {
 
 func TestConvertRangeGtLt(t *testing.T) {
 	input := `{"filter":{"must":[{"key":"price","range":{"gt":10,"lt":100}}]},"limit":5}`
-	stmts, err := JSONToQQL(input)
+	stmts, err := JSONToQQL([]byte(input))
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
 	assert.Contains(t, stmts[0], "SCROLL FROM unknown")
@@ -380,17 +380,17 @@ func TestConvertRangeGtLt(t *testing.T) {
 // --- Error cases ---
 
 func TestConvertInvalidJSON(t *testing.T) {
-	_, err := JSONToQQL("not json")
+	_, err := JSONToQQL([]byte("not json"))
 	require.Error(t, err)
 }
 
 func TestConvertEmptyJSON(t *testing.T) {
-	_, err := JSONToQQL("{}")
+	_, err := JSONToQQL([]byte("{}"))
 	require.Error(t, err)
 }
 
 func TestConvertUnknownOperation(t *testing.T) {
-	_, err := JSONToQQL(`{"random_key":123}`)
+	_, err := JSONToQQL([]byte(`{"random_key":123}`))
 	require.Error(t, err)
 }
 
@@ -408,7 +408,7 @@ func TestConvertNoKeywordCollection(t *testing.T) {
 		`{"field_name":"x","field_schema":"keyword"}`,
 	}
 	for _, input := range tests {
-		stmts, err := JSONToQQL(input)
+		stmts, err := JSONToQQL([]byte(input))
 		require.NoError(t, err, "input: %s", input)
 		for _, s := range stmts {
 			assert.NotContains(t, s, "FROM collection", "input: %s, output: %s", input, s)
@@ -420,6 +420,6 @@ func TestConvertNoKeywordCollection(t *testing.T) {
 // --- Empty batch ---
 
 func TestConvertBatchSearchEmpty(t *testing.T) {
-	_, err := JSONToQQL(`{"searches":[]}`)
+	_, err := JSONToQQL([]byte(`{"searches":[]}`))
 	require.Error(t, err)
 }

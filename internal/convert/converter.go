@@ -1,6 +1,7 @@
 package convert
 
-import (
+	import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -8,8 +9,8 @@ import (
 
 // JSONToQQL converts a Qdrant REST API JSON payload to QQL statements.
 // It auto-detects the operation from the JSON structure.
-func JSONToQQL(input string) ([]string, error) {
-	input = strings.TrimSpace(input)
+func JSONToQQL(input []byte) ([]string, error) {
+	input = bytes.TrimSpace(input)
 
 	// Try to detect if it's a wrapped request with method+path
 	var wrapped struct {
@@ -18,13 +19,13 @@ func JSONToQQL(input string) ([]string, error) {
 		Body    json.RawMessage `json:"body"`
 		Request json.RawMessage `json:"request"`
 	}
-	if err := json.Unmarshal([]byte(input), &wrapped); err == nil {
+	if err := json.Unmarshal(input, &wrapped); err == nil {
 		if wrapped.Method != "" && wrapped.Path != "" {
 			body := wrapped.Body
 			if len(body) == 0 {
 				body = wrapped.Request
 			}
-			return convertByEndpoint(wrapped.Method, wrapped.Path, string(body))
+			return convertByEndpoint(wrapped.Method, wrapped.Path, body)
 		}
 	}
 
@@ -32,7 +33,7 @@ func JSONToQQL(input string) ([]string, error) {
 	return convertByStructure(input)
 }
 
-func convertByEndpoint(method, path, body string) ([]string, error) {
+func convertByEndpoint(method, path string, body []byte) ([]string, error) {
 	path = strings.TrimPrefix(path, "/")
 
 	// Parse collection name from path
@@ -100,7 +101,7 @@ func extractCollection(path string) string {
 	return "unknown"
 }
 
-func convertByStructure(input string) ([]string, error) {
+func convertByStructure(input []byte) ([]string, error) {
 	var raw struct {
 		Query         json.RawMessage `json:"query"`
 		Prefetch      json.RawMessage `json:"prefetch"`
@@ -117,7 +118,7 @@ func convertByStructure(input string) ([]string, error) {
 		Limit         json.RawMessage `json:"limit"`
 		Searches      json.RawMessage `json:"searches"`
 	}
-	if err := json.Unmarshal([]byte(input), &raw); err != nil {
+	if err := json.Unmarshal(input, &raw); err != nil {
 		return nil, fmt.Errorf("invalid JSON: %w", err)
 	}
 
@@ -210,7 +211,7 @@ func convertByStructure(input string) ([]string, error) {
 		var probe struct {
 			Points []json.RawMessage `json:"points"`
 		}
-		json.Unmarshal([]byte(input), &probe)
+		json.Unmarshal(input, &probe)
 		if len(probe.Points) > 0 {
 			var pointProbe struct {
 				Vector  json.RawMessage `json:"vector"`

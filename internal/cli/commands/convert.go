@@ -70,7 +70,7 @@ Examples:
 				return fmt.Errorf("no input provided")
 			}
 
-			statements, err := convert.JSONToQQL(inputStr)
+			statements, err := convert.JSONToQQL([]byte(inputStr))
 			if err != nil {
 				return fmt.Errorf("conversion error: %w", err)
 			}

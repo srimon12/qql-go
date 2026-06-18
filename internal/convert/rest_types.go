@@ -5,25 +5,54 @@ import (
 )
 
 type RESTQueryRequest struct {
-	Prefetch    json.RawMessage `json:"prefetch"`
-	Query       RESTQuery       `json:"query"`
-	Filter      *RESTFilter     `json:"filter"`
-	Limit       *int            `json:"limit"`
-	Offset      *int            `json:"offset"`
-	Defaults    map[string]any  `json:"defaults"`
-	Using       string          `json:"using"`
-	WithPayload any             `json:"with_payload"`
+	Prefetch    RESTPrefetchList `json:"prefetch"`
+	Query       RESTQuery        `json:"query"`
+	Filter      *RESTFilter      `json:"filter"`
+	Limit       *int             `json:"limit"`
+	Offset      *int             `json:"offset"`
+	Defaults    map[string]any   `json:"defaults"`
+	Using       string           `json:"using"`
+	WithPayload any              `json:"with_payload"`
 }
 
 type RESTPrefetch struct {
-	Prefetch       json.RawMessage `json:"prefetch"`
-	Query          RESTQuery       `json:"query"`
-	Document       any             `json:"document"`
-	Vector         any             `json:"vector"`
-	Filter         *RESTFilter     `json:"filter"`
-	Limit          *int            `json:"limit"`
-	Using          string          `json:"using"`
-	ScoreThreshold *float64        `json:"score_threshold"`
+	Prefetch       RESTPrefetchList `json:"prefetch"`
+	Query          RESTQuery        `json:"query"`
+	Document       any              `json:"document"`
+	Vector         any              `json:"vector"`
+	Filter         *RESTFilter      `json:"filter"`
+	Limit          *int             `json:"limit"`
+	Using          string           `json:"using"`
+	ScoreThreshold *float64         `json:"score_threshold"`
+}
+
+type RESTPrefetchList []RESTPrefetch
+
+func (l *RESTPrefetchList) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	for i := 0; i < len(data); i++ {
+		switch data[i] {
+		case ' ', '\t', '\n', '\r':
+			continue
+		case '[':
+			var arr []RESTPrefetch
+			if err := json.Unmarshal(data, &arr); err != nil {
+				return err
+			}
+			*l = arr
+			return nil
+		default:
+			var single RESTPrefetch
+			if err := json.Unmarshal(data, &single); err != nil {
+				return err
+			}
+			*l = []RESTPrefetch{single}
+			return nil
+		}
+	}
+	return nil
 }
 
 type RESTQuery struct {
@@ -43,33 +72,34 @@ func (q *RESTQuery) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	// If it's an array, it's a raw nearest vector
-	if len(data) > 0 && data[0] == '[' {
-		var arr []any
-		if err := json.Unmarshal(data, &arr); err != nil {
-			return err
+	for i := 0; i < len(data); i++ {
+		switch data[i] {
+		case ' ', '\t', '\n', '\r':
+			continue
+		case '[':
+			var arr []any
+			if err := json.Unmarshal(data, &arr); err != nil {
+				return err
+			}
+			q.Nearest = arr
+			return nil
+		case '"':
+			var s string
+			if err := json.Unmarshal(data, &s); err != nil {
+				return err
+			}
+			q.Nearest = s
+			return nil
+		default:
+			type Alias RESTQuery
+			var alias Alias
+			if err := json.Unmarshal(data, &alias); err != nil {
+				return err
+			}
+			*q = RESTQuery(alias)
+			return nil
 		}
-		q.Nearest = arr
-		return nil
 	}
-
-	// If it's a string, it could be a point ID or raw query text (if we allow that)
-	if len(data) > 0 && data[0] == '"' {
-		var s string
-		if err := json.Unmarshal(data, &s); err != nil {
-			return err
-		}
-		q.Nearest = s
-		return nil
-	}
-
-	// Try standard struct mapping
-	type Alias RESTQuery
-	var alias Alias
-	if err := json.Unmarshal(data, &alias); err != nil {
-		return err
-	}
-	*q = RESTQuery(alias)
 
 	// If Nearest wasn't set inside the object but it IS an object (like `{"nearest": ...}`), alias unmarshal works.
 	// But what if the object itself is the nearest vector? Qdrant sometimes allows named vectors `{"name": "vec", "vector": [0.1, 0.2]}` as query.
@@ -111,39 +141,36 @@ type RESTFeedbackStrategy struct {
 }
 
 type RESTFilter struct {
-	Must    []RESTCondition `json:"must"`
-	Should  []RESTCondition `json:"should"`
-	MustNot []RESTCondition `json:"must_not"`
+	Must    RESTConditionList `json:"must"`
+	Should  RESTConditionList `json:"should"`
+	MustNot RESTConditionList `json:"must_not"`
 }
 
-func (f *RESTFilter) UnmarshalJSON(data []byte) error {
-	type Alias RESTFilter
-	var raw struct {
-		Must    json.RawMessage `json:"must"`
-		Should  json.RawMessage `json:"should"`
-		MustNot json.RawMessage `json:"must_not"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	f.Must = parseConditionList(raw.Must)
-	f.Should = parseConditionList(raw.Should)
-	f.MustNot = parseConditionList(raw.MustNot)
-	return nil
-}
+type RESTConditionList []RESTCondition
 
-func parseConditionList(raw json.RawMessage) []RESTCondition {
-	if len(raw) == 0 {
+func (l *RESTConditionList) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
 		return nil
 	}
-	if raw[0] == '[' {
-		var arr []RESTCondition
-		json.Unmarshal(raw, &arr)
-		return arr
-	}
-	var single RESTCondition
-	if err := json.Unmarshal(raw, &single); err == nil {
-		return []RESTCondition{single}
+	for i := 0; i < len(data); i++ {
+		switch data[i] {
+		case ' ', '\t', '\n', '\r':
+			continue
+		case '[':
+			var arr []RESTCondition
+			if err := json.Unmarshal(data, &arr); err != nil {
+				return err
+			}
+			*l = arr
+			return nil
+		default:
+			var single RESTCondition
+			if err := json.Unmarshal(data, &single); err != nil {
+				return err
+			}
+			*l = []RESTCondition{single}
+			return nil
+		}
 	}
 	return nil
 }
@@ -190,17 +217,24 @@ type RESTHasVector struct {
 }
 
 func (h *RESTHasVector) UnmarshalJSON(data []byte) error {
-	if len(data) > 0 && data[0] == '"' {
-		var s string
-		json.Unmarshal(data, &s)
-		h.Vector = s
-		return nil
+	for i := 0; i < len(data); i++ {
+		switch data[i] {
+		case ' ', '\t', '\n', '\r':
+			continue
+		case '"':
+			var s string
+			json.Unmarshal(data, &s)
+			h.Vector = s
+			return nil
+		default:
+			var obj struct {
+				Vector string `json:"vector"`
+			}
+			json.Unmarshal(data, &obj)
+			h.Vector = obj.Vector
+			return nil
+		}
 	}
-	var obj struct {
-		Vector string `json:"vector"`
-	}
-	json.Unmarshal(data, &obj)
-	h.Vector = obj.Vector
 	return nil
 }
 

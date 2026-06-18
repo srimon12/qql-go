@@ -44,24 +44,12 @@ func convertRESTQueryToAST(req *RESTQueryRequest, collection string) (*ast.Query
 
 	// Prefetches
 	if len(req.Prefetch) > 0 {
-		var prefetches []RESTPrefetch
-		err := json.Unmarshal(req.Prefetch, &prefetches)
-		if err != nil {
-			var single RESTPrefetch
-			if err2 := json.Unmarshal(req.Prefetch, &single); err2 == nil {
-				prefetches = []RESTPrefetch{single}
-				err = nil
-			}
-		}
-
-		if err == nil {
-			for i, pf := range prefetches {
-				cteName := fmt.Sprintf("_pf%d", i)
-				pfStmt, err := convertRESTPrefetchToAST(&pf, collection, cteName)
-				if err == nil {
-					stmt.CTEs = append(stmt.CTEs, ast.CTE{Name: cteName, Stmt: pfStmt})
-					stmt.PrefetchRefs = append(stmt.PrefetchRefs, ast.PrefetchRef{CTEName: cteName})
-				}
+		for i, pf := range req.Prefetch {
+			cteName := fmt.Sprintf("_pf%d", i)
+			pfStmt, err := convertRESTPrefetchToAST(&pf, collection, cteName)
+			if err == nil {
+				stmt.CTEs = append(stmt.CTEs, ast.CTE{Name: cteName, Stmt: pfStmt})
+				stmt.PrefetchRefs = append(stmt.PrefetchRefs, ast.PrefetchRef{CTEName: cteName})
 			}
 		}
 	}
@@ -93,28 +81,16 @@ func convertRESTPrefetchToAST(pf *RESTPrefetch, collection, prefix string) (*ast
 
 	// Handle Nested Prefetches
 	if len(pf.Prefetch) > 0 {
-		var prefetches []RESTPrefetch
-		err := json.Unmarshal(pf.Prefetch, &prefetches)
-		if err != nil {
-			var single RESTPrefetch
-			if err2 := json.Unmarshal(pf.Prefetch, &single); err2 == nil {
-				prefetches = []RESTPrefetch{single}
-				err = nil
-			}
-		}
+		for i, childPf := range pf.Prefetch {
+			cteName := fmt.Sprintf("%s_%d", prefix, i)
+			pfStmt, err := convertRESTPrefetchToAST(&childPf, collection, cteName)
+			if err == nil {
+				// Add the child's own CTEs if any, then the child itself
+				stmt.CTEs = append(stmt.CTEs, pfStmt.CTEs...)
+				pfStmt.CTEs = nil // Clear child CTEs as they're bubbled up
 
-		if err == nil {
-			for i, childPf := range prefetches {
-				cteName := fmt.Sprintf("%s_%d", prefix, i)
-				pfStmt, err := convertRESTPrefetchToAST(&childPf, collection, cteName)
-				if err == nil {
-					// Add the child's own CTEs if any, then the child itself
-					stmt.CTEs = append(stmt.CTEs, pfStmt.CTEs...)
-					pfStmt.CTEs = nil // Clear child CTEs as they're bubbled up
-
-					stmt.CTEs = append(stmt.CTEs, ast.CTE{Name: cteName, Stmt: pfStmt})
-					stmt.PrefetchRefs = append(stmt.PrefetchRefs, ast.PrefetchRef{CTEName: cteName})
-				}
+				stmt.CTEs = append(stmt.CTEs, ast.CTE{Name: cteName, Stmt: pfStmt})
+				stmt.PrefetchRefs = append(stmt.PrefetchRefs, ast.PrefetchRef{CTEName: cteName})
 			}
 		}
 	}

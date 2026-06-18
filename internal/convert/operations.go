@@ -9,7 +9,7 @@ import (
 	"github.com/srimon12/qql-go/internal/ast"
 )
 
-func convertUpsert(input, collection string) ([]string, error) {
+func convertUpsert(input []byte, collection string) ([]string, error) {
 	var req struct {
 		Points []struct {
 			ID      any                  `json:"id"`
@@ -18,7 +18,7 @@ func convertUpsert(input, collection string) ([]string, error) {
 			Payload map[string]any       `json:"payload"`
 		} `json:"points"`
 	}
-	if err := json.Unmarshal([]byte(input), &req); err != nil {
+	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, fmt.Errorf("invalid upsert JSON: %w", err)
 	}
 
@@ -50,7 +50,7 @@ func convertUpsert(input, collection string) ([]string, error) {
 	return stmts, nil
 }
 
-func convertSearch(input, collection string) ([]string, error) {
+func convertSearch(input []byte, collection string) ([]string, error) {
 	var req struct {
 		Vector         any         `json:"vector"`
 		QueryRaw       any         `json:"query"`
@@ -68,7 +68,7 @@ func convertSearch(input, collection string) ([]string, error) {
 		WithLookup     any         `json:"with_lookup"`
 		LookupFrom     any         `json:"lookup_from"`
 	}
-	if err := json.Unmarshal([]byte(input), &req); err != nil {
+	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, fmt.Errorf("invalid search JSON: %w", err)
 	}
 
@@ -203,7 +203,7 @@ func convertSearch(input, collection string) ([]string, error) {
 	return []string{ast.FormatQueryStmt(stmt)}, nil
 }
 
-func convertRecommend(input, collection string) ([]string, error) {
+func convertRecommend(input []byte, collection string) ([]string, error) {
 	var req struct {
 		Query struct {
 			Recommend struct {
@@ -220,7 +220,7 @@ func convertRecommend(input, collection string) ([]string, error) {
 		Using      string      `json:"using"`
 		LookupFrom any         `json:"lookup_from"`
 	}
-	if err := json.Unmarshal([]byte(input), &req); err != nil {
+	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, fmt.Errorf("invalid recommend JSON: %w", err)
 	}
 
@@ -280,7 +280,7 @@ func convertRecommend(input, collection string) ([]string, error) {
 	return []string{strings.Join(parts, " ")}, nil
 }
 
-func convertDiscover(input, collection string) ([]string, error) {
+func convertDiscover(input []byte, collection string) ([]string, error) {
 	var req struct {
 		Query struct {
 			Discover struct {
@@ -303,7 +303,7 @@ func convertDiscover(input, collection string) ([]string, error) {
 		Limit  int         `json:"limit"`
 		Filter *RESTFilter `json:"filter"`
 	}
-	if err := json.Unmarshal([]byte(input), &req); err != nil {
+	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, fmt.Errorf("invalid discover JSON: %w", err)
 	}
 
@@ -349,13 +349,13 @@ func convertDiscover(input, collection string) ([]string, error) {
 	return []string{strings.Join(parts, " ")}, nil
 }
 
-func convertScroll(input, collection string) ([]string, error) {
+func convertScroll(input []byte, collection string) ([]string, error) {
 	var req struct {
 		Limit  int         `json:"limit"`
 		Offset any         `json:"offset"`
 		Filter *RESTFilter `json:"filter"`
 	}
-	if err := json.Unmarshal([]byte(input), &req); err != nil {
+	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, fmt.Errorf("invalid scroll JSON: %w", err)
 	}
 
@@ -378,11 +378,11 @@ func convertScroll(input, collection string) ([]string, error) {
 	return []string{strings.Join(parts, " ")}, nil
 }
 
-func convertGetPoints(input, collection string) ([]string, error) {
+func convertGetPoints(input []byte, collection string) ([]string, error) {
 	var req struct {
 		Ids []any `json:"ids"`
 	}
-	if err := json.Unmarshal([]byte(input), &req); err != nil {
+	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, fmt.Errorf("invalid get points JSON: %w", err)
 	}
 
@@ -393,12 +393,12 @@ func convertGetPoints(input, collection string) ([]string, error) {
 	return stmts, nil
 }
 
-func convertDeletePoints(input, collection string) ([]string, error) {
+func convertDeletePoints(input []byte, collection string) ([]string, error) {
 	var req struct {
 		Points []any       `json:"points"`
 		Filter *RESTFilter `json:"filter"`
 	}
-	if err := json.Unmarshal([]byte(input), &req); err != nil {
+	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, fmt.Errorf("invalid delete JSON: %w", err)
 	}
 
@@ -413,11 +413,11 @@ func convertDeletePoints(input, collection string) ([]string, error) {
 	return stmts, nil
 }
 
-func convertDeleteByFilter(input, collection string) ([]string, error) {
+func convertDeleteByFilter(input []byte, collection string) ([]string, error) {
 	var req struct {
 		Filter *RESTFilter `json:"filter"`
 	}
-	if err := json.Unmarshal([]byte(input), &req); err != nil {
+	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, fmt.Errorf("invalid delete filter JSON: %w", err)
 	}
 
@@ -428,13 +428,13 @@ func convertDeleteByFilter(input, collection string) ([]string, error) {
 	return []string{fmt.Sprintf("DELETE FROM %s WHERE %s", collection, filterStr)}, nil
 }
 
-func convertSetPayload(input, collection string) ([]string, error) {
+func convertSetPayload(input []byte, collection string) ([]string, error) {
 	var req struct {
 		Payload map[string]any `json:"payload"`
 		Points  []any          `json:"points"`
 		Filter  *RESTFilter    `json:"filter"`
 	}
-	if err := json.Unmarshal([]byte(input), &req); err != nil {
+	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, fmt.Errorf("invalid set payload JSON: %w", err)
 	}
 
@@ -459,12 +459,12 @@ func convertSetPayload(input, collection string) ([]string, error) {
 	return nil, fmt.Errorf("set payload requires points or filter")
 }
 
-func convertCreateCollection(input, collection string) ([]string, error) {
+func convertCreateCollection(input []byte, collection string) ([]string, error) {
 	var req struct {
 		Vectors       any `json:"vectors"`
 		VectorsConfig any `json:"vectors_config"`
 	}
-	if err := json.Unmarshal([]byte(input), &req); err != nil {
+	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, fmt.Errorf("invalid create collection JSON: %w", err)
 	}
 
@@ -528,12 +528,12 @@ func buildVectorDef(name string, v map[string]any) string {
 	return def
 }
 
-func convertCreateIndex(input, collection string) ([]string, error) {
+func convertCreateIndex(input []byte, collection string) ([]string, error) {
 	var req struct {
 		FieldName   any `json:"field_name"`
 		FieldSchema any `json:"field_schema"`
 	}
-	if err := json.Unmarshal([]byte(input), &req); err != nil {
+	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, fmt.Errorf("invalid create index JSON: %w", err)
 	}
 
@@ -622,11 +622,11 @@ func buildWithClause(input any) *ast.SearchWith {
 	return nil
 }
 
-func convertBatchSearch(input string) ([]string, error) {
+func convertBatchSearch(input []byte) ([]string, error) {
 	var req struct {
 		Searches []json.RawMessage `json:"searches"`
 	}
-	if err := json.Unmarshal([]byte(input), &req); err != nil {
+	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, fmt.Errorf("invalid batch search JSON: %w", err)
 	}
 	if len(req.Searches) == 0 {
@@ -634,7 +634,7 @@ func convertBatchSearch(input string) ([]string, error) {
 	}
 	var stmts []string
 	for _, search := range req.Searches {
-		subStmts, err := JSONToQQL(string(search))
+		subStmts, err := JSONToQQL(search)
 		if err != nil {
 			return nil, fmt.Errorf("batch search entry: %w", err)
 		}
