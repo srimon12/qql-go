@@ -104,13 +104,19 @@ func (c *chainInt) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 		}
 
 		// Step 2: Policy evaluation (if policy engine is configured).
-		if c.cfg.PolicyEngine != nil {
-			policy := c.cfg.PolicyEngine.Evaluate(claims)
-			if !policy.Allowed {
-				c.cfg.Audit.LogDenied(claims, operationFromProcedure(procedure), "", "no matching policy rule", time.Since(start))
-				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("access denied: no matching policy"))
+		if c.cfg.PolicyEngine != nil || c.cfg.PolicyReloader != nil {
+			engine := c.cfg.PolicyEngine
+			if c.cfg.PolicyReloader != nil {
+				engine = c.cfg.PolicyReloader.Engine()
 			}
-			ctx = injectEvaluatedPolicy(ctx, policy)
+			if engine != nil {
+				policy := engine.Evaluate(claims)
+				if !policy.Allowed {
+					c.cfg.Audit.LogDenied(claims, operationFromProcedure(procedure), "", "no matching policy rule", time.Since(start))
+					return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("access denied: no matching policy"))
+				}
+				ctx = injectEvaluatedPolicy(ctx, policy)
+			}
 		}
 
 		// Step 3: Execute handler with AuditMeta context.

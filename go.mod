@@ -9,7 +9,10 @@ require (
 	github.com/stretchr/testify v1.11.1
 )
 
-require github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
+require (
+	github.com/fsnotify/fsnotify v1.10.1 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
+)
 
 require (
 	connectrpc.com/connect v1.20.0

@@ -47,6 +47,18 @@ type GatewayConfig struct {
 	// If nil, no policy enforcement is applied.
 	PolicyEngine *PolicyEngine
 
+	// PolicyReloader watches the policy file for changes and atomically swaps.
+	// If set, PolicyEngine is derived from it.
+	PolicyReloader *PolicyReloader
+
+	// RateLimiter enforces per-tenant request rate limits.
+	// If nil, no rate limiting is applied.
+	RateLimiter *RateLimiter
+
+	// Templates is the query template engine for agent-safe operations.
+	// If nil, template execution is disabled.
+	Templates *TemplateEngine
+
 	// Audit is the structured audit logger.
 	Audit *AuditLogger
 }
@@ -76,6 +88,10 @@ func Run(cfg Config) error {
 	// Build interceptor chain.
 	var interceptors []connect.Interceptor
 	if cfg.Gateway != nil && cfg.Gateway.Audit != nil {
+		// Rate limiter goes first (cheapest check).
+		if cfg.Gateway.RateLimiter != nil {
+			interceptors = append(interceptors, rateLimitInterceptor(cfg.Gateway.RateLimiter))
+		}
 		interceptors = append(interceptors, chainInterceptors(cfg.Gateway))
 	} else {
 		interceptors = append(interceptors, loggingInterceptor())

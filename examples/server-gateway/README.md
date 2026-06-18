@@ -14,6 +14,12 @@ server-gateway/
 └── README.md
 ```
 
+## Architecture
+
+![Architecture Diagram](./architecture.png)
+
+The core magic happens at the AST Parser & Injector level. Instead of filtering results *after* they return from the database, the gateway rewrites the query structure directly in memory (recursively handling CTEs and limits) before generating the physical `QueryBatch` payload for Qdrant.
+
 ## Prerequisites
 
 - **Qdrant** running (default `http://localhost:6334` gRPC)

@@ -261,6 +261,35 @@ Write to a file with `--audit-file audit.jsonl`, or omit to write to stderr.
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--policy-file` | | Path to YAML policy file |
+| `--policy-reload` | `false` | Watch policy file for changes and reload automatically (zero downtime) |
+
+### Rate Limiting
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--rate-limit` | `0` | Max requests per second per user (0 = unlimited) |
+| `--rate-limit-capacity` | `20` | Max burst size per user |
+
+Uses a token bucket per JWT subject. When the bucket is empty, requests get `429 Resource Exhausted` with a `Retry-After` header. Stale buckets are cleaned up every 5 minutes.
+
+### Templates
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--templates` | | Path to YAML query template file |
+
+Templates let agents invoke named operations instead of writing raw QQL. Variables use `{name}` syntax, JWT claims are available as `{claims.<field>}`.
+
+```yaml
+templates:
+  search_docs:
+    description: "Search documents"
+    query: "QUERY '{query}' FROM docs LIMIT {limit} USING HYBRID"
+  tenant_scroll:
+    description: "Scroll caller's tenant"
+    query: "SCROLL FROM docs LIMIT {limit}"
+    require_claims: [org_id]
+```
 
 ### Audit
 
@@ -338,8 +367,11 @@ server.Run(server.Config{
 | `policy.go` | YAML policy loader, rule matching, `EvaluatedPolicy` |
 | `inject.go` | `ASTInjector` — tenant filter injection, limit cap, collection scoping, CTE recursion |
 | `audit.go` | `AuditLogger` — structured JSON lines, `AuditMeta` context pattern |
+| `reload.go` | `PolicyReloader` — fsnotify watcher, atomic policy swap on file change |
+| `ratelimit.go` | `RateLimiter` — per-key token bucket with cleanup |
+| `templates.go` | `TemplateEngine` — named query templates with variable substitution |
 | `cmd.go` | `NewServeCmd()` — cobra command with all flags |
-| `gateway_test.go` | 19 tests: policy engine, AST injection, claim extraction, glob matching |
+| `gateway_test.go` | 28 tests: policy engine, AST injection, claim extraction, glob matching, rate limiter, templates |
 
 ## Testing
 
@@ -347,4 +379,4 @@ server.Run(server.Config{
 go test ./server/... -v
 ```
 
-Covers: policy rule matching (admin, reader, nil claims, deny overrides, rule order), AST injection (tenant filter, merge with existing, limit cap, collection scoping, operation deny, static value), claim extraction (simple, nested with `#` separator, slice claims), and glob matching.
+Covers: policy rule matching (admin, reader, nil claims, deny overrides, rule order), AST injection (tenant filter, merge with existing, limit cap, collection scoping, operation deny, static value), claim extraction (simple, nested with `#` separator, slice claims), glob matching, rate limiter (disabled, allow/block, refill, retry-after), and template engine (resolve, claim substitution, not found, required claims, param extraction).

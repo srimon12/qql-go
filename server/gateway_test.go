@@ -2,6 +2,7 @@ package server
 
 import (
 	"testing"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/srimon12/qql-go/internal/ast"
@@ -525,6 +526,187 @@ func TestMatchGlob(t *testing.T) {
 		got := matchGlob(tt.pattern, tt.name)
 		if got != tt.want {
 			t.Errorf("matchGlob(%q, %q) = %v, want %v", tt.pattern, tt.name, got, tt.want)
+		}
+	}
+}
+
+// --- Rate Limiter Tests ---
+
+func TestRateLimiter_Disabled(t *testing.T) {
+	rl := NewRateLimiter(RateLimitConfig{Enabled: false})
+	if !rl.Allow("anyone") {
+		t.Fatal("disabled limiter should allow all")
+	}
+}
+
+func TestRateLimiter_AllowAndBlock(t *testing.T) {
+	rl := NewRateLimiter(RateLimitConfig{
+		Rate:     2, // 2 tokens/sec
+		Capacity: 5, // burst of 5
+		Enabled:  true,
+	})
+
+	// Should allow up to capacity.
+	for i := 0; i < 5; i++ {
+		if !rl.Allow("user1") {
+			t.Fatalf("request %d should be allowed", i)
+		}
+	}
+
+	// 6th request should be blocked.
+	if rl.Allow("user1") {
+		t.Fatal("request 6 should be blocked")
+	}
+
+	// Different user should still be allowed.
+	if !rl.Allow("user2") {
+		t.Fatal("different user should be allowed")
+	}
+}
+
+func TestRateLimiter_Refill(t *testing.T) {
+	rl := NewRateLimiter(RateLimitConfig{
+		Rate:     100, // fast refill for testing
+		Capacity: 2,
+		Enabled:  true,
+	})
+
+	// Exhaust the bucket.
+	rl.Allow("user1")
+	rl.Allow("user1")
+	if rl.Allow("user1") {
+		t.Fatal("should be blocked after exhausting capacity")
+	}
+
+	// Wait for refill.
+	time.Sleep(50 * time.Millisecond)
+	if !rl.Allow("user1") {
+		t.Fatal("should be allowed after refill")
+	}
+}
+
+func TestRateLimiter_RetryAfter(t *testing.T) {
+	rl := NewRateLimiter(RateLimitConfig{
+		Rate:     1, // 1 token/sec
+		Capacity: 1,
+		Enabled:  true,
+	})
+
+	rl.Allow("user1")
+	ra := rl.RetryAfter("user1")
+	if ra <= 0 {
+		t.Fatal("retry after should be positive when bucket is empty")
+	}
+}
+
+// --- Template Engine Tests ---
+
+func TestTemplateEngine_Resolve(t *testing.T) {
+	te := &TemplateEngine{
+		templates: map[string]Template{
+			"search_docs": {
+				Description: "Search documents",
+				Query:       "QUERY '{query}' FROM docs LIMIT {limit} USING HYBRID",
+			},
+		},
+	}
+
+	claims := &JWTClaims{
+		Subject:  "usr_alice",
+		TenantID: "acme-corp",
+		Raw:      map[string]any{"org_id": "acme-corp"},
+	}
+
+	result, err := te.Resolve("search_docs", map[string]string{
+		"query": "emergency care",
+		"limit": "10",
+	}, claims)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := "QUERY 'emergency care' FROM docs LIMIT 10 USING HYBRID"
+	if result != expected {
+		t.Fatalf("expected %q, got %q", expected, result)
+	}
+}
+
+func TestTemplateEngine_ResolveWithClaims(t *testing.T) {
+	te := &TemplateEngine{
+		templates: map[string]Template{
+			"tenant_search": {
+				Query: "QUERY '{query}' FROM {claims.org_id}_docs LIMIT 10",
+			},
+		},
+	}
+
+	claims := &JWTClaims{
+		Subject:  "usr_bob",
+		TenantID: "acme-corp",
+		Raw:      map[string]any{"org_id": "acme-corp"},
+	}
+
+	result, err := te.Resolve("tenant_search", map[string]string{
+		"query": "test",
+	}, claims)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := "QUERY 'test' FROM acme-corp_docs LIMIT 10"
+	if result != expected {
+		t.Fatalf("expected %q, got %q", expected, result)
+	}
+}
+
+func TestTemplateEngine_NotFound(t *testing.T) {
+	te := &TemplateEngine{templates: map[string]Template{}}
+	_, err := te.Resolve("nonexistent", nil, nil)
+	if err == nil {
+		t.Fatal("expected error for missing template")
+	}
+}
+
+func TestTemplateEngine_RequireClaims(t *testing.T) {
+	te := &TemplateEngine{
+		templates: map[string]Template{
+			"secure": {
+				Query:         "QUERY 'test' FROM docs LIMIT 10",
+				RequireClaims: []string{"org_id"},
+			},
+		},
+	}
+
+	// Without the required claim.
+	claims := &JWTClaims{Subject: "usr_alice", Raw: map[string]any{}}
+	_, err := te.Resolve("secure", nil, claims)
+	if err == nil {
+		t.Fatal("expected error when required claim is missing")
+	}
+
+	// With the required claim.
+	claims.Raw["org_id"] = "acme-corp"
+	result, err := te.Resolve("secure", nil, claims)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "QUERY 'test' FROM docs LIMIT 10" {
+		t.Fatalf("unexpected result: %q", result)
+	}
+}
+
+func TestTemplate_ExtractParams(t *testing.T) {
+	tmpl := Template{
+		Query: "QUERY '{query}' FROM {collection} LIMIT {limit} WHERE tenant = '{claims.org_id}'",
+	}
+	params := tmpl.ExtractParams()
+	if len(params) != 3 {
+		t.Fatalf("expected 3 params, got %d: %v", len(params), params)
+	}
+	// Should not include claims.* params.
+	for _, p := range params {
+		if p == "claims.org_id" {
+			t.Fatal("should not include claims.* params")
 		}
 	}
 }

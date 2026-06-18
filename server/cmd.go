@@ -24,10 +24,18 @@ func NewServeCmd() *cobra.Command {
 		roleClaim    string
 		tenantClaim  string
 
-		policyFile string
+		policyFile  string
+		policyReload bool
 
 		auditEnable bool
 		auditFile   string
+
+		// Rate limiting.
+		rateLimit         float64
+		rateLimitCapacity int
+
+		// Templates.
+		templateFile string
 
 		// Embedding flags.
 		inferenceMode    string
@@ -61,10 +69,13 @@ Any language can send QQL queries:
     --tenant-claim org_id \
     --role-claim role
 
-  # With policy enforcement
+  # With policy enforcement + hot-reload + rate limiting + templates
   qql-go serve --qdrant-url http://localhost:6334 \
     --jwks-url https://idp.example.com/.well-known/jwks.json \
     --policy-file policies.yaml \
+    --policy-reload \
+    --rate-limit 10 \
+    --templates templates.yaml \
     --audit`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if qdrantURL == "" {
@@ -88,7 +99,7 @@ Any language can send QQL queries:
 			}
 
 			// Build gateway config if any gateway flag is set.
-			if jwksURL != "" || policyFile != "" || auditEnable {
+			if jwksURL != "" || policyFile != "" || auditEnable || rateLimit > 0 || templateFile != "" {
 				gw := &GatewayConfig{}
 
 				// Audit logger.
@@ -116,13 +127,40 @@ Any language can send QQL queries:
 					})
 				}
 
-				// Policy engine.
+				// Policy engine (with optional hot-reload).
 				if policyFile != "" {
-					pe, err := NewPolicyEngine(policyFile)
-					if err != nil {
-						return fmt.Errorf("failed to load policy file: %w", err)
+					if policyReload {
+						reloader, err := NewPolicyReloader(policyFile)
+						if err != nil {
+							return fmt.Errorf("failed to start policy reloader: %w", err)
+						}
+						gw.PolicyReloader = reloader
+						gw.PolicyEngine = reloader.Engine()
+					} else {
+						pe, err := NewPolicyEngine(policyFile)
+						if err != nil {
+							return fmt.Errorf("failed to load policy file: %w", err)
+						}
+						gw.PolicyEngine = pe
 					}
-					gw.PolicyEngine = pe
+				}
+
+				// Rate limiter.
+				if rateLimit > 0 {
+					gw.RateLimiter = NewRateLimiter(RateLimitConfig{
+						Rate:     rateLimit,
+						Capacity: rateLimitCapacity,
+						Enabled:  true,
+					})
+				}
+
+				// Template engine.
+				if templateFile != "" {
+					te, err := NewTemplateEngine(templateFile)
+					if err != nil {
+						return fmt.Errorf("failed to load template file: %w", err)
+					}
+					gw.Templates = te
 				}
 
 				cfg.Gateway = gw
@@ -146,10 +184,18 @@ Any language can send QQL queries:
 
 	// Gateway: Policy flags.
 	cmd.Flags().StringVar(&policyFile, "policy-file", "", "path to YAML policy file for access control")
+	cmd.Flags().BoolVar(&policyReload, "policy-reload", false, "watch policy file for changes and reload automatically")
 
 	// Gateway: Audit flags.
 	cmd.Flags().BoolVar(&auditEnable, "audit", false, "enable structured JSON audit logging")
 	cmd.Flags().StringVar(&auditFile, "audit-file", "", "path to audit log file (default: stderr)")
+
+	// Gateway: Rate limiting flags.
+	cmd.Flags().Float64Var(&rateLimit, "rate-limit", 0, "max requests per second per user (0 = unlimited)")
+	cmd.Flags().IntVar(&rateLimitCapacity, "rate-limit-capacity", 20, "max burst size per user for rate limiting")
+
+	// Gateway: Template flags.
+	cmd.Flags().StringVar(&templateFile, "templates", "", "path to YAML query template file for agent-safe operations")
 
 	// Embedding flags (same as CLI connect).
 	cmd.Flags().StringVar(&inferenceMode, "inference-mode", "local", "Inference mode: cloud, external, or local")
