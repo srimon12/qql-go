@@ -155,30 +155,75 @@ func (h *Handler) ExecBatch(
 			}
 		}
 
-		results := make([]*qqlpb.ExecResponse, len(nodes))
-		for i, node := range nodes {
-			result, err := qql.ExecAST(ctx, h.client, node, h.config)
-			if err != nil {
-				if batchReq.GetStopOnError() {
-					return nil, connect.NewError(connect.CodeInternal, err)
-				}
-				results[i] = &qqlpb.ExecResponse{
-					Ok:      false,
-					Message: err.Error(),
-				}
-				continue
-			}
-			data, err := json.Marshal(result.Data)
-			if err != nil {
-				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal batch result %d: %w", i, err))
-			}
-			results[i] = &qqlpb.ExecResponse{
-				Ok:        result.OK,
-				Operation: result.Operation,
-				Message:   result.Message,
-				Data:      data,
+		allQuery := true
+		for _, n := range nodes {
+			if _, ok := n.(*ast.QueryStmt); !ok {
+				allQuery = false
+				break
 			}
 		}
+
+		var qqlResults []*qql.Result
+		var batchErr error
+
+		if allQuery && len(nodes) > 1 {
+			qqlResults, batchErr = qql.BatchQueryASTWithConfig(ctx, h.client, nodes, h.config)
+		}
+
+		if batchErr != nil {
+			if batchReq.GetStopOnError() {
+				return nil, connect.NewError(connect.CodeInternal, batchErr)
+			}
+			// Batch failed but stopOnError is false — fall through to sequential.
+			qqlResults = nil
+		}
+
+		results := make([]*qqlpb.ExecResponse, len(nodes))
+		
+		if qqlResults != nil {
+			// Fast path succeeded
+			for i, result := range qqlResults {
+				if result == nil {
+					continue // Should not happen
+				}
+				data, err := json.Marshal(result.Data)
+				if err != nil {
+					return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal batch result %d: %w", i, err))
+				}
+				results[i] = &qqlpb.ExecResponse{
+					Ok:        result.OK,
+					Operation: result.Operation,
+					Message:   result.Message,
+					Data:      data,
+				}
+			}
+		} else {
+			// Sequential execution fallback (for INSERT, DELETE, mixed batches, or single query)
+			for i, node := range nodes {
+				result, err := qql.ExecAST(ctx, h.client, node, h.config)
+				if err != nil {
+					if batchReq.GetStopOnError() {
+						return nil, connect.NewError(connect.CodeInternal, err)
+					}
+					results[i] = &qqlpb.ExecResponse{
+						Ok:      false,
+						Message: err.Error(),
+					}
+					continue
+				}
+				data, err := json.Marshal(result.Data)
+				if err != nil {
+					return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal batch result %d: %w", i, err))
+				}
+				results[i] = &qqlpb.ExecResponse{
+					Ok:        result.OK,
+					Operation: result.Operation,
+					Message:   result.Message,
+					Data:      data,
+				}
+			}
+		}
+
 		return connect.NewResponse(&qqlpb.ExecBatchResponse{Results: results}), nil
 	}
 

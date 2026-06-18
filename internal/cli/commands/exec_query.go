@@ -305,6 +305,11 @@ func (e *Executor) BuildQueryPoints(ctx context.Context, query string) (*qdrant.
 	if err != nil {
 		return nil, err
 	}
+	return e.BuildQueryPointsNode(ctx, node)
+}
+
+// BuildQueryPointsNode builds QueryPoints directly from an AST node.
+func (e *Executor) BuildQueryPointsNode(ctx context.Context, node ast.ASTNode) (*qdrant.QueryPoints, error) {
 	stmt, ok := node.(*ast.QueryStmt)
 	if !ok {
 		return nil, fmt.Errorf("expected QUERY statement, got %T", node)
