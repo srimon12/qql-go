@@ -6,7 +6,27 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 ## [Unreleased]
 
-- No unreleased changes yet.
+### Added
+
+- **Multivector (ColBERT) support** — `CREATE COLLECTION` accepts `WITH MULTIVECTOR (comparator = 'max_sim')` on named vectors for ColBERT/ColPali-style late interaction models. `HNSW (m = 0)` disables HNSW indexing on reranking vectors, reducing RAM and speeding up inserts.
+- **Prefetch with `USING`** — Each CTE prefetch can target a different named vector: `WITH _pf0 AS (QUERY [...] USING 'dense' LIMIT 100), _pf1 AS (QUERY [...] USING 'sparse' LIMIT 100) QUERY ... USING 'original' PREFETCH (_pf0, _pf1)`.
+- **Inline subqueries in `PREFETCH`** — `PREFETCH (QUERY [...] USING 'dense' LIMIT 100)` generates CTEs inline without explicit `WITH` blocks.
+- **Insert with named vectors** — `INSERT INTO <col> VALUES {'id': 1, 'vector': {'dense': [...], 'colbert': [[...],[...]]}}` stores pre-computed dense and multivector vectors alongside payload.
+- **`qql-go convert`** — Converts Qdrant REST API JSON to QQL. Accepts stdin, file, or wrapped `method+path+body` format. Supports all operations: create collection, upsert, search, recommend, discover, scroll, delete, set payload, create index.
+- **Python SDK interceptor** — `sdks/python/qql_intercept.py` wraps `QdrantClient` at the HTTP layer, captures REST JSON calls, and pipes them through `qql-go convert` for migration.
+- **`ConvertJSONBytesToQQL`** — `pkg/qql` exposes `[]byte` API to avoid string copies on high-throughput paths.
+- **110-payload regression suite** — `all_payloads.json` covers PDF retrieval, 3-level nested prefetch, score_threshold, offset, group_by, 2D multivector query, wrapped endpoints, batch mixed recommend+search, insert with named vectors.
+
+### Changed
+
+- Converter formatters use `strings.Builder` and `strconv.FormatFloat` for zero-allocation output.
+- `RESTPrefetch` and `RESTQueryRequest` structs handle `Using`, `Offset`, `ScoreThreshold`, `WithPayload` for complete JSON-to-QQL round-trips.
+- `convertUpsert` includes vector data (dense and multivector) in output.
+- `convertByStructure` routes text/indices queries with prefetch through formula path for CTE generation.
+- Parser treats `DENSE`, `SPARSE`, `VECTOR` as contextual identifiers, allowing them as vector names in `CREATE COLLECTION`.
+- Parser allows `HNSW (m = 0)` to disable indexing (was restricted to `m >= 4`).
+- Executor maps `MultivectorConfig` to `qdrant.MultiVectorComparator_MaxSim` and shows multivector details in `EXPLAIN`.
+- Converter test files updated for `[]byte` API.
 
 ## [0.4.0] - 2026-06-18
 

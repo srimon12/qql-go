@@ -15,7 +15,7 @@ Read these reference documents **ONLY** when you need details on their specific 
 - [references/qql-gaps.md](references/qql-gaps.md) — Read if a user asks for unsupported features (ReadConsistency, Timeout, ShardKeySelector).
 - [references/qql-examples.md](references/qql-examples.md) — Read for advanced examples (CTEs, MMR, Context patterns).
 
-For runnable demo scripts, see `scripts/demo_retrieval_modes.py`, `scripts/demo_medical_records.py`, and `scripts/demo_kitchen_sink.py`.
+For runnable demo scripts, see `scripts/demo_retrieval_modes.py`, `scripts/demo_medical_records.py`, `scripts/demo_kitchen_sink.py`, and `scripts/demo_multivector.py`.
 
 ## Intent Mapping
 Translate user intent directly into QQL syntax:
@@ -24,6 +24,8 @@ Translate user intent directly into QQL syntax:
 - Hybrid retrieval with DBSF fusion -> `USING HYBRID FUSION DBSF`
 - Hybrid retrieval with tuned RRF -> `USING HYBRID WITH (rrf_k = ..., rrf_weights = [...])`
 - Multi-stage retrieval -> `WITH <name> AS (...), ... QUERY ... PREFETCH (name1, name2) FUSION RRF`
+- Multi-stage with different vectors -> `WITH _pf0 AS (QUERY ... USING 'dense'), _pf1 AS (QUERY ... USING 'sparse') QUERY ... USING 'colbert' PREFETCH (_pf0, _pf1)`
+- PDF retrieval (ColBERT/ColPali) -> create with `MULTIVECTOR (comparator = 'max_sim')` + `HNSW (m = 0)`, search with prefetch + USING
 - Keyword-only retrieval -> `USING SPARSE`
 - Query by point ID -> `QUERY <id> FROM <collection>`
 - Recommendation by example -> `QUERY RECOMMEND WITH (positive = (...), negative = (...))`
@@ -42,6 +44,9 @@ Translate user intent directly into QQL syntax:
 - Exact point lookup -> `SELECT * FROM <collection> WHERE id = <id>`
 - Browse points -> `SCROLL FROM <collection> [AFTER <id>] LIMIT <n>`
 - Batch ingest -> `INSERT INTO <collection> VALUES {...}, {...}`
+- Insert with pre-computed vectors -> `INSERT INTO <col> VALUES {'id': 1, 'vector': {'dense': [...], 'colbert': [[...]]}}`
+- Convert Python SDK to QQL -> `python3 sdks/python/qql_intercept.py your_script.py`
+- Convert REST JSON to QQL -> `qql-go convert payload.json`
 
 ## QQL Capabilities & Grammar
 
@@ -55,6 +60,12 @@ CREATE COLLECTION <name> [HYBRID [RERANK]]
   [WITH PARAMS (replication_factor = <n>, ...)]
   [WITH QUANTIZATION (type = 'scalar'|'binary'|'product'|'turbo', ...)]
   [USING MODEL '<model>' | USING HYBRID [DENSE MODEL '<model>']]
+
+-- Named vectors with per-vector config
+CREATE COLLECTION <name> (
+  dense VECTOR(384, COSINE),
+  colbert VECTOR(128, COSINE) WITH MULTIVECTOR (comparator = 'max_sim') WITH HNSW (m = 0)
+)
 
 ALTER COLLECTION <name> ... -- Supports WITH HNSW, WITH OPTIMIZERS, WITH PARAMS, WITH QUANTIZATION (disabled = true)
 SHOW COLLECTIONS
@@ -77,6 +88,9 @@ CREATE INDEX ON COLLECTION <name> FOR <field> TYPE <keyword|integer|float|bool|u
 ```sql
 INSERT INTO <name> VALUES { 'text': '...', 'category': '...' }, {...}, {...}
   [USING [HYBRID [DENSE MODEL '<m>' SPARSE MODEL '<m>'] | MODEL '<m>']]
+
+-- Insert with pre-computed named vectors (dense + multivector)
+INSERT INTO <name> VALUES { 'id': 1, 'text': '...', 'vector': {'dense': [0.1, 0.2], 'colbert': [[0.1, 0.2], [0.3, 0.4]]} }
 
 UPDATE <name> SET VECTOR = [<float>, ...] WHERE id = <id>
 UPDATE <name> SET PAYLOAD = {...} WHERE <filter_expression>
@@ -125,15 +139,17 @@ BOOST ($score + exp_decay(datetime_key('published_at'), target=datetime('2026-06
 
 ### CTEs (Common Table Expressions)
 ```sql
-WITH <name> AS (QUERY ...) [, <name> AS (QUERY ...)]
-QUERY ... FROM <collection> PREFETCH (<name>, ...) FUSION RRF LIMIT <n>
+WITH <name> AS (QUERY ... USING '<vector>' [LIMIT <n>]) [, <name> AS (QUERY ...)]
+QUERY ... FROM <collection> USING '<vector>' PREFETCH (<name>, ...) FUSION RRF LIMIT <n>
 ```
 
 **Notes:**
+- Each CTE can target a different named vector with `USING '<vector>'`.
 - `PREFETCH` references CTE names, not inline queries.
 - Each prefetch ref can have an inline `WHERE` filter and `SCORE THRESHOLD`.
 - `OFFSET` cannot be used with `GROUP BY`.
 - Filters use standard SQL operators: `=`, `!=`, `>`, `<`, `BETWEEN ... AND ...`, `IN (...)`, `IS NULL`, `IS EMPTY`, `AND`, `OR`, `NOT`.
+- For PDF retrieval with ColBERT: create collection with `MULTIVECTOR` + `HNSW (m = 0)`, search with prefetch USING mean-pooled vectors, rerank with original.
 
 ## Agent and Script Output Contract
 For automation, use structured output:
@@ -143,6 +159,8 @@ For automation, use structured output:
 - `qql-go doctor --quiet --json`
 - `qql-go connect --quiet --json --url <url> ...`
 - `qql-go dump --quiet --json [--batch-size <n>] <collection> <output.qql>`
+- `qql-go convert --quiet <payload.json>` — REST JSON to QQL
+- `python3 sdks/python/qql_intercept.py <script.py>` — Python SDK to QQL
 
 **Script format:** `.qql` files use newline-delimited statements **WITHOUT semicolons**.
 ```sql

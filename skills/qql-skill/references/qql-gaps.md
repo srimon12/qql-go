@@ -5,12 +5,10 @@ Use this file when a request sounds reasonable in Qdrant terms but is still outs
 ## Not Supported Yet
 
 - local/external rerank (`RERANK` is cloud-only)
-- relevance feedback query
 - offset-style pagination for grouped search
 - MMR for `USING SPARSE` or `RECOMMEND`
 - custom vector on-disk toggles
 - ReadConsistency / ShardKeySelector / Timeout controls
-- Datetime / DatetimeKey formula expressions (rare)
 
 ## What To Say
 
