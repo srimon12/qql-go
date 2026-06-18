@@ -4,15 +4,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/srimon12/qql-go/internal/ast"
 )
 
 func convertUpsert(input, collection string) ([]string, error) {
 	var req struct {
 		Points []struct {
-			ID      interface{}            `json:"id"`
-			Vector  interface{}            `json:"vector"`
-			Vectors map[string][]float32   `json:"vectors"`
-			Payload map[string]interface{} `json:"payload"`
+			ID      any                  `json:"id"`
+			Vector  any                  `json:"vector"`
+			Vectors map[string][]float32 `json:"vectors"`
+			Payload map[string]any       `json:"payload"`
 		} `json:"points"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
@@ -21,7 +23,7 @@ func convertUpsert(input, collection string) ([]string, error) {
 
 	var stmts []string
 	for _, point := range req.Points {
-		payload := make(map[string]interface{})
+		payload := make(map[string]any)
 		if point.Payload != nil {
 			payload = point.Payload
 		}
@@ -42,69 +44,86 @@ func convertUpsert(input, collection string) ([]string, error) {
 
 func convertSearch(input, collection string) ([]string, error) {
 	var req struct {
-		Vector         interface{} `json:"vector"`
+		Vector         any         `json:"vector"`
 		Limit          int         `json:"limit"`
 		Offset         int         `json:"offset"`
 		Filter         *RESTFilter `json:"filter"`
-		WithPayload    interface{} `json:"with_payload"`
-		WithVector     interface{} `json:"with_vector"`
+		WithPayload    any         `json:"with_payload"`
+		WithVector     any         `json:"with_vector"`
 		ScoreThreshold *float64    `json:"score_threshold"`
 		Using          string      `json:"using"`
-		Params         interface{} `json:"params"`
+		Params         any         `json:"params"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid search JSON: %w", err)
 	}
 
-	var parts []string
-	parts = append(parts, fmt.Sprintf("QUERY '<query_text>' FROM %s", collection))
-
-	if req.Limit > 0 {
-		parts = append(parts, fmt.Sprintf("LIMIT %d", req.Limit))
+	stmt := &ast.QueryStmt{
+		Collection: collection,
+		Mode:       ast.QueryModeNearest,
+		Limit:      req.Limit,
+		Offset:     req.Offset,
 	}
-	if req.Offset > 0 {
-		parts = append(parts, fmt.Sprintf("OFFSET %d", req.Offset))
+
+	// Vector
+	if vec, ok := req.Vector.([]any); ok && len(vec) > 0 {
+		raw := make([]float64, len(vec))
+		for i, v := range vec {
+			switch f := v.(type) {
+			case float64:
+				raw[i] = f
+			case int:
+				raw[i] = float64(f)
+			}
+		}
+		stmt.RawVector = raw
+	} else if req.Vector != nil {
+		str := "<query_text>"
+		stmt.QueryText = &str
 	}
 
 	// Using
 	switch strings.ToLower(req.Using) {
 	case "hybrid":
-		parts = append(parts, "USING HYBRID")
+		stmt.Type = ast.QueryTypeHybrid
 	case "sparse":
-		parts = append(parts, "USING SPARSE")
+		stmt.Type = ast.QueryTypeSparse
+	default:
+		if req.Using != "" {
+			using := req.Using
+			stmt.Using = &using
+		}
 	}
 
 	// Filter
 	if req.Filter != nil {
-		filterStr, err := convertFilter(req.Filter)
-		if err == nil && filterStr != "" {
-			parts = append(parts, "WHERE "+filterStr)
-		}
+		stmt.QueryFilter = convertRESTFilter(req.Filter)
 	}
 
 	// Score threshold
 	if req.ScoreThreshold != nil {
-		parts = append(parts, fmt.Sprintf("SCORE THRESHOLD %g", *req.ScoreThreshold))
+		stmt.ScoreThreshold = req.ScoreThreshold
 	}
 
 	// Params
 	if req.Params != nil {
-		paramsStr, err := convertSearchParams(req.Params)
-		if err == nil && paramsStr != "" {
-			parts = append(parts, "WITH ("+paramsStr+")")
-		}
+		stmt.WithClause = buildWithClause(req.Params)
 	}
 
-	return []string{strings.Join(parts, " ")}, nil
+	// WithPayload and WithVectors
+	stmt.WithPayload = buildPayloadSelector(req.WithPayload)
+	stmt.WithVectors = buildVectorsSelector(req.WithVector)
+
+	return []string{ast.FormatQueryStmt(stmt)}, nil
 }
 
 func convertRecommend(input, collection string) ([]string, error) {
 	var req struct {
-		Positive []interface{} `json:"positive"`
-		Negative []interface{} `json:"negative"`
-		Limit    int           `json:"limit"`
-		Strategy string        `json:"strategy"`
-		Filter   *RESTFilter   `json:"filter"`
+		Positive []any       `json:"positive"`
+		Negative []any       `json:"negative"`
+		Limit    int         `json:"limit"`
+		Strategy string      `json:"strategy"`
+		Filter   *RESTFilter `json:"filter"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid recommend JSON: %w", err)
@@ -139,10 +158,10 @@ func convertRecommend(input, collection string) ([]string, error) {
 
 func convertDiscover(input, collection string) ([]string, error) {
 	var req struct {
-		Target  interface{} `json:"target"`
+		Target  any `json:"target"`
 		Context []struct {
-			Positive interface{} `json:"positive"`
-			Negative interface{} `json:"negative"`
+			Positive any `json:"positive"`
+			Negative any `json:"negative"`
 		} `json:"context"`
 		Limit  int         `json:"limit"`
 		Filter *RESTFilter `json:"filter"`
@@ -179,7 +198,7 @@ func convertDiscover(input, collection string) ([]string, error) {
 func convertScroll(input, collection string) ([]string, error) {
 	var req struct {
 		Limit  int         `json:"limit"`
-		Offset interface{} `json:"offset"`
+		Offset any         `json:"offset"`
 		Filter *RESTFilter `json:"filter"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
@@ -207,7 +226,7 @@ func convertScroll(input, collection string) ([]string, error) {
 
 func convertGetPoints(input, collection string) ([]string, error) {
 	var req struct {
-		Ids []interface{} `json:"ids"`
+		Ids []any `json:"ids"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid get points JSON: %w", err)
@@ -222,8 +241,8 @@ func convertGetPoints(input, collection string) ([]string, error) {
 
 func convertDeletePoints(input, collection string) ([]string, error) {
 	var req struct {
-		Points []interface{} `json:"points"`
-		Filter *RESTFilter   `json:"filter"`
+		Points []any       `json:"points"`
+		Filter *RESTFilter `json:"filter"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid delete JSON: %w", err)
@@ -257,9 +276,9 @@ func convertDeleteByFilter(input, collection string) ([]string, error) {
 
 func convertSetPayload(input, collection string) ([]string, error) {
 	var req struct {
-		Payload map[string]interface{} `json:"payload"`
-		Points  []interface{}          `json:"points"`
-		Filter  *RESTFilter            `json:"filter"`
+		Payload map[string]any `json:"payload"`
+		Points  []any          `json:"points"`
+		Filter  *RESTFilter    `json:"filter"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid set payload JSON: %w", err)
@@ -288,8 +307,8 @@ func convertSetPayload(input, collection string) ([]string, error) {
 
 func convertCreateCollection(input, collection string) ([]string, error) {
 	var req struct {
-		Vectors       interface{} `json:"vectors"`
-		VectorsConfig interface{} `json:"vectors_config"`
+		Vectors       any `json:"vectors"`
+		VectorsConfig any `json:"vectors_config"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid create collection JSON: %w", err)
@@ -304,7 +323,7 @@ func convertCreateCollection(input, collection string) ([]string, error) {
 
 	if vectors != nil {
 		switch v := vectors.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			if size, ok := v["size"]; ok {
 				distance := "Cosine"
 				if d, ok := v["distance"]; ok {
@@ -320,8 +339,8 @@ func convertCreateCollection(input, collection string) ([]string, error) {
 
 func convertCreateIndex(input, collection string) ([]string, error) {
 	var req struct {
-		FieldName   interface{} `json:"field_name"`
-		FieldSchema interface{} `json:"field_schema"`
+		FieldName   any `json:"field_name"`
+		FieldSchema any `json:"field_schema"`
 	}
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
 		return nil, fmt.Errorf("invalid create index JSON: %w", err)
@@ -333,7 +352,7 @@ func convertCreateIndex(input, collection string) ([]string, error) {
 		switch s := req.FieldSchema.(type) {
 		case string:
 			schema = s
-		case map[string]interface{}:
+		case map[string]any:
 			if t, ok := s["type"]; ok {
 				schema = fmt.Sprintf("%v", t)
 			}
@@ -344,3 +363,70 @@ func convertCreateIndex(input, collection string) ([]string, error) {
 }
 
 // --- Formula / MMR / Relevance Feedback ---
+
+func buildPayloadSelector(input any) *ast.PayloadSelector {
+	if input == nil {
+		return nil
+	}
+	if b, ok := input.(bool); ok {
+		return &ast.PayloadSelector{Enable: &b}
+	}
+	if m, ok := input.(map[string]any); ok {
+		sel := &ast.PayloadSelector{}
+		if inc, ok := m["include"].([]any); ok {
+			for _, v := range inc {
+				if s, ok := v.(string); ok {
+					sel.Include = append(sel.Include, s)
+				}
+			}
+		}
+		if exc, ok := m["exclude"].([]any); ok {
+			for _, v := range exc {
+				if s, ok := v.(string); ok {
+					sel.Exclude = append(sel.Exclude, s)
+				}
+			}
+		}
+		return sel
+	}
+	return nil
+}
+
+func buildVectorsSelector(input any) *ast.VectorsSelector {
+	if input == nil {
+		return nil
+	}
+	if b, ok := input.(bool); ok {
+		return &ast.VectorsSelector{Enable: &b}
+	}
+	if arr, ok := input.([]any); ok {
+		sel := &ast.VectorsSelector{}
+		for _, v := range arr {
+			if s, ok := v.(string); ok {
+				sel.Vectors = append(sel.Vectors, s)
+			}
+		}
+		return sel
+	}
+	return nil
+}
+
+func buildWithClause(input any) *ast.SearchWith {
+	if input == nil {
+		return nil
+	}
+	if m, ok := input.(map[string]any); ok {
+		w := &ast.SearchWith{}
+		if exact, ok := m["exact"].(bool); ok {
+			w.Exact = exact
+		}
+		if hnsw, ok := m["hnsw_ef"].(float64); ok {
+			w.HnswEf = int(hnsw)
+		}
+		if idx, ok := m["indexed_only"].(bool); ok {
+			w.IndexedOnly = idx
+		}
+		return w
+	}
+	return nil
+}

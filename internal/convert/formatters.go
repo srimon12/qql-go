@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func buildValuesDict(payload map[string]interface{}) string {
+func buildValuesDict(payload map[string]any) string {
 	if len(payload) == 0 {
 		return "{}"
 	}
@@ -18,7 +18,7 @@ func buildValuesDict(payload map[string]interface{}) string {
 	return "{" + strings.Join(entries, ", ") + "}"
 }
 
-func formatID(id interface{}) string {
+func formatID(id any) string {
 	switch v := id.(type) {
 	case string:
 		return fmt.Sprintf("'%s'", v)
@@ -32,7 +32,7 @@ func formatID(id interface{}) string {
 	}
 }
 
-func formatIDList(ids []interface{}) string {
+func formatIDList(ids []any) string {
 	var parts []string
 	for _, id := range ids {
 		parts = append(parts, formatID(id))
@@ -40,7 +40,7 @@ func formatIDList(ids []interface{}) string {
 	return strings.Join(parts, ", ")
 }
 
-func formatValue(v interface{}) string {
+func formatValue(v any) string {
 	switch val := v.(type) {
 	case string:
 		return fmt.Sprintf("'%s'", strings.ReplaceAll(val, "'", "\\'"))
@@ -56,7 +56,7 @@ func formatValue(v interface{}) string {
 		return "false"
 	case nil:
 		return "null"
-	case []interface{}:
+	case []any:
 		var items []string
 		for _, item := range val {
 			items = append(items, formatValue(item))

@@ -20,8 +20,8 @@ func convertFilter(f *RESTFilter) (string, error) {
 	return ast.FormatFilterExpr(astFilter), nil
 }
 
-func convertSearchParams(input interface{}) (string, error) {
-	params, ok := input.(map[string]interface{})
+func convertSearchParams(input any) (string, error) {
+	params, ok := input.(map[string]any)
 	if !ok {
 		return "", nil
 	}

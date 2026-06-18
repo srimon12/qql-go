@@ -150,7 +150,24 @@ func (e *Executor) buildQueryStateAndPipeline(ctx context.Context, stmt *ast.Que
 
 	case ast.QueryModeNearest:
 		if len(stmt.RawVector) > 0 {
-			execPipeline.Add(&pipeline.RawVectorNode{Vector: stmt.RawVector, VectorName: denseVectorName})
+			if stmt.Type == ast.QueryTypeHybrid {
+				if stmt.QueryText == nil {
+					return nil, fmt.Errorf("USING HYBRID with a raw dense vector requires a text query for the sparse vector")
+				}
+				execPipeline.Add(&pipeline.RawVectorNode{Vector: stmt.RawVector, VectorName: denseVectorName, Limit: uint64(stmt.Limit) * 10, AsPrefetch: true})
+				execPipeline.Add(&pipeline.SparseEmbedNode{Model: *sparseModel, VectorName: sparseVectorName, Limit: uint64(stmt.Limit) * 10, AsPrefetch: true})
+				if stmt.FusionType != nil {
+					execPipeline.Add(&pipeline.FusionNode{Mode: strings.ToLower(*stmt.FusionType)})
+				} else {
+					execPipeline.Add(&pipeline.FusionNode{Mode: "rrf"})
+				}
+			} else {
+				execPipeline.Add(&pipeline.RawVectorNode{Vector: stmt.RawVector, VectorName: denseVectorName})
+				if stmt.FusionType != nil {
+					execPipeline.Add(&pipeline.FusionNode{Mode: strings.ToLower(*stmt.FusionType)})
+					state.VectorName = ""
+				}
+			}
 		} else if stmt.QueryID != nil {
 			execPipeline.Add(&pipeline.RecommendNode{PositiveIDs: []any{stmt.QueryID}})
 		} else {
@@ -385,6 +402,10 @@ func (e *Executor) buildCTEPrefetch(ctx context.Context, stmt *ast.QueryStmt, ct
 		})
 
 	case ast.QueryModeNearest:
+		if stmt.Type == ast.QueryTypeHybrid {
+			return nil, fmt.Errorf("USING HYBRID is not supported inside CTE prefetch queries; define separate sparse and dense CTEs and combine them via prefetch references")
+		}
+
 		if len(stmt.RawVector) > 0 {
 			raw := make([]float32, len(stmt.RawVector))
 			for i, v := range stmt.RawVector {

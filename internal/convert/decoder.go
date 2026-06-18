@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/srimon12/qql-go/internal/ast"
+	"maps"
 )
 
 func convertRESTQueryToAST(req *RESTQueryRequest, collection string) (*ast.QueryStmt, error) {
@@ -23,9 +24,7 @@ func convertRESTQueryToAST(req *RESTQueryRequest, collection string) (*ast.Query
 
 	if len(req.Defaults) > 0 {
 		stmt.FormulaDefaults = make(map[string]any)
-		for k, v := range req.Defaults {
-			stmt.FormulaDefaults[k] = v
-		}
+		maps.Copy(stmt.FormulaDefaults, req.Defaults)
 	}
 
 	// Prefetches
@@ -43,7 +42,7 @@ func convertRESTQueryToAST(req *RESTQueryRequest, collection string) (*ast.Query
 		if err == nil {
 			for i, pf := range prefetches {
 				cteName := fmt.Sprintf("_pf%d", i)
-				pfStmt, err := convertRESTPrefetchToAST(&pf, collection)
+				pfStmt, err := convertRESTPrefetchToAST(&pf, collection, cteName)
 				if err == nil {
 					stmt.CTEs = append(stmt.CTEs, ast.CTE{Name: cteName, Stmt: pfStmt})
 					stmt.PrefetchRefs = append(stmt.PrefetchRefs, ast.PrefetchRef{CTEName: cteName})
@@ -55,7 +54,7 @@ func convertRESTQueryToAST(req *RESTQueryRequest, collection string) (*ast.Query
 	return stmt, nil
 }
 
-func convertRESTPrefetchToAST(pf *RESTPrefetch, collection string) (*ast.QueryStmt, error) {
+func convertRESTPrefetchToAST(pf *RESTPrefetch, collection, prefix string) (*ast.QueryStmt, error) {
 	stmt := &ast.QueryStmt{
 		Collection: collection,
 		Mode:       ast.QueryModeNearest,
@@ -67,8 +66,36 @@ func convertRESTPrefetchToAST(pf *RESTPrefetch, collection string) (*ast.QuerySt
 		stmt.QueryFilter = convertRESTFilter(pf.Filter)
 	}
 
+	// Handle Nested Prefetches
+	if len(pf.Prefetch) > 0 {
+		var prefetches []RESTPrefetch
+		err := json.Unmarshal(pf.Prefetch, &prefetches)
+		if err != nil {
+			var single RESTPrefetch
+			if err2 := json.Unmarshal(pf.Prefetch, &single); err2 == nil {
+				prefetches = []RESTPrefetch{single}
+				err = nil
+			}
+		}
+
+		if err == nil {
+			for i, childPf := range prefetches {
+				cteName := fmt.Sprintf("%s_%d", prefix, i)
+				pfStmt, err := convertRESTPrefetchToAST(&childPf, collection, cteName)
+				if err == nil {
+					// Add the child's own CTEs if any, then the child itself
+					stmt.CTEs = append(stmt.CTEs, pfStmt.CTEs...)
+					pfStmt.CTEs = nil // Clear child CTEs as they're bubbled up
+
+					stmt.CTEs = append(stmt.CTEs, ast.CTE{Name: cteName, Stmt: pfStmt})
+					stmt.PrefetchRefs = append(stmt.PrefetchRefs, ast.PrefetchRef{CTEName: cteName})
+				}
+			}
+		}
+	}
+
 	if pf.Document != nil {
-		if docMap, ok := pf.Document.(map[string]interface{}); ok {
+		if docMap, ok := pf.Document.(map[string]any); ok {
 			if text, ok := docMap["text"]; ok {
 				if s, ok := text.(string); ok {
 					stmt.QueryText = &s
@@ -76,7 +103,7 @@ func convertRESTPrefetchToAST(pf *RESTPrefetch, collection string) (*ast.QuerySt
 			}
 		}
 	} else if pf.Query.Document != nil {
-		if docMap, ok := pf.Query.Document.(map[string]interface{}); ok {
+		if docMap, ok := pf.Query.Document.(map[string]any); ok {
 			if text, ok := docMap["text"]; ok {
 				if s, ok := text.(string); ok {
 					stmt.QueryText = &s
@@ -84,9 +111,9 @@ func convertRESTPrefetchToAST(pf *RESTPrefetch, collection string) (*ast.QuerySt
 			}
 		}
 	} else if pf.Query.Nearest != nil {
-		if nearestMap, ok := pf.Query.Nearest.(map[string]interface{}); ok {
+		if nearestMap, ok := pf.Query.Nearest.(map[string]any); ok {
 			if doc, ok := nearestMap["document"]; ok {
-				if docMap, ok := doc.(map[string]interface{}); ok {
+				if docMap, ok := doc.(map[string]any); ok {
 					if text, ok := docMap["text"]; ok {
 						if s, ok := text.(string); ok {
 							stmt.QueryText = &s
@@ -94,7 +121,7 @@ func convertRESTPrefetchToAST(pf *RESTPrefetch, collection string) (*ast.QuerySt
 					}
 				}
 			}
-		} else if vec, ok := pf.Query.Nearest.([]interface{}); ok && len(vec) > 0 {
+		} else if vec, ok := pf.Query.Nearest.([]any); ok && len(vec) > 0 {
 			raw := make([]float64, len(vec))
 			for i, v := range vec {
 				switch f := v.(type) {
@@ -107,7 +134,7 @@ func convertRESTPrefetchToAST(pf *RESTPrefetch, collection string) (*ast.QuerySt
 			stmt.RawVector = raw
 		}
 	} else if pf.Vector != nil {
-		if vec, ok := pf.Vector.([]interface{}); ok && len(vec) > 0 {
+		if vec, ok := pf.Vector.([]any); ok && len(vec) > 0 {
 			raw := make([]float64, len(vec))
 			for i, v := range vec {
 				switch f := v.(type) {
@@ -189,10 +216,10 @@ func convertRESTCondition(c RESTCondition) ast.FilterExpr {
 			if val, ok := c.Match["text"]; ok {
 				return ast.MatchTextExpr{Field: c.Key, Text: fmt.Sprintf("%v", val)}
 			}
-			if anyList, ok := c.Match["any"].([]interface{}); ok {
+			if anyList, ok := c.Match["any"].([]any); ok {
 				return ast.InExpr{Field: c.Key, Values: anyList}
 			}
-			if exceptList, ok := c.Match["except"].([]interface{}); ok {
+			if exceptList, ok := c.Match["except"].([]any); ok {
 				return ast.NotInExpr{Field: c.Key, Values: exceptList}
 			}
 		}

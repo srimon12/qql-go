@@ -23,7 +23,7 @@ func TestConvertSearchWithFilter(t *testing.T) {
 	stmts, err := JSONToQQL(input)
 	require.NoError(t, err)
 	require.Len(t, stmts, 1)
-	assert.Contains(t, stmts[0], "QUERY '<query_text>' FROM collection LIMIT 10")
+	assert.Contains(t, stmts[0], "QUERY [0.1, 0.2] FROM collection")
 	assert.Contains(t, stmts[0], "WHERE status = 'active'")
 	assert.Contains(t, stmts[0], "SCORE THRESHOLD 0.5")
 }
