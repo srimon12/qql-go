@@ -107,7 +107,7 @@ func (p *Parser) parseIdentifier() (string, error) {
 
 func isContextualIdentifier(kind lexer.TokenKind) bool {
 	switch kind {
-	case lexer.TokenKindOffset, lexer.TokenKindScore, lexer.TokenKindThreshold, lexer.TokenKindLookup, lexer.TokenKindId:
+	case lexer.TokenKindOffset, lexer.TokenKindScore, lexer.TokenKindThreshold, lexer.TokenKindLookup, lexer.TokenKindId, lexer.TokenKindDense, lexer.TokenKindSparse, lexer.TokenKindVector:
 		return true
 	}
 	return false

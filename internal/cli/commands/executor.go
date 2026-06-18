@@ -568,6 +568,17 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		} else {
 			plan.WriteString("Type: DENSE\n")
 		}
+		for _, v := range n.Vectors {
+			plan.WriteString(fmt.Sprintf("Vector: %s, Size: %d\n", v.Name, v.Size))
+			if v.Multivector != nil {
+				plan.WriteString(fmt.Sprintf("  Multivector: comparator=%s\n", v.Multivector.Comparator))
+			}
+			if v.Hnsw != nil {
+				if v.Hnsw.M != nil {
+					plan.WriteString(fmt.Sprintf("  HNSW m: %d\n", *v.Hnsw.M))
+				}
+			}
+		}
 		plan.WriteString("Action: Create new collection\n")
 	case *ast.AlterCollectionStmt:
 		plan.WriteString(fmt.Sprintf("Statement: ALTER COLLECTION %s\n", n.Collection))
@@ -1339,6 +1350,11 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 					return nil, err
 				}
 				vp.QuantizationConfig = cfg
+			}
+			if v.Multivector != nil {
+				vp.MultivectorConfig = &qdrant.MultiVectorConfig{
+					Comparator: qdrant.MultiVectorComparator_MaxSim,
+				}
 			}
 			paramsMap[v.Name] = vp
 		}

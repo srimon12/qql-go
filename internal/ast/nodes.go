@@ -78,6 +78,11 @@ type VectorDef struct {
 	Distance     VectorDistance
 	Hnsw         *HnswRuntimeConfig
 	Quantization *QuantizationConfig
+	Multivector  *MultivectorConfig
+}
+
+type MultivectorConfig struct {
+	Comparator string
 }
 
 type SparseVectorDef struct {

@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"fmt"
+
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
 	"github.com/srimon12/qql-go/internal/lexer"
@@ -495,12 +497,28 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 			if _, err := p.expect(lexer.TokenKindLparen); err != nil {
 				return
 			}
+			inlinePrefetchIdx := 0
 			for p.peek().Kind != lexer.TokenKindRparen {
-				if p.peek().Kind != lexer.TokenKindIdentifier {
-					break
+				var ref ast.PrefetchRef
+
+				if p.peek().Kind == lexer.TokenKindQuery || p.peek().Kind == lexer.TokenKindRecommend || p.peek().Kind == lexer.TokenKindDiscover || p.peek().Kind == lexer.TokenKindWith {
+					inlineStmt, inlineErr := p.parseCTEQuery()
+					if inlineErr != nil {
+						return
+					}
+					cteName := fmt.Sprintf("__inline_pf%d", inlinePrefetchIdx)
+					inlinePrefetchIdx++
+					ref = ast.PrefetchRef{CTEName: cteName}
+					stmt.CTEs = append(stmt.CTEs, ast.CTE{
+						Name: cteName,
+						Stmt: inlineStmt,
+					})
+				} else if p.peek().Kind == lexer.TokenKindIdentifier {
+					ref = ast.PrefetchRef{CTEName: p.peek().Value}
+					p.advance()
+				} else {
+					return
 				}
-				ref := ast.PrefetchRef{CTEName: p.peek().Value}
-				p.advance()
 
 				// Optional per-prefetch WHERE
 				if p.peek().Kind == lexer.TokenKindWhere {

@@ -33,7 +33,7 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 	if p.peek().Kind == lexer.TokenKindLparen {
 		p.advance()
 		for p.peek().Kind != lexer.TokenKindRparen && p.peek().Kind != lexer.TokenKindEof {
-			nameTok, err := p.expect(lexer.TokenKindIdentifier)
+			nameTokVal, err := p.parseIdentifier()
 			if err != nil {
 				return nil, err
 			}
@@ -74,6 +74,7 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 
 				var hnsw *ast.HnswRuntimeConfig
 				var quant *ast.QuantizationConfig
+				var multiv *ast.MultivectorConfig
 
 				for p.peek().Kind == lexer.TokenKindWith {
 					p.advance()
@@ -91,22 +92,30 @@ func (p *Parser) parseCreate() (ast.ASTNode, error) {
 							return nil, err
 						}
 						quant = block.Quantization
+					} else if p.peek().Kind == lexer.TokenKindIdentifier && asciiEqual(p.peek().Value, "MULTIVECTOR") {
+						p.advance()
+						block, err := p.parseMultivectorConfigBlock()
+						if err != nil {
+							return nil, err
+						}
+						multiv = block
 					} else {
-						return nil, errors.NewQQLSyntaxError("Expected HNSW or QUANTIZATION after WITH for vector configuration", p.peek().Pos)
+						return nil, errors.NewQQLSyntaxError("Expected HNSW, QUANTIZATION, or MULTIVECTOR after WITH for vector configuration", p.peek().Pos)
 					}
 				}
 
 				explicitVectors = append(explicitVectors, ast.VectorDef{
-					Name:         nameTok.Value,
+					Name:         nameTokVal,
 					Size:         uint64(size),
 					Distance:     distance,
 					Hnsw:         hnsw,
 					Quantization: quant,
+					Multivector:  multiv,
 				})
 			} else if p.peek().Kind == lexer.TokenKindSparse {
 				p.advance()
 				explicitSparseVectors = append(explicitSparseVectors, ast.SparseVectorDef{
-					Name: nameTok.Value,
+					Name: nameTokVal,
 				})
 			} else {
 				return nil, errors.NewQQLSyntaxError("Expected VECTOR or SPARSE after vector name", p.peek().Pos)
@@ -295,12 +304,12 @@ func (p *Parser) parseHnswConfigBlock() (*ast.CollectionConfig, error) {
 			return nil, err
 		}
 	}
-	mVal, err := collectionPositiveUint64(config, "m", p.peek().Pos)
+	mVal, err := collectionNonNegativeUint64(config, "m", p.peek().Pos)
 	if err != nil {
 		return nil, err
 	}
-	if mVal != nil && *mVal < 4 {
-		return nil, errors.NewQQLSyntaxError("m must be >= 4", p.peek().Pos)
+	if mVal != nil && *mVal != 0 && *mVal < 4 {
+		return nil, errors.NewQQLSyntaxError("m must be 0 or >= 4", p.peek().Pos)
 	}
 	efConstruct, err := collectionPositiveUint64(config, "ef_construct", p.peek().Pos)
 	if err != nil {
@@ -795,4 +804,25 @@ func (p *Parser) parseCreateIndex() (*ast.CreateIndexStmt, error) {
 		FieldType:  fieldType,
 		Options:    options,
 	}, nil
+}
+
+func (p *Parser) parseMultivectorConfigBlock() (*ast.MultivectorConfig, error) {
+	config, err := p.parseConfigBlock()
+	if err != nil {
+		return nil, err
+	}
+	var comparator string
+	if comp, ok := collectionValue(config, "comparator"); ok {
+		if c, ok := comp.(string); ok {
+			comparator = strings.ToLower(c)
+		} else {
+			return nil, errors.NewQQLSyntaxError("MULTIVECTOR comparator must be a string", p.peek().Pos)
+		}
+	} else {
+		return nil, errors.NewQQLSyntaxError("MULTIVECTOR config requires 'comparator'", p.peek().Pos)
+	}
+	if comparator != "max_sim" {
+		return nil, errors.NewQQLSyntaxError("MULTIVECTOR comparator must be 'max_sim'", p.peek().Pos)
+	}
+	return &ast.MultivectorConfig{Comparator: comparator}, nil
 }

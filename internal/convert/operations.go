@@ -3,6 +3,7 @@ package convert
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/srimon12/qql-go/internal/ast"
@@ -44,8 +45,8 @@ func convertUpsert(input, collection string) ([]string, error) {
 
 func convertSearch(input, collection string) ([]string, error) {
 	var req struct {
-		Vector         any    `json:"vector"`
-		QueryRaw       any    `json:"query"`
+		Vector         any         `json:"vector"`
+		QueryRaw       any         `json:"query"`
 		Limit          int         `json:"limit"`
 		Offset         int         `json:"offset"`
 		Filter         *RESTFilter `json:"filter"`
@@ -74,12 +75,18 @@ func convertSearch(input, collection string) ([]string, error) {
 	// Query handling: check raw query (ID string, vector array, object with text/model/indices)
 	if qm, ok := req.QueryRaw.(map[string]interface{}); ok {
 		if t, ok := qm["text"]; ok {
-			if s, ok := t.(string); ok { stmt.QueryText = &s }
+			if s, ok := t.(string); ok {
+				stmt.QueryText = &s
+			}
 		}
 		if m, ok := qm["model"]; ok {
-			if s, ok := m.(string); ok { stmt.Model = &s }
+			if s, ok := m.(string); ok {
+				stmt.Model = &s
+			}
 		}
-		if _, ok := qm["sample"]; ok { stmt.Mode = ast.QueryModeSample }
+		if _, ok := qm["sample"]; ok {
+			stmt.Mode = ast.QueryModeSample
+		}
 		if _, ok := qm["indices"]; ok {
 			str := "<sparse_query>"
 			stmt.QueryText = &str
@@ -90,45 +97,70 @@ func convertSearch(input, collection string) ([]string, error) {
 	} else if vec, ok := req.QueryRaw.([]interface{}); ok && len(vec) > 0 {
 		raw := make([]float64, len(vec))
 		for i, v := range vec {
-			switch f := v.(type) { case float64: raw[i] = f; case int: raw[i] = float64(f) }
+			switch f := v.(type) {
+			case float64:
+				raw[i] = f
+			case int:
+				raw[i] = float64(f)
+			}
 		}
 		stmt.RawVector = raw
 	} else if vec, ok := req.Vector.([]interface{}); ok && len(vec) > 0 {
 		raw := make([]float64, len(vec))
 		for i, v := range vec {
-			switch f := v.(type) { case float64: raw[i] = f; case int: raw[i] = float64(f) }
+			switch f := v.(type) {
+			case float64:
+				raw[i] = f
+			case int:
+				raw[i] = float64(f)
+			}
 		}
 		stmt.RawVector = raw
 	}
 
 	// Using
 	switch strings.ToLower(req.Using) {
-	case "hybrid": stmt.Type = ast.QueryTypeHybrid
-	case "sparse": stmt.Type = ast.QueryTypeSparse
+	case "hybrid":
+		stmt.Type = ast.QueryTypeHybrid
+	case "sparse":
+		stmt.Type = ast.QueryTypeSparse
 	default:
-		if req.Using != "" { using := req.Using; stmt.Using = &using }
+		if req.Using != "" {
+			using := req.Using
+			stmt.Using = &using
+		}
 	}
 
 	// Filter
-	if req.Filter != nil { stmt.QueryFilter = convertRESTFilter(req.Filter) }
+	if req.Filter != nil {
+		stmt.QueryFilter = convertRESTFilter(req.Filter)
+	}
 
 	// Score threshold
-	if req.ScoreThreshold != nil { stmt.ScoreThreshold = req.ScoreThreshold }
+	if req.ScoreThreshold != nil {
+		stmt.ScoreThreshold = req.ScoreThreshold
+	}
 
 	// Params
-	if req.Params != nil { stmt.WithClause = buildWithClause(req.Params) }
+	if req.Params != nil {
+		stmt.WithClause = buildWithClause(req.Params)
+	}
 
 	// Group by / group size
 	if req.GroupBy != "" {
 		stmt.GroupBy = &req.GroupBy
-		if req.GroupSize > 0 { stmt.GroupSize = &req.GroupSize }
+		if req.GroupSize > 0 {
+			stmt.GroupSize = &req.GroupSize
+		}
 	}
 
 	// WithLookup
 	if req.WithLookup != nil {
 		if lookupMap, ok := req.WithLookup.(map[string]interface{}); ok {
 			if coll, ok := lookupMap["collection"]; ok {
-				if s, ok := coll.(string); ok { stmt.WithLookupCollection = &s }
+				if s, ok := coll.(string); ok {
+					stmt.WithLookupCollection = &s
+				}
 			}
 		}
 	}
@@ -137,20 +169,28 @@ func convertSearch(input, collection string) ([]string, error) {
 	if req.LookupFrom != nil {
 		if lookupMap, ok := req.LookupFrom.(map[string]interface{}); ok {
 			if coll, ok := lookupMap["collection"]; ok {
-				if s, ok := coll.(string); ok { stmt.LookupFrom = s }
+				if s, ok := coll.(string); ok {
+					stmt.LookupFrom = s
+				}
 			}
 			if vec, ok := lookupMap["vector"]; ok {
-				if s, ok := vec.(string); ok { stmt.LookupVector = &s }
+				if s, ok := vec.(string); ok {
+					stmt.LookupVector = &s
+				}
 			}
 		}
 	}
 
 	// WithPayload and WithVectors (prefer newer "with_vectors" over "with_vector")
 	wp := req.WithPayload
-	if wp == nil { wp = true } // default
+	if wp == nil {
+		wp = true
+	} // default
 	stmt.WithPayload = buildPayloadSelector(wp)
 	wv := req.WithVector
-	if wv == nil { wv = req.WithVectors }
+	if wv == nil {
+		wv = req.WithVectors
+	}
 	stmt.WithVectors = buildVectorsSelector(wv)
 
 	return []string{ast.FormatQueryStmt(stmt)}, nil
@@ -158,7 +198,7 @@ func convertSearch(input, collection string) ([]string, error) {
 
 func convertRecommend(input, collection string) ([]string, error) {
 	var req struct {
-		Query      struct {
+		Query struct {
 			Recommend struct {
 				Positive []any  `json:"positive"`
 				Negative []any  `json:"negative"`
@@ -209,7 +249,7 @@ func convertRecommend(input, collection string) ([]string, error) {
 		parts = append(parts, fmt.Sprintf("USING '%s'", req.Using))
 	}
 	if req.LookupFrom != nil {
-			if lookupMap, ok := req.LookupFrom.(map[string]interface{}); ok {
+		if lookupMap, ok := req.LookupFrom.(map[string]interface{}); ok {
 			if coll, ok := lookupMap["collection"]; ok {
 				if cn, ok := coll.(string); ok {
 					if vec, ok := lookupMap["vector"]; ok {
@@ -431,17 +471,54 @@ func convertCreateCollection(input, collection string) ([]string, error) {
 	if vectors != nil {
 		switch v := vectors.(type) {
 		case map[string]any:
-			if size, ok := v["size"]; ok {
-				distance := "Cosine"
-				if d, ok := v["distance"]; ok {
-					distance = fmt.Sprintf("%v", d)
+			var vecDefs []string
+			if _, hasSize := v["size"]; hasSize {
+				// Single vector
+				vecDefs = append(vecDefs, buildVectorDef("dense", v))
+			} else {
+				// Named vectors
+				// Sort keys for deterministic output
+				var names []string
+				for name := range v {
+					names = append(names, name)
 				}
-				stmt += fmt.Sprintf(" (dense VECTOR(%v, %s))", size, distance)
+				sort.Strings(names)
+				for _, name := range names {
+					if vecObj, ok := v[name].(map[string]any); ok {
+						vecDefs = append(vecDefs, buildVectorDef(name, vecObj))
+					}
+				}
+			}
+			if len(vecDefs) > 0 {
+				stmt += " (\n    " + strings.Join(vecDefs, ",\n    ") + "\n)"
 			}
 		}
 	}
 
 	return []string{stmt}, nil
+}
+
+func buildVectorDef(name string, v map[string]any) string {
+	size := v["size"]
+	distance := "Cosine"
+	if d, ok := v["distance"]; ok {
+		distance = fmt.Sprintf("%v", d)
+	}
+	def := fmt.Sprintf("'%s' VECTOR(%v, %s)", name, size, distance)
+
+	if mvc, ok := v["multivector_config"].(map[string]any); ok {
+		if comp, ok := mvc["comparator"]; ok {
+			def += fmt.Sprintf(" WITH MULTIVECTOR (comparator = '%v')", comp)
+		}
+	}
+
+	if hnsw, ok := v["hnsw_config"].(map[string]any); ok {
+		if m, ok := hnsw["m"]; ok {
+			def += fmt.Sprintf(" WITH HNSW (m = %v)", m)
+		}
+	}
+
+	return def
 }
 
 func convertCreateIndex(input, collection string) ([]string, error) {

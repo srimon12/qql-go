@@ -84,10 +84,7 @@ func (e *Executor) doInsert(n *ast.InsertStmt) (*ExecResponse, error) {
 
 	var vectorsBatch []map[string]*qdrant.Vector
 	if hasProvidedVectors {
-		vectorsBatch, err = buildVectorsFromProvided(preProvidedVectors)
-		if err != nil {
-			return nil, err
-		}
+		vectorsBatch = preProvidedVectors
 	} else {
 		vectorsBatch, err = e.buildInsertVectorsBatch(ctx, texts, model, sparseModel, useHybrid, includeRerank, n.Collection, denseName, sparseName)
 		if err != nil {
@@ -277,10 +274,10 @@ func extractID(payload map[string]any) any {
 }
 
 func isVectorKey(key string) bool {
-	return key == "_v" || strings.HasPrefix(key, "_v_")
+	return key == "vector" || key == "_v" || strings.HasPrefix(key, "_v_")
 }
 
-func extractProvidedVectors(valuesList []map[string]any) ([]map[string][]float32, error) {
+func extractProvidedVectors(valuesList []map[string]any) ([]map[string]*qdrant.Vector, error) {
 	hasAny := false
 	for _, values := range valuesList {
 		for key := range values {
@@ -297,29 +294,70 @@ func extractProvidedVectors(valuesList []map[string]any) ([]map[string][]float32
 		return nil, nil
 	}
 
-	all := make([]map[string][]float32, len(valuesList))
+	all := make([]map[string]*qdrant.Vector, len(valuesList))
 	for i, values := range valuesList {
-		var rowVectors map[string][]float32
+		var rowVectors map[string]*qdrant.Vector
 		for key, value := range values {
 			if !isVectorKey(key) {
 				continue
 			}
 			if rowVectors == nil {
-				rowVectors = make(map[string][]float32)
+				rowVectors = make(map[string]*qdrant.Vector)
 			}
+			if key == "vector" {
+				vecMap, ok := value.(map[string]any)
+				if !ok {
+					return nil, fmt.Errorf("invalid vector data: expected dictionary for 'vector' key")
+				}
+				for vName, vData := range vecMap {
+					vec, err := parseAnyToQdrantVector(vData)
+					if err != nil {
+						return nil, fmt.Errorf("invalid vector data for '%s': %w", vName, err)
+					}
+					rowVectors[vName] = vec
+				}
+				continue
+			}
+
 			var vecName string
 			if key != "_v" {
 				vecName = unescapeVectorKey(key[3:])
 			}
-			floats, err := anyToFloat32Slice(value)
+			vec, err := parseAnyToQdrantVector(value)
 			if err != nil {
 				return nil, fmt.Errorf("invalid vector data for key '%s': %w", key, err)
 			}
-			rowVectors[vecName] = floats
+			rowVectors[vecName] = vec
 		}
 		all[i] = rowVectors
 	}
 	return all, nil
+}
+
+func parseAnyToQdrantVector(value any) (*qdrant.Vector, error) {
+	arr, ok := value.([]any)
+	if !ok {
+		return nil, fmt.Errorf("expected array, got %T", value)
+	}
+	if len(arr) == 0 {
+		return qdrant.NewVectorDense(nil), nil
+	}
+	if _, isMulti := arr[0].([]any); isMulti {
+		var multiDense [][]float32
+		for i, inner := range arr {
+			floats, err := anyToFloat32Slice(inner)
+			if err != nil {
+				return nil, fmt.Errorf("at index %d: %w", i, err)
+			}
+			multiDense = append(multiDense, floats)
+		}
+		return qdrant.NewVectorMulti(multiDense), nil
+	}
+	floats, err := anyToFloat32Slice(value)
+	if err != nil {
+		return nil, err
+	}
+	return qdrant.NewVectorDense(floats), nil
 }
 
 func anyToFloat32Slice(value any) ([]float32, error) {
@@ -351,22 +389,6 @@ func stripVectorKeys(payload map[string]any) {
 			delete(payload, key)
 		}
 	}
-}
-
-func buildVectorsFromProvided(preProvided []map[string][]float32) ([]map[string]*qdrant.Vector, error) {
-	batch := make([]map[string]*qdrant.Vector, len(preProvided))
-	for i, rowVectors := range preProvided {
-		vecs := make(map[string]*qdrant.Vector, len(rowVectors))
-		for vname, data := range rowVectors {
-			if vname == "" {
-				vecs[""] = qdrant.NewVectorDense(data)
-			} else {
-				vecs[vname] = qdrant.NewVectorDense(data)
-			}
-		}
-		batch[i] = vecs
-	}
-	return batch, nil
 }
 
 func unescapeVectorKey(name string) string {

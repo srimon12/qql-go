@@ -155,7 +155,9 @@ func FormatQueryStmt(q *QueryStmt) string {
 	case QueryModeOrderBy:
 		if q.OrderByField != nil {
 			dir := "ASC"
-			if q.OrderByAsc != nil && !*q.OrderByAsc { dir = "DESC" }
+			if q.OrderByAsc != nil && !*q.OrderByAsc {
+				dir = "DESC"
+			}
 			parts = append(parts, fmt.Sprintf("QUERY ORDER BY %s %s", *q.OrderByField, dir))
 		} else {
 			parts = append(parts, "QUERY ORDER BY")

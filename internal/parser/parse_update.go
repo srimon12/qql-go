@@ -107,7 +107,6 @@ func (p *Parser) parseDelete() (*ast.DeleteStmt, error) {
 		return nil, err
 	}
 
-
 	// Try full filter expression first — handles AND/OR/NOT/between/in/match etc.
 	savedPos := p.pos
 	queryFilter, err := p.parseFilterExpr()
