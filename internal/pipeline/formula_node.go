@@ -2,16 +2,18 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/qdrant/go-client/qdrant"
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/filters"
+	"github.com/srimon12/qql-go/internal/parser"
 )
 
 type FormulaNode struct {
 	Expr     ast.FormulaExpr
-	Defaults map[string]float64
+	Defaults map[string]any
 }
 
 func (n *FormulaNode) Execute(ctx context.Context, state *QueryState) error {
@@ -26,7 +28,27 @@ func (n *FormulaNode) Execute(ctx context.Context, state *QueryState) error {
 	if len(n.Defaults) > 0 {
 		defs = make(map[string]*qdrant.Value)
 		for k, v := range n.Defaults {
-			defs[k] = qdrant.NewValueDouble(v)
+			var qVal *qdrant.Value
+			switch val := v.(type) {
+			case float64:
+				qVal = qdrant.NewValueDouble(val)
+			case int:
+				qVal = qdrant.NewValueInt(int64(val))
+			case int64:
+				qVal = qdrant.NewValueInt(val)
+			case string:
+				qVal = qdrant.NewValueString(val)
+			case bool:
+				qVal = qdrant.NewValueBool(val)
+			default:
+				// Fallback to json string if it's a map or something we don't handle natively
+				if b, err := json.Marshal(val); err == nil {
+					qVal = qdrant.NewValueString(string(b))
+				} else {
+					qVal = qdrant.NewValueString(fmt.Sprintf("%v", val))
+				}
+			}
+			defs[k] = qVal
 		}
 	}
 
@@ -230,7 +252,72 @@ func BuildExpression(expr ast.FormulaExpr) (*qdrant.Expression, error) {
 		return qdrant.NewExpressionSum(&qdrant.SumExpression{
 			Sum: []*qdrant.Expression{thenPart, elsePart},
 		}), nil
+	case ast.FormulaMatchCondition:
+		return buildMatchConditionExpression(e.Field, e.Values)
+	case ast.RawFormulaExpr:
+		parsed, err := parser.ParseFormulaString(e.Expr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse formula expression: %w", err)
+		}
+		return BuildExpression(parsed)
 	default:
 		return nil, fmt.Errorf("unknown formula expression type %T", expr)
 	}
+}
+
+func buildMatchConditionExpression(field string, values []any) (*qdrant.Expression, error) {
+	if len(values) == 0 {
+		return nil, fmt.Errorf("MATCH requires at least one value")
+	}
+	var condition *qdrant.Condition
+	if len(values) == 1 {
+		switch v := values[0].(type) {
+		case string:
+			condition = qdrant.NewMatchKeyword(field, v)
+		case int:
+			condition = qdrant.NewMatchInt(field, int64(v))
+		case int64:
+			condition = qdrant.NewMatchInt(field, v)
+		case uint64:
+			condition = qdrant.NewMatchInt(field, int64(v))
+		case float64:
+			condition = qdrant.NewMatchInt(field, int64(v))
+		default:
+			return nil, fmt.Errorf("MATCH value must be a string or number, got %T", v)
+		}
+	} else {
+		first := values[0]
+		switch first.(type) {
+		case string:
+			keywords := make([]string, len(values))
+			for i, v := range values {
+				s, ok := v.(string)
+				if !ok {
+					return nil, fmt.Errorf("MATCH: all values must be strings when first is a string")
+				}
+				keywords[i] = s
+			}
+			condition = qdrant.NewMatchKeywords(field, keywords...)
+		case int, int64, uint64, float64:
+			vals := make([]int64, len(values))
+			for i, v := range values {
+				switch n := v.(type) {
+				case int:
+					vals[i] = int64(n)
+				case int64:
+					vals[i] = n
+				case uint64:
+					vals[i] = int64(n)
+				case float64:
+					vals[i] = int64(n)
+				default:
+					return nil, fmt.Errorf("MATCH: all values must be numbers when first is a number")
+				}
+			}
+			condition = qdrant.NewMatchInts(field, vals...)
+		default:
+			return nil, fmt.Errorf("MATCH values must be strings or numbers, got %T", first)
+		}
+	}
+	return qdrant.NewExpressionCondition(condition), nil
 }

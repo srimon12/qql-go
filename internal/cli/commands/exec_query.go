@@ -123,8 +123,35 @@ func (e *Executor) buildQueryStateAndPipeline(ctx context.Context, stmt *ast.Que
 		execPipeline.Add(&pipeline.OrderByNode{Field: *stmt.OrderByField, Asc: asc})
 	case ast.QueryModeSample:
 		execPipeline.Add(&pipeline.SampleNode{})
+
+	case ast.QueryModeRelevanceFeedback:
+		feedback := make([]struct {
+			Example any
+			Score   float64
+		}, len(stmt.FeedbackItems))
+		for i, item := range stmt.FeedbackItems {
+			feedback[i] = struct {
+				Example any
+				Score   float64
+			}{Example: item.Example, Score: item.Score}
+		}
+		node := &pipeline.RelevanceFeedbackNode{
+			Target:   stmt.FeedbackTarget,
+			Feedback: feedback,
+		}
+		if stmt.FeedbackStrategy != nil {
+			node.Strategy = &struct{ A, B, C float64 }{
+				A: stmt.FeedbackStrategy.A,
+				B: stmt.FeedbackStrategy.B,
+				C: stmt.FeedbackStrategy.C,
+			}
+		}
+		execPipeline.Add(node)
+
 	case ast.QueryModeNearest:
-		if stmt.QueryID != nil {
+		if len(stmt.RawVector) > 0 {
+			execPipeline.Add(&pipeline.RawVectorNode{Vector: stmt.RawVector, VectorName: denseVectorName})
+		} else if stmt.QueryID != nil {
 			execPipeline.Add(&pipeline.RecommendNode{PositiveIDs: []any{stmt.QueryID}})
 		} else {
 			if stmt.QueryText != nil {
@@ -358,7 +385,13 @@ func (e *Executor) buildCTEPrefetch(ctx context.Context, stmt *ast.QueryStmt, ct
 		})
 
 	case ast.QueryModeNearest:
-		if stmt.QueryText != nil {
+		if len(stmt.RawVector) > 0 {
+			raw := make([]float32, len(stmt.RawVector))
+			for i, v := range stmt.RawVector {
+				raw[i] = float32(v)
+			}
+			pq.Query = qdrant.NewQueryDense(raw)
+		} else if stmt.QueryText != nil {
 			isSparse := stmt.Type == ast.QueryTypeSparse
 			if isSparse {
 				if e.usesLocalEmbeddings() {

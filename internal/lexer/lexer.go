@@ -97,6 +97,8 @@ var keywords = map[string]TokenKind{
 	"PREFETCH":    TokenKindPrefetch,
 	"FUSION":      TokenKindFusion,
 	"SAMPLE":      TokenKindSample,
+	"RELEVANCE":   TokenKindRelevance,
+	"FEEDBACK":    TokenKindFeedback,
 }
 
 type Lexer struct{}

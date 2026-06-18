@@ -65,6 +65,24 @@ func (n *DenseEmbedNode) Execute(ctx context.Context, state *QueryState) error {
 	return nil
 }
 
+type RawVectorNode struct {
+	Vector     []float64
+	VectorName string
+}
+
+func (n *RawVectorNode) Execute(_ context.Context, state *QueryState) error {
+	raw := make([]float32, len(n.Vector))
+	for i, v := range n.Vector {
+		raw[i] = float32(v)
+	}
+	query := qdrant.NewQueryDense(raw)
+	state.TargetQuery = query
+	if n.VectorName != "" {
+		state.VectorName = n.VectorName
+	}
+	return nil
+}
+
 type SparseEmbedNode struct {
 	Model      string
 	VectorName string
@@ -416,4 +434,74 @@ type SampleNode struct{}
 func (n *SampleNode) Execute(ctx context.Context, state *QueryState) error {
 	state.TargetQuery = qdrant.NewQuerySample(qdrant.Sample_Random)
 	return nil
+}
+
+type RelevanceFeedbackNode struct {
+	Target   any
+	Feedback []struct {
+		Example any
+		Score   float64
+	}
+	Strategy *struct {
+		A, B, C float64
+	}
+}
+
+func (n *RelevanceFeedbackNode) Execute(ctx context.Context, state *QueryState) error {
+	targetInput, err := buildVectorInputFromValue(ctx, state, n.Target)
+	if err != nil {
+		return fmt.Errorf("relevance feedback target: %w", err)
+	}
+
+	feedbackItems := make([]*qdrant.FeedbackItem, len(n.Feedback))
+	for i, f := range n.Feedback {
+		exampleInput, err := buildVectorInputFromValue(ctx, state, f.Example)
+		if err != nil {
+			return fmt.Errorf("relevance feedback example %d: %w", i, err)
+		}
+		feedbackItems[i] = &qdrant.FeedbackItem{
+			Example: exampleInput,
+			Score:   float32(f.Score),
+		}
+	}
+
+	rf := &qdrant.RelevanceFeedbackInput{
+		Target:   targetInput,
+		Feedback: feedbackItems,
+	}
+
+	if n.Strategy != nil {
+		rf.Strategy = qdrant.NewFeedbackStrategyNaive(&qdrant.NaiveFeedbackStrategy{
+			A: float32(n.Strategy.A),
+			B: float32(n.Strategy.B),
+			C: float32(n.Strategy.C),
+		})
+	}
+
+	state.TargetQuery = qdrant.NewQueryRelevanceFeedback(rf)
+	return nil
+}
+
+func buildVectorInputFromValue(_ context.Context, _ *QueryState, val any) (*qdrant.VectorInput, error) {
+	switch v := val.(type) {
+	case []float32:
+		return qdrant.NewVectorInputDense(v), nil
+	case []interface{}:
+		vec := make([]float32, len(v))
+		for i, item := range v {
+			f, ok := item.(float64)
+			if !ok {
+				return nil, fmt.Errorf("vector element %d is not a number", i)
+			}
+			vec[i] = float32(f)
+		}
+		return qdrant.NewVectorInputDense(vec), nil
+	default:
+		// Treat as point ID
+		pid, err := buildPointID(val)
+		if err != nil {
+			return nil, err
+		}
+		return qdrant.NewVectorInputID(pid), nil
+	}
 }

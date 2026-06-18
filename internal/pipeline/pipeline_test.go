@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/qdrant/go-client/qdrant"
+	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -139,4 +140,65 @@ func TestGetDocOptions_CachesResult(t *testing.T) {
 func TestGetDocOptions_NilForEmptyConfig(t *testing.T) {
 	state := &QueryState{}
 	assert.Nil(t, state.GetDocOptions())
+}
+
+func TestBuildExpression_MatchCondition(t *testing.T) {
+	expr, err := BuildExpression(ast.FormulaMatchCondition{
+		Field:  "tag",
+		Values: []any{"h1", "h2", "h3"},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, expr)
+
+	cond := expr.GetCondition()
+	require.NotNil(t, cond)
+
+	fieldCond := cond.GetField()
+	require.NotNil(t, fieldCond)
+	assert.Equal(t, "tag", fieldCond.GetKey())
+
+	match := fieldCond.GetMatch()
+	require.NotNil(t, match)
+	assert.NotNil(t, match.GetKeywords())
+	assert.Equal(t, []string{"h1", "h2", "h3"}, match.GetKeywords().GetStrings())
+}
+
+func TestBuildExpression_MatchConditionSingle(t *testing.T) {
+	expr, err := BuildExpression(ast.FormulaMatchCondition{
+		Field:  "category",
+		Values: []any{"premium"},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, expr)
+
+	cond := expr.GetCondition()
+	require.NotNil(t, cond)
+
+	fieldCond := cond.GetField()
+	require.NotNil(t, fieldCond)
+	assert.Equal(t, "category", fieldCond.GetKey())
+
+	match := fieldCond.GetMatch()
+	require.NotNil(t, match)
+	assert.Equal(t, "premium", match.GetKeyword())
+}
+
+func TestBuildExpression_MatchConditionNumeric(t *testing.T) {
+	expr, err := BuildExpression(ast.FormulaMatchCondition{
+		Field:  "count",
+		Values: []any{1, 2, 3},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, expr)
+
+	cond := expr.GetCondition()
+	require.NotNil(t, cond)
+
+	fieldCond := cond.GetField()
+	require.NotNil(t, fieldCond)
+	assert.Equal(t, "count", fieldCond.GetKey())
+
+	match := fieldCond.GetMatch()
+	require.NotNil(t, match)
+	assert.Equal(t, []int64{1, 2, 3}, match.GetIntegers().GetIntegers())
 }

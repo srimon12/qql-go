@@ -41,6 +41,7 @@ func NewRootCmd(out *output.Outputter) *cobra.Command {
 		commands.NewDumpCmd(out),
 		commands.NewDoctorCmd(out),
 		commands.NewVersionCmd(out),
+		commands.NewConvertCmd(out),
 	)
 
 	return rootCmd

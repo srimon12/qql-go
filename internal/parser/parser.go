@@ -396,6 +396,31 @@ func parseFloatToken(tok lexer.Token) (float64, error) {
 	return value, nil
 }
 
+func (p *Parser) parseRawVector() ([]float64, error) {
+	if _, err := p.expect(lexer.TokenKindLbracket); err != nil {
+		return nil, err
+	}
+	var vec []float64
+	for p.peek().Kind != lexer.TokenKindRbracket && p.peek().Kind != lexer.TokenKindEof {
+		tok := p.peek()
+		if tok.Kind != lexer.TokenKindFloat && tok.Kind != lexer.TokenKindInteger {
+			return nil, errors.NewQQLSyntaxError("Expected numeric value in raw vector, got '"+tok.Value+"'", tok.Pos)
+		}
+		f, err := parseFloatToken(p.advance())
+		if err != nil {
+			return nil, err
+		}
+		vec = append(vec, f)
+		if p.peek().Kind == lexer.TokenKindComma {
+			p.advance()
+		}
+	}
+	if _, err := p.expect(lexer.TokenKindRbracket); err != nil {
+		return nil, err
+	}
+	return vec, nil
+}
+
 func coerceVectorValues(values []any) ([]float32, error) {
 	vector := make([]float32, 0, len(values))
 	for _, value := range values {

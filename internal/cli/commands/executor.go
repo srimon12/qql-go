@@ -504,7 +504,12 @@ func NewClient(cfg *config.Config) (*qdrant.Client, error) {
 func (e *Executor) DumpCollection(collection, outputPath string, batchSize int) (string, error) {
 	ctx, cancel := e.defaultContext()
 	defer cancel()
-	written, skipped, err := dump.Collection(ctx, e.client, collection, outputPath, batchSize)
+	denseModel := e.resolveDenseModel(nil)
+	sparseModel := ""
+	if e.config != nil && e.config.SparseInferenceModel != "" {
+		sparseModel = e.config.SparseInferenceModel
+	}
+	written, skipped, err := dump.CollectionWithModel(ctx, e.client, collection, outputPath, batchSize, denseModel, sparseModel)
 	if err != nil {
 		return "", err
 	}
@@ -631,6 +636,8 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			plan.WriteString(fmt.Sprintf("Statement: QUERY ORDER BY %s %s FROM %s LIMIT %v\n", field, dir, n.Collection, n.Limit))
 		case ast.QueryModeSample:
 			plan.WriteString(fmt.Sprintf("Statement: QUERY SAMPLE FROM %s LIMIT %v\n", n.Collection, n.Limit))
+		case ast.QueryModeRelevanceFeedback:
+			plan.WriteString(fmt.Sprintf("Statement: QUERY RELEVANCE FEEDBACK FROM %s LIMIT %v\n", n.Collection, n.Limit))
 		default:
 			plan.WriteString(fmt.Sprintf("Statement: QUERY %s FROM %s LIMIT %v\n", string(n.Mode), n.Collection, n.Limit))
 		}
@@ -782,6 +789,17 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			}
 			if len(n.ContextPairs) > 0 {
 				plan.WriteString(fmt.Sprintf("Context pairs: %d\n", len(n.ContextPairs)))
+			}
+		}
+
+		// RELEVANCE FEEDBACK mode details
+		if n.Mode == ast.QueryModeRelevanceFeedback {
+			plan.WriteString(fmt.Sprintf("Feedback target: %v\n", n.FeedbackTarget))
+			if len(n.FeedbackItems) > 0 {
+				plan.WriteString(fmt.Sprintf("Feedback items: %d\n", len(n.FeedbackItems)))
+			}
+			if n.FeedbackStrategy != nil {
+				plan.WriteString(fmt.Sprintf("Strategy: %s (a=%g, b=%g, c=%g)\n", n.FeedbackStrategy.Type, n.FeedbackStrategy.A, n.FeedbackStrategy.B, n.FeedbackStrategy.C))
 			}
 		}
 

@@ -132,6 +132,13 @@ type FormulaCase struct {
 
 func (FormulaCase) isFormulaExpr() {}
 
+type FormulaMatchCondition struct {
+	Field  string
+	Values []any
+}
+
+func (FormulaMatchCondition) isFormulaExpr() {}
+
 // FormulaExprString renders a FormulaExpr as a human-readable string.
 func FormulaExprString(expr FormulaExpr) string {
 	if expr == nil {
@@ -191,7 +198,30 @@ func FormulaExprString(expr FormulaExpr) string {
 		return fmt.Sprintf("%s(%s)", strings.ToUpper(e.Kind), strings.Join(parts, ", "))
 	case FormulaCase:
 		return fmt.Sprintf("CASE WHEN %s THEN %s ELSE %s END", "<filter>", FormulaExprString(e.Then_), FormulaExprString(e.Else_))
+	case FormulaMatchCondition:
+		formatVal := func(v any) string {
+			if s, ok := v.(string); ok {
+				return fmt.Sprintf("'%s'", s)
+			}
+			return fmt.Sprintf("%v", v)
+		}
+		if len(e.Values) == 1 {
+			return fmt.Sprintf("MATCH(%s, %s)", e.Field, formatVal(e.Values[0]))
+		}
+		vals := make([]string, len(e.Values))
+		for i, v := range e.Values {
+			vals[i] = formatVal(v)
+		}
+		return fmt.Sprintf("MATCH(%s, [%s])", e.Field, strings.Join(vals, ", "))
+	case RawFormulaExpr:
+		return e.Expr
 	default:
 		return fmt.Sprintf("<unknown:%T>", expr)
 	}
 }
+
+type RawFormulaExpr struct {
+	Expr string
+}
+
+func (RawFormulaExpr) isFormulaExpr() {}

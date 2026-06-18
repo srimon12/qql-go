@@ -19,6 +19,10 @@ type Client interface {
 }
 
 func Collection(ctx context.Context, client Client, collection, outputPath string, batchSize int) (int, int, error) {
+	return CollectionWithModel(ctx, client, collection, outputPath, batchSize, "", "")
+}
+
+func CollectionWithModel(ctx context.Context, client Client, collection, outputPath string, batchSize int, denseModel, sparseModel string) (int, int, error) {
 	if batchSize <= 0 {
 		return 0, 0, fmt.Errorf("batch size must be greater than 0")
 	}
@@ -44,10 +48,26 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 		return 0, 0, fmt.Errorf("failed to prepare output directory: %w", err)
 	}
 
+	var header strings.Builder
+	header.WriteString(fmt.Sprintf("-- QQL dump for %s\n", collection))
+	if denseModel != "" {
+		header.WriteString(fmt.Sprintf("-- Default model: %s\n", denseModel))
+		if hybrid && sparseModel != "" {
+			header.WriteString(fmt.Sprintf("-- Sparse model : %s\n", sparseModel))
+		}
+	}
+
 	var builder strings.Builder
-	createLine := buildDumpCreateLine(collection, hybrid, denseName, sparseName, info)
+	createLine := buildDumpCreateLine(collection, hybrid, denseName, sparseName, denseModel, sparseModel, info)
 	builder.WriteString(createLine)
 	builder.WriteString("\n\n")
+
+	// Payload indexes
+	payloadIndexStmts := buildPayloadIndexStatements(collection, info.PayloadSchema)
+	if len(payloadIndexStmts) > 0 {
+		builder.WriteString(strings.Join(payloadIndexStmts, "\n"))
+		builder.WriteString("\n\n")
+	}
 
 	written := 0
 	skipped := 0
@@ -61,7 +81,7 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 			Limit:          qdrant.PtrOf(uint32(batchSize)),
 			Offset:         offset,
 			WithPayload:    qdrant.NewWithPayload(true),
-			WithVectors:    qdrant.NewWithVectors(false),
+			WithVectors:    qdrant.NewWithVectors(true),
 		})
 		if err != nil {
 			return written, skipped, fmt.Errorf("failed to scroll collection: %w", err)
@@ -80,6 +100,11 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 			}
 			record := payloadToMap(payload)
 			record["id"] = pointIDValue(point.GetId())
+
+			if point.Vectors != nil {
+				addVectorsToRecord(record, point.Vectors)
+			}
+
 			batch = append(batch, record)
 		}
 
@@ -93,15 +118,7 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 				builder.WriteString("\n")
 				written++
 			}
-			if hybrid {
-				if denseName != "dense" || sparseName != "sparse" {
-					builder.WriteString(fmt.Sprintf(" USING HYBRID DENSE VECTOR '%s' SPARSE VECTOR '%s'", escapeString(denseName), escapeString(sparseName)))
-				} else {
-					builder.WriteString(" USING HYBRID")
-				}
-			} else if denseName != "dense" && denseName != "" {
-				builder.WriteString(fmt.Sprintf(" USING VECTOR '%s'", escapeString(denseName)))
-			}
+			builder.WriteString(buildInsertUsingClause(hybrid, denseName, sparseName, denseModel, sparseModel))
 			builder.WriteString("\n\n")
 		}
 
@@ -111,8 +128,6 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 		offset = nextOffset
 	}
 
-	var header strings.Builder
-	header.WriteString(fmt.Sprintf("-- QQL dump for %s\n", collection))
 	header.WriteString(fmt.Sprintf("-- Points: %d\n\n", written))
 
 	finalOutput := header.String() + builder.String() + fmt.Sprintf("-- Written: %d\n-- Skipped: %d\n", written, skipped)
@@ -121,6 +136,68 @@ func Collection(ctx context.Context, client Client, collection, outputPath strin
 		return written, skipped, fmt.Errorf("failed to write dump: %w", err)
 	}
 	return written, skipped, nil
+}
+
+func buildInsertUsingClause(hybrid bool, denseName, sparseName, denseModel, sparseModel string) string {
+	if hybrid {
+		if denseModel != "" {
+			parts := []string{" USING HYBRID"}
+			parts = append(parts, fmt.Sprintf("DENSE MODEL '%s'", escapeString(denseModel)))
+			if sparseModel != "" {
+				parts = append(parts, fmt.Sprintf("SPARSE MODEL '%s'", escapeString(sparseModel)))
+			}
+			return strings.Join(parts, " ")
+		}
+		if denseName != "dense" || sparseName != "sparse" {
+			return fmt.Sprintf(" USING HYBRID DENSE VECTOR '%s' SPARSE VECTOR '%s'", escapeString(denseName), escapeString(sparseName))
+		}
+		return " USING HYBRID"
+	}
+	if denseModel != "" {
+		return fmt.Sprintf(" USING MODEL '%s'", escapeString(denseModel))
+	}
+	if denseName != "dense" && denseName != "" {
+		return fmt.Sprintf(" USING VECTOR '%s'", escapeString(denseName))
+	}
+	return ""
+}
+
+func addVectorsToRecord(record map[string]any, vectors *qdrant.VectorsOutput) {
+	if named := vectors.GetVectors(); named != nil {
+		for vname, vout := range named.GetVectors() {
+			vkey := "_v_" + escapeVectorKey(vname)
+			if dense := vout.GetDense(); dense != nil {
+				data := denseVectorToAny(dense.GetData())
+				if len(data) > 0 {
+					record[vkey] = data
+				}
+			}
+		}
+	} else if single := vectors.GetVector(); single != nil {
+		if dense := single.GetDense(); dense != nil {
+			data := denseVectorToAny(dense.GetData())
+			if len(data) > 0 {
+				record["_v"] = data
+			}
+		}
+	}
+}
+
+func escapeVectorKey(name string) string {
+	name = strings.ReplaceAll(name, "_", "__")
+	return name
+}
+
+func unescapeVectorKey(name string) string {
+	return strings.ReplaceAll(name, "__", "_")
+}
+
+func denseVectorToAny(data []float32) []any {
+	out := make([]any, len(data))
+	for i, v := range data {
+		out[i] = float64(v)
+	}
+	return out
 }
 
 func getVectorTopology(info *qdrant.CollectionInfo) (hybrid bool, denseName, sparseName string, err error) {
@@ -273,15 +350,26 @@ func escapeString(value string) string {
 	return value
 }
 
-func buildDumpCreateLine(collection string, hybrid bool, denseName, sparseName string, info *qdrant.CollectionInfo) string {
+func buildDumpCreateLine(collection string, hybrid bool, denseName, sparseName, denseModel, sparseModel string, info *qdrant.CollectionInfo) string {
 	var b strings.Builder
 	b.WriteString("CREATE COLLECTION ")
 	b.WriteString(collection)
+
 	if hybrid {
-		b.WriteString(" HYBRID")
-		if denseName != "dense" || sparseName != "sparse" {
-			b.WriteString(fmt.Sprintf(" DENSE VECTOR '%s' SPARSE VECTOR '%s'", escapeString(denseName), escapeString(sparseName)))
+		if denseModel != "" {
+			b.WriteString(" HYBRID")
+			b.WriteString(fmt.Sprintf(" DENSE MODEL '%s'", escapeString(denseModel)))
+			if sparseModel != "" {
+				b.WriteString(fmt.Sprintf(" SPARSE MODEL '%s'", escapeString(sparseModel)))
+			}
+		} else {
+			b.WriteString(" HYBRID")
+			if denseName != "dense" || sparseName != "sparse" {
+				b.WriteString(fmt.Sprintf(" DENSE VECTOR '%s' SPARSE VECTOR '%s'", escapeString(denseName), escapeString(sparseName)))
+			}
 		}
+	} else if denseModel != "" {
+		b.WriteString(fmt.Sprintf(" USING MODEL '%s'", escapeString(denseModel)))
 	} else if denseName != "dense" && denseName != "" {
 		b.WriteString(fmt.Sprintf(" VECTOR '%s'", escapeString(denseName)))
 	}
@@ -448,6 +536,183 @@ func buildDumpCreateLine(collection string, hybrid bool, denseName, sparseName s
 	}
 
 	return b.String()
+}
+
+// buildPayloadIndexStatements generates CREATE INDEX statements from the collection's PayloadSchema.
+func buildPayloadIndexStatements(collection string, schema map[string]*qdrant.PayloadSchemaInfo) []string {
+	if len(schema) == 0 {
+		return nil
+	}
+	stmts := make([]string, 0, len(schema))
+	for fieldName, idxInfo := range schema {
+		if idxInfo.GetParams() == nil {
+			continue
+		}
+		fieldType := payloadSchemaTypeToString(idxInfo.GetDataType())
+		if fieldType == "" {
+			continue
+		}
+		options := serializeIndexParams(idxInfo.GetParams())
+		if len(options) > 0 {
+			parts := make([]string, 0, len(options))
+			for k, v := range options {
+				parts = append(parts, fmt.Sprintf("%s = %s", k, serializeIndexValue(v)))
+			}
+			sort.Strings(parts)
+			stmts = append(stmts, fmt.Sprintf("CREATE INDEX ON %s FOR %s TYPE %s WITH (%s)",
+				collection, fieldName, fieldType, strings.Join(parts, ", ")))
+		} else {
+			stmts = append(stmts, fmt.Sprintf("CREATE INDEX ON %s FOR %s TYPE %s",
+				collection, fieldName, fieldType))
+		}
+	}
+	sort.Strings(stmts)
+	return stmts
+}
+
+func payloadSchemaTypeToString(dt qdrant.PayloadSchemaType) string {
+	switch dt {
+	case qdrant.PayloadSchemaType_Keyword:
+		return "keyword"
+	case qdrant.PayloadSchemaType_Integer:
+		return "integer"
+	case qdrant.PayloadSchemaType_Float:
+		return "float"
+	case qdrant.PayloadSchemaType_Geo:
+		return "geo"
+	case qdrant.PayloadSchemaType_Text:
+		return "text"
+	case qdrant.PayloadSchemaType_Bool:
+		return "bool"
+	case qdrant.PayloadSchemaType_Datetime:
+		return "datetime"
+	case qdrant.PayloadSchemaType_Uuid:
+		return "uuid"
+	default:
+		return ""
+	}
+}
+
+func serializeIndexParams(params *qdrant.PayloadIndexParams) map[string]any {
+	switch typed := params.GetIndexParams().(type) {
+	case *qdrant.PayloadIndexParams_KeywordIndexParams:
+		return serializeKeywordParams(typed.KeywordIndexParams)
+	case *qdrant.PayloadIndexParams_TextIndexParams:
+		return serializeTextParams(typed.TextIndexParams)
+	case *qdrant.PayloadIndexParams_UuidIndexParams:
+		return serializeUUIDParams(typed.UuidIndexParams)
+	case *qdrant.PayloadIndexParams_IntegerIndexParams:
+		return serializeIntegerParams(typed.IntegerIndexParams)
+	default:
+		return nil
+	}
+}
+
+func serializeKeywordParams(params *qdrant.KeywordIndexParams) map[string]any {
+	if params == nil {
+		return nil
+	}
+	data := map[string]any{}
+	if params.IsTenant != nil {
+		data["is_tenant"] = params.GetIsTenant()
+	}
+	if params.OnDisk != nil {
+		data["on_disk"] = params.GetOnDisk()
+	}
+	if params.EnableHnsw != nil {
+		data["enable_hnsw"] = params.GetEnableHnsw()
+	}
+	return data
+}
+
+func serializeTextParams(params *qdrant.TextIndexParams) map[string]any {
+	if params == nil {
+		return nil
+	}
+	data := map[string]any{}
+	if params.Tokenizer != qdrant.TokenizerType_Unknown {
+		data["tokenizer"] = strings.ToLower(strings.TrimPrefix(params.Tokenizer.String(), "TokenizerType_"))
+	}
+	if params.MinTokenLen != nil {
+		data["min_token_len"] = params.GetMinTokenLen()
+	}
+	if params.MaxTokenLen != nil {
+		data["max_token_len"] = params.GetMaxTokenLen()
+	}
+	if params.Lowercase != nil {
+		data["lowercase"] = params.GetLowercase()
+	}
+	if params.AsciiFolding != nil {
+		data["ascii_folding"] = params.GetAsciiFolding()
+	}
+	if params.PhraseMatching != nil {
+		data["phrase_matching"] = params.GetPhraseMatching()
+	}
+	if params.OnDisk != nil {
+		data["on_disk"] = params.GetOnDisk()
+	}
+	if params.EnableHnsw != nil {
+		data["enable_hnsw"] = params.GetEnableHnsw()
+	}
+	return data
+}
+
+func serializeUUIDParams(params *qdrant.UuidIndexParams) map[string]any {
+	if params == nil {
+		return nil
+	}
+	data := map[string]any{}
+	if params.IsTenant != nil {
+		data["is_tenant"] = params.GetIsTenant()
+	}
+	if params.OnDisk != nil {
+		data["on_disk"] = params.GetOnDisk()
+	}
+	if params.EnableHnsw != nil {
+		data["enable_hnsw"] = params.GetEnableHnsw()
+	}
+	return data
+}
+
+func serializeIntegerParams(params *qdrant.IntegerIndexParams) map[string]any {
+	if params == nil {
+		return nil
+	}
+	data := map[string]any{}
+	if params.Lookup != nil {
+		data["lookup"] = params.GetLookup()
+	}
+	if params.Range != nil {
+		data["range"] = params.GetRange()
+	}
+	if params.IsPrincipal != nil {
+		data["is_principal"] = params.GetIsPrincipal()
+	}
+	if params.OnDisk != nil {
+		data["on_disk"] = params.GetOnDisk()
+	}
+	if params.EnableHnsw != nil {
+		data["enable_hnsw"] = params.GetEnableHnsw()
+	}
+	return data
+}
+
+func serializeIndexValue(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return "null"
+	case bool:
+		if typed {
+			return "true"
+		}
+		return "false"
+	case string:
+		return "'" + escapeString(typed) + "'"
+	case int, int64, uint64, float64:
+		return fmt.Sprintf("%v", typed)
+	default:
+		return fmt.Sprintf("'%v'", value)
+	}
 }
 
 func turboBitsValue(bits qdrant.TurboQuantBitSize) float64 {
