@@ -54,8 +54,12 @@ type PolicyMatch struct {
 
 // PolicyInject specifies automatic filter injection.
 type PolicyInject struct {
-	// Where defines a WHERE clause to inject into every query.
+	// Where defines a single WHERE clause to inject (legacy, kept for backward compat).
 	Where *InjectWhere `yaml:"where"`
+
+	// Filters defines multiple WHERE conditions to inject (AND logic).
+	// Use this for complex policies like: tenant + department + access_level.
+	Filters []InjectWhere `yaml:"filters"`
 }
 
 // InjectWhere defines a single WHERE condition to inject.
@@ -92,8 +96,19 @@ type EvaluatedPolicy struct {
 	InjectFromClaim string // JWT claim path to extract value from (e.g. "org_id")
 	InjectValue     string // static value (mutually exclusive with InjectFromClaim)
 	InjectOp        string
+	// InjectFilters holds multiple filter conditions to inject (AND logic).
+	// Each entry is resolved independently from claims or static values.
+	InjectFilters   []ResolvedFilter
 	MaxLimit        int
 	MatchedRule     int // index of matched rule, -1 if none
+}
+
+// ResolvedFilter is a single resolved filter condition ready for injection.
+type ResolvedFilter struct {
+	Field     string // payload field to filter on
+	Op        string // comparison operator
+	Value     string // resolved value (static or from claim)
+	FromClaim string // JWT claim path to resolve value from (if Value is empty)
 }
 
 // PolicyEngine evaluates JWT claims against policy rules.
@@ -205,7 +220,7 @@ func (pe *PolicyEngine) buildPolicy(rule PolicyRule, index int) EvaluatedPolicy 
 
 	p.Collections = rule.Collections
 
-	// Injection config.
+	// Injection config — single where (legacy).
 	if rule.Inject.Where != nil {
 		p.InjectField = rule.Inject.Where.Field
 		p.InjectFromClaim = rule.Inject.Where.FromClaim
@@ -213,6 +228,23 @@ func (pe *PolicyEngine) buildPolicy(rule PolicyRule, index int) EvaluatedPolicy 
 		p.InjectOp = rule.Inject.Where.Op
 		if p.InjectOp == "" {
 			p.InjectOp = "="
+		}
+	}
+
+	// Injection config — multiple filters.
+	if len(rule.Inject.Filters) > 0 {
+		p.InjectFilters = make([]ResolvedFilter, 0, len(rule.Inject.Filters))
+		for _, f := range rule.Inject.Filters {
+			op := f.Op
+			if op == "" {
+				op = "="
+			}
+			p.InjectFilters = append(p.InjectFilters, ResolvedFilter{
+				Field:     f.Field,
+				Op:        op,
+				Value:     f.Value,
+				FromClaim: f.FromClaim,
+			})
 		}
 	}
 

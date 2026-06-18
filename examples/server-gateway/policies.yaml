@@ -1,62 +1,31 @@
 # qql-go gateway demo policy
 #
-# Simulates a multi-tenant SaaS platform (ACME Corp + Globex Corp)
-# with department-level access control.
-#
-# Rules are evaluated top-to-bottom. First match wins.
-# Unmatched requests are denied by default.
+# Multi-tenant SaaS with department-level access control.
+# Rules evaluated top-to-bottom. First match wins.
 
 rules:
   # ── Platform admin: god mode ────────────────────────────────────────
   - match:
       claims:
         role: platform_admin
-    allow:
-      - QUERY
-      - INSERT
-      - UPDATE
-      - DELETE
-      - SCROLL
-      - SELECT
-      - SHOW
-      - CREATE
-      - DROP
-      - ALTER
-      - EXPLAIN
+    allow: [QUERY, INSERT, UPDATE, DELETE, SCROLL, SELECT, SHOW, CREATE, DROP, ALTER, EXPLAIN]
 
-  # ── Org admin: full access within their tenant ──────────────────────
+  # ── Org admin: full access within tenant ────────────────────────────
   - match:
       claims:
         role: admin
-    allow:
-      - QUERY
-      - INSERT
-      - UPDATE
-      - DELETE
-      - SCROLL
-      - SELECT
-      - SHOW
-      - CREATE
-      - ALTER
-      - EXPLAIN
+    allow: [QUERY, INSERT, UPDATE, DELETE, SCROLL, SELECT, SHOW, CREATE, ALTER, EXPLAIN]
     inject:
       where:
         field: tenant_id
         from_claim: org_id
         op: "="
 
-  # ── Manager: read + write within tenant ─────────────────────────────
+  # ── Manager: read + write, tenant scoped ────────────────────────────
   - match:
       claims:
         role: manager
-    allow:
-      - QUERY
-      - INSERT
-      - UPDATE
-      - SCROLL
-      - SELECT
-      - SHOW
-      - EXPLAIN
+    allow: [QUERY, INSERT, UPDATE, SCROLL, SELECT, SHOW, EXPLAIN]
     inject:
       where:
         field: tenant_id
@@ -65,63 +34,58 @@ rules:
     limits:
       max_limit: 200
 
-  # ── Finance reader: tenant + department scoped ──────────────────────
-  - match:
-      claims:
-        role: reader
-        department: finance
-    allow:
-      - QUERY
-      - SCROLL
-      - SELECT
-      - SHOW
-      - EXPLAIN
-    collections:
-      - docs
-      - finance_*
-      - reports_*
-    inject:
-      where:
-        field: tenant_id
-        from_claim: org_id
-        op: "="
-    limits:
-      max_limit: 50
-
   # ── Engineering reader: tenant + department scoped ──────────────────
+  # Sees: engineering docs + org-wide docs (department=all)
+  # Hides: confidential docs, other department docs
   - match:
       claims:
         role: reader
         department: engineering
-    allow:
-      - QUERY
-      - SCROLL
-      - SELECT
-      - SHOW
-      - EXPLAIN
-    collections:
-      - docs
-      - engineering_*
+    allow: [QUERY, SCROLL, SELECT, SHOW, EXPLAIN]
+    collections: [docs]
     inject:
-      where:
-        field: tenant_id
-        from_claim: org_id
-        op: "="
+      filters:
+        - field: tenant_id
+          from_claim: org_id
+          op: "="
+        - field: department
+          value: "engineering,all"
+          op: "in"
+        - field: access_level
+          value: "confidential"
+          op: "!="
     limits:
       max_limit: 50
 
-  # ── Generic reader: tenant-scoped ───────────────────────────────────
+  # ── Finance reader: tenant + department scoped ──────────────────────
+  # Sees: finance docs + org-wide docs (department=all)
+  # Hides: confidential docs, other department docs
   - match:
       claims:
         role: reader
-    allow:
-      - QUERY
-      - SCROLL
-      - SELECT
-      - SHOW
-      - EXPLAIN
-    collections:
-      - docs
+        department: finance
+    allow: [QUERY, SCROLL, SELECT, SHOW, EXPLAIN]
+    collections: [docs]
+    inject:
+      filters:
+        - field: tenant_id
+          from_claim: org_id
+          op: "="
+        - field: department
+          value: "finance,all"
+          op: "in"
+        - field: access_level
+          value: "confidential"
+          op: "!="
+    limits:
+      max_limit: 50
+
+  # ── Generic reader: tenant scoped only ──────────────────────────────
+  - match:
+      claims:
+        role: reader
+    allow: [QUERY, SCROLL, SELECT, SHOW, EXPLAIN]
+    collections: [docs]
     inject:
       where:
         field: tenant_id
@@ -130,20 +94,17 @@ rules:
     limits:
       max_limit: 50
 
-  # ── Agent: narrowest surface, public docs only ──────────────────────
+  # ── Agent: public docs only ─────────────────────────────────────────
   - match:
       claims:
         token_type: agent
-    allow:
-      - QUERY
-      - SCROLL
-    collections:
-      - docs
-      - public_*
+    allow: [QUERY, SCROLL]
+    collections: [docs]
     inject:
-      where:
-        field: access_level
-        value: public
+      filters:
+        - field: access_level
+          value: "public"
+          op: "="
     limits:
       max_limit: 10
 

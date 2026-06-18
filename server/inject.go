@@ -122,17 +122,27 @@ func (a *ASTInjector) GetEffectiveLimit(requested int) int {
 
 // injectFilter injects the policy's WHERE clause into a QueryStmt and its CTEs.
 func (a *ASTInjector) injectFilter(q *ast.QueryStmt) {
-	if a.policy.InjectField == "" {
-		return
+	// Legacy single filter.
+	if a.policy.InjectField != "" {
+		resolved := a.resolveValue()
+		if resolved != "" {
+			injected := a.buildCompareExpr(resolved)
+			q.QueryFilter = mergeFilters(q.QueryFilter, injected)
+		}
 	}
 
-	resolved := a.resolveValue()
-	if resolved == "" {
-		return
+	// Multiple filters.
+	for _, f := range a.policy.InjectFilters {
+		value := f.Value
+		if f.FromClaim != "" && a.claims != nil {
+			value = extractStringClaimFromJWT(a.claims, f.FromClaim)
+		}
+		if value == "" {
+			continue
+		}
+		compare := a.buildFilterExpr(f.Field, f.Op, value)
+		q.QueryFilter = mergeFilters(q.QueryFilter, compare)
 	}
-
-	injected := a.buildCompareExpr(resolved)
-	q.QueryFilter = mergeFilters(q.QueryFilter, injected)
 
 	// Recursively apply to CTEs
 	for i := range q.CTEs {
@@ -144,17 +154,27 @@ func (a *ASTInjector) injectFilter(q *ast.QueryStmt) {
 
 // injectScrollFilter injects the policy's WHERE clause into a ScrollStmt.
 func (a *ASTInjector) injectScrollFilter(s *ast.ScrollStmt) {
-	if a.policy.InjectField == "" {
-		return
+	// Legacy single filter.
+	if a.policy.InjectField != "" {
+		resolved := a.resolveValue()
+		if resolved != "" {
+			injected := a.buildCompareExpr(resolved)
+			s.QueryFilter = mergeFilters(s.QueryFilter, injected)
+		}
 	}
 
-	resolved := a.resolveValue()
-	if resolved == "" {
-		return
+	// Multiple filters.
+	for _, f := range a.policy.InjectFilters {
+		value := f.Value
+		if f.FromClaim != "" && a.claims != nil {
+			value = extractStringClaimFromJWT(a.claims, f.FromClaim)
+		}
+		if value == "" {
+			continue
+		}
+		compare := a.buildFilterExpr(f.Field, f.Op, value)
+		s.QueryFilter = mergeFilters(s.QueryFilter, compare)
 	}
-
-	injected := a.buildCompareExpr(resolved)
-	s.QueryFilter = mergeFilters(s.QueryFilter, injected)
 }
 
 // resolveValue determines the injection value from policy config or JWT claims.
@@ -168,35 +188,36 @@ func (a *ASTInjector) resolveValue() string {
 	return ""
 }
 
-// buildCompareExpr creates a CompareExpr for the injected filter.
+// buildCompareExpr creates a CompareExpr for the injected filter (legacy single filter).
 func (a *ASTInjector) buildCompareExpr(value string) ast.FilterExpr {
 	op := a.policy.InjectOp
 	if op == "" {
 		op = "="
 	}
+	return a.buildFilterExpr(a.policy.InjectField, op, value)
+}
 
+// buildFilterExpr creates a filter expression for a given field, operator, and value.
+func (a *ASTInjector) buildFilterExpr(field, op, value string) ast.FilterExpr {
 	switch strings.ToLower(op) {
 	case "in":
-		// Split comma-separated values.
 		parts := strings.Split(value, ",")
 		vals := make([]any, len(parts))
 		for i, p := range parts {
 			vals[i] = strings.TrimSpace(p)
 		}
-		return ast.InExpr{Field: a.policy.InjectField, Values: vals}
+		return ast.InExpr{Field: field, Values: vals}
 	case "not_in":
 		parts := strings.Split(value, ",")
 		vals := make([]any, len(parts))
 		for i, p := range parts {
 			vals[i] = strings.TrimSpace(p)
 		}
-		return ast.NotInExpr{Field: a.policy.InjectField, Values: vals}
+		return ast.NotInExpr{Field: field, Values: vals}
+	case "!=":
+		return ast.CompareExpr{Field: field, Op: "!=", Value: value}
 	default:
-		return ast.CompareExpr{
-			Field: a.policy.InjectField,
-			Op:    op,
-			Value: value,
-		}
+		return ast.CompareExpr{Field: field, Op: op, Value: value}
 	}
 }
 

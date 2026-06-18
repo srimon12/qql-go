@@ -475,6 +475,10 @@ func buildPointID(val any) (*qdrant.PointId, error) {
 
 func (e *Executor) executeFlatQuery(ctx context.Context, p *pipeline.QueryPipeline, state *pipeline.QueryState) (*ExecResponse, error) {
 	req := p.BuildFlatRequest(state)
+	// Always request payload — users want to see the data.
+	if req.WithPayload == nil {
+		req.WithPayload = qdrant.NewWithPayload(true)
+	}
 	results, err := e.client.Query(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query on qdrant: %w", err)
@@ -489,6 +493,14 @@ func (e *Executor) executeFlatQuery(ctx context.Context, p *pipeline.QueryPipeli
 		if textVal, ok := hit.Payload["text"]; ok {
 			formatted[i].Text = textVal.GetStringValue()
 		}
+		// Include full payload.
+		if hit.Payload != nil {
+			payload := make(map[string]any, len(hit.Payload))
+			for k, v := range hit.Payload {
+				payload[k] = qdrantValueToAny(v)
+			}
+			formatted[i].Payload = payload
+		}
 	}
 
 	return &ExecResponse{
@@ -501,6 +513,10 @@ func (e *Executor) executeFlatQuery(ctx context.Context, p *pipeline.QueryPipeli
 
 func (e *Executor) executeGroupedQuery(ctx context.Context, p *pipeline.QueryPipeline, state *pipeline.QueryState) (*ExecResponse, error) {
 	req := p.BuildGroupedRequest(state)
+	// Always request payload.
+	if req.WithPayload == nil {
+		req.WithPayload = qdrant.NewWithPayload(true)
+	}
 	groups, err := e.client.QueryGroups(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query groups on qdrant: %w", err)
@@ -517,6 +533,13 @@ func (e *Executor) executeGroupedQuery(ctx context.Context, p *pipeline.QueryPip
 			if textVal, ok := hit.Payload["text"]; ok {
 				hits[j].Text = textVal.GetStringValue()
 			}
+			if hit.Payload != nil {
+				payload := make(map[string]any, len(hit.Payload))
+				for k, v := range hit.Payload {
+					payload[k] = qdrantValueToAny(v)
+				}
+				hits[j].Payload = payload
+			}
 		}
 		formatted[i] = GroupedSearchResult{
 			GroupID: groupIDString(g.Id),
@@ -530,6 +553,39 @@ func (e *Executor) executeGroupedQuery(ctx context.Context, p *pipeline.QueryPip
 		Message:   fmt.Sprintf("Found %d groups", len(formatted)),
 		Data:      formatted,
 	}, nil
+}
+
+// qdrantValueToAny converts a qdrant.Value to a plain Go value for JSON serialization.
+func qdrantValueToAny(v *qdrant.Value) any {
+	if v == nil {
+		return nil
+	}
+	switch val := v.Kind.(type) {
+	case *qdrant.Value_StringValue:
+		return val.StringValue
+	case *qdrant.Value_IntegerValue:
+		return val.IntegerValue
+	case *qdrant.Value_DoubleValue:
+		return val.DoubleValue
+	case *qdrant.Value_BoolValue:
+		return val.BoolValue
+	case *qdrant.Value_ListValue:
+		arr := make([]any, len(val.ListValue.Values))
+		for i, item := range val.ListValue.Values {
+			arr[i] = qdrantValueToAny(item)
+		}
+		return arr
+	case *qdrant.Value_StructValue:
+		m := make(map[string]any, len(val.StructValue.Fields))
+		for k, item := range val.StructValue.Fields {
+			m[k] = qdrantValueToAny(item)
+		}
+		return m
+	case *qdrant.Value_NullValue:
+		return nil
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }
 
 func buildWithPayload(sel *ast.PayloadSelector) *qdrant.WithPayloadSelector {
