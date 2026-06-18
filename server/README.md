@@ -143,13 +143,10 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIs...
 
 A YAML file defines who can do what. Rules are evaluated top-to-bottom; first match wins. Unmatched requests are denied.
 
+**Single filter injection:**
+
 ```yaml
 rules:
-  - match:
-      claims:
-        role: admin
-    allow: [QUERY, INSERT, UPDATE, DELETE, SCROLL, SELECT, SHOW, CREATE, ALTER, EXPLAIN]
-
   - match:
       claims:
         role: reader
@@ -161,19 +158,31 @@ rules:
         op: "="
     limits:
       max_limit: 50
+```
 
+**Multi-filter injection** (AND logic — all filters applied):
+
+```yaml
   - match:
       claims:
-        token_type: agent
-    allow: [QUERY, SCROLL]
-    collections: [public_*]
+        role: reader
+    allow: [QUERY, SCROLL, SELECT, SHOW, EXPLAIN]
     inject:
-      where:
-        field: access_level
-        value: public           # static value, not from JWT
+      filters:
+        - field: org              # tenant isolation
+          from_claim: org_id
+          op: "="
+        - field: team             # department scoping (user's team + org-wide)
+          from_claim: department
+          op: "in"
+        - field: access           # exclude confidential
+          value: "confidential"
+          op: "!="
     limits:
-      max_limit: 10
+      max_limit: 50
 ```
+
+The `filters:` list lets you inject multiple WHERE conditions. Each filter resolves independently — `from_claim` reads from JWT, `value` is static. All filters are AND'd together.
 
 **What a rule controls:**
 
@@ -184,6 +193,8 @@ rules:
 | `allow` | Permitted operation types |
 | `deny` | Blocked operation types (takes precedence over allow) |
 | `collections` | Glob-pattern allowlist for collection names |
+| `inject.where` | Single filter injection (legacy) |
+| `inject.filters` | Multiple filter injection (AND logic) |
 | `inject.where.field` | Payload field to filter on |
 | `inject.where.from_claim` | JWT claim to read the filter value from |
 | `inject.where.value` | Static filter value (mutually exclusive with from_claim) |

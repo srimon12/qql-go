@@ -76,9 +76,28 @@ def load_payload_examples() -> dict[str, str]:
 
 
 DEMO_USERS = {
-    "alice@acme.com": {"password": "alice123", "label": "Alice (reader, acme-corp, engineering)"},
-    "bob@acme.com": {"password": "bob123", "label": "Bob (admin, acme-corp)"},
-    "carol@globex.com": {"password": "carol123", "label": "Carol (reader, globex-corp, finance)"},
-    "dave@acme.com": {"password": "dave123", "label": "Dave (reader, acme-corp, finance)"},
-    "eve@globex.com": {"password": "eve123", "label": "Eve (manager, globex-corp, engineering)"},
+    # Superadmin
+    "admin@qql-go.io":  {"password": "admin123",   "label": "QQL Admin · system · platform_admin"},
+    # ACME Corp
+    "alice@acme.com":   {"password": "alice123",   "label": "Alice Chen · acme · engineering · reader"},
+    "bob@acme.com":     {"password": "bob123",     "label": "Bob Smith · acme · engineering · admin"},
+    "dave@acme.com":    {"password": "dave123",    "label": "Dave Patel · acme · finance · reader"},
+    "frank@acme.com":   {"password": "frank123",   "label": "Frank Miller · acme · engineering · reader"},
+    "grace@acme.com":   {"password": "grace123",   "label": "Grace Lee · acme · security · reader"},
+    # Globex Corp
+    "carol@globex.com": {"password": "carol123",   "label": "Carol Rivera · globex · finance · reader"},
+    "eve@globex.com":   {"password": "eve123",     "label": "Eve Nakamura · globex · engineering · manager"},
+    "mike@globex.com":  {"password": "mike123",    "label": "Mike Johnson · globex · engineering · reader"},
+    "nina@globex.com":  {"password": "nina123",    "label": "Nina Williams · globex · compliance · reader"},
+    "uma@globex.com":   {"password": "uma123",     "label": "Uma Sharma · globex · engineering · admin"},
+    # Initech Inc
+    "finn@initech.com":   {"password": "finn123",   "label": "Finn O'Brien · initech · engineering · admin"},
+    "victor@initech.com": {"password": "victor123", "label": "Victor Hugo · initech · engineering · reader"},
+    "wendy@initech.com":  {"password": "wendy123",  "label": "Wendy Tanaka · initech · clinical · reader"},
+    "yuki@initech.com":   {"password": "yuki123",   "label": "Yuki Tanaka · initech · rd · reader"},
+    # Umbrella Corp
+    "quinn@umbrella.com": {"password": "quinn123",  "label": "Quinn Adams · umbrella · operations · admin"},
+    "glenn@umbrella.com": {"password": "glenn123",  "label": "Glenn Rossi · umbrella · engineering · reader"},
+    "holly@umbrella.com": {"password": "holly123",  "label": "Holly Chen · umbrella · supply_chain · reader"},
+    "kira@umbrella.com":  {"password": "kira123",   "label": "Kira Volkov · umbrella · quality · reader"},
 }

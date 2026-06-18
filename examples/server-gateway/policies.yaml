@@ -1,6 +1,11 @@
-# qql-go gateway demo policy
+# qql-go gateway policy — 4 organizations, 12+ teams
 #
-# Multi-tenant SaaS with department-level access control.
+# Access model:
+#   - Tenant isolation: org_id from JWT → WHERE org = <value>
+#   - Department scoping: team docs + org-wide docs (team=all)
+#   - Confidential: only admins and managers
+#   - Public: everyone (including agents)
+#
 # Rules evaluated top-to-bottom. First match wins.
 
 rules:
@@ -8,93 +13,55 @@ rules:
   - match:
       claims:
         role: platform_admin
-    allow: [QUERY, INSERT, UPDATE, DELETE, SCROLL, SELECT, SHOW, CREATE, DROP, ALTER, EXPLAIN]
+    allow: [QUERY, INSERT, UPDATE, DELETE, SCROLL, SELECT, SHOW, CREATE, CREATE_INDEX, DROP, ALTER, EXPLAIN]
 
   # ── Org admin: full access within tenant ────────────────────────────
   - match:
       claims:
         role: admin
-    allow: [QUERY, INSERT, UPDATE, DELETE, SCROLL, SELECT, SHOW, CREATE, ALTER, EXPLAIN]
+    allow: [QUERY, INSERT, UPDATE, DELETE, SCROLL, SELECT, SHOW, CREATE, CREATE_INDEX, ALTER, EXPLAIN]
     inject:
       where:
-        field: tenant_id
+        field: org
         from_claim: org_id
         op: "="
 
-  # ── Manager: read + write, tenant scoped ────────────────────────────
+  # ── Manager: read + write, tenant scoped, can see confidential ─────
   - match:
       claims:
         role: manager
     allow: [QUERY, INSERT, UPDATE, SCROLL, SELECT, SHOW, EXPLAIN]
     inject:
       where:
-        field: tenant_id
+        field: org
         from_claim: org_id
         op: "="
     limits:
       max_limit: 200
 
-  # ── Engineering reader: tenant + department scoped ──────────────────
-  # Sees: engineering docs + org-wide docs (department=all)
-  # Hides: confidential docs, other department docs
+  # ── Department reader: tenant + team scoped, no confidential ────────
+  # Sees: own team docs + org-wide docs (team=all)
+  # Hides: confidential docs, other team docs
   - match:
       claims:
         role: reader
-        department: engineering
     allow: [QUERY, SCROLL, SELECT, SHOW, EXPLAIN]
     collections: [docs]
     inject:
       filters:
-        - field: tenant_id
+        - field: org
           from_claim: org_id
           op: "="
-        - field: department
-          value: "engineering,all"
+        - field: team
+          from_claim: department
           op: "in"
-        - field: access_level
+        - field: access
           value: "confidential"
           op: "!="
     limits:
       max_limit: 50
 
-  # ── Finance reader: tenant + department scoped ──────────────────────
-  # Sees: finance docs + org-wide docs (department=all)
-  # Hides: confidential docs, other department docs
-  - match:
-      claims:
-        role: reader
-        department: finance
-    allow: [QUERY, SCROLL, SELECT, SHOW, EXPLAIN]
-    collections: [docs]
-    inject:
-      filters:
-        - field: tenant_id
-          from_claim: org_id
-          op: "="
-        - field: department
-          value: "finance,all"
-          op: "in"
-        - field: access_level
-          value: "confidential"
-          op: "!="
-    limits:
-      max_limit: 50
-
-  # ── Generic reader: tenant scoped only ──────────────────────────────
-  - match:
-      claims:
-        role: reader
-    allow: [QUERY, SCROLL, SELECT, SHOW, EXPLAIN]
-    collections: [docs]
-    inject:
-      where:
-        field: tenant_id
-        from_claim: org_id
-        op: "="
-    limits:
-      max_limit: 50
-
-  # ── Agent: public docs only ─────────────────────────────────────────
+  # ── Agent: public docs only, any tenant ─────────────────────────────
   - match:
       claims:
         token_type: agent
@@ -102,7 +69,7 @@ rules:
     collections: [docs]
     inject:
       filters:
-        - field: access_level
+        - field: access
           value: "public"
           op: "="
     limits:

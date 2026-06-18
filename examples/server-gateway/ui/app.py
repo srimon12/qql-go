@@ -33,13 +33,13 @@ with st.sidebar:
 
     if st.session_state.user:
         u = st.session_state.user
-        st.success(f"Logged in as **{u['name']}**")
-        st.caption(f"`{u['email']}`")
+        st.success(f"Logged in as **{u.get('name', u.get('email', '?'))}**")
+        st.caption(f"`{u.get('email', u.get('sub', '?'))}`")
         col1, col2 = st.columns(2)
         col1.metric("Role", u.get("role", "-"))
         col2.metric("Org", u.get("org_id", "-"))
         if u.get("department"):
-            st.metric("Department", u["department"])
+            st.metric("Department", u.get("department", "-"))
         if st.button("Logout", use_container_width=True):
             st.session_state.token = None
             st.session_state.user = None

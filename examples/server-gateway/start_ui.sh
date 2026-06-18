@@ -39,11 +39,6 @@ info "Building qql-go..."
 go build -o "$REPO_ROOT/qql-go" "$REPO_ROOT/cmd/qql-go/"
 ok "Binary built"
 
-# ── Seed data ───────────────────────────────────────────────────────
-info "Seeding data..."
-"$REPO_ROOT/qql-go" execute "$SCRIPT_DIR/01-seed.qql" >/dev/null 2>&1
-ok "Seeded"
-
 # ── Start auth server ───────────────────────────────────────────────
 info "Starting auth server on :8081..."
 uv run python3 "$SCRIPT_DIR/auth_server.py" --port 8081 &
@@ -76,6 +71,11 @@ info "Audit log: $AUDIT_FILE"
 GW_PID=$!
 sleep 3
 ok "Gateway ready (pid $GW_PID)"
+
+# ── Seed data via gateway ───────────────────────────────────────────
+info "Seeding data via gateway..."
+uv run python3 "$SCRIPT_DIR/seed.py" --gateway http://localhost:50051 --auth http://127.0.0.1:8081
+ok "Seeded"
 
 # ── Start Streamlit ─────────────────────────────────────────────────
 info "Starting Streamlit dashboard..."

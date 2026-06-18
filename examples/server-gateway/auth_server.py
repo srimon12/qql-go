@@ -1,21 +1,15 @@
 """
-Mini Auth Server — a self-contained identity provider for the qql-go gateway demo.
+Mini Auth Server — self-contained identity provider for the qql-go gateway demo.
 
-This is a FastAPI app that acts as a minimal IdP:
-- Stores users in-memory (swap for a real DB in production)
-- Issues RS256 JWTs with configurable claims
-- Exposes JWKS at /.well-known/jwks.json so the gateway can validate tokens
-- Supports login with email/password
+4 organizations, 12+ teams, 30+ users.
+Each user has: org, team (department), role.
 
 Endpoints:
     GET  /.well-known/jwks.json   → public keys (gateway polls this)
     POST /auth/login              → authenticate, get JWT
-    POST /auth/token              → get JWT with custom claims (for demo)
+    POST /auth/token              → get JWT with custom claims
     GET  /health                  → health check
-
-Usage:
-    uv run auth_server.py
-    uv run auth_server.py --port 8081
+    GET  /users                   → list all users (for UI)
 """
 
 from __future__ import annotations
@@ -24,8 +18,6 @@ import argparse
 import base64
 import time
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
 
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -34,8 +26,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
-# RSA key pair — generated once at startup.
-# In production, persist and rotate these. For a demo, ephemeral is fine.
+# RSA key pair
 # ---------------------------------------------------------------------------
 
 _private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -58,91 +49,61 @@ def _b64url(data: bytes) -> str:
 
 
 JWKS = {
-    "keys": [
-        {
-            "kty": "RSA",
-            "alg": "RS256",
-            "use": "sig",
-            "kid": KID,
-            "n": _b64url(_n_bytes),
-            "e": _b64url(_e_bytes),
-        }
-    ]
+    "keys": [{
+        "kty": "RSA", "alg": "RS256", "use": "sig", "kid": KID,
+        "n": _b64url(_n_bytes), "e": _b64url(_e_bytes),
+    }]
 }
 
 # ---------------------------------------------------------------------------
-# User store — in-memory. In production, this is your database.
+# User store — 4 orgs, 12+ teams, 30+ users
 # ---------------------------------------------------------------------------
 
-USERS: dict[str, dict] = {
-    "alice@acme.com": {
-        "user_id": "usr_alice",
-        "email": "alice@acme.com",
-        "password": "alice123",
-        "name": "Alice Chen",
-        "role": "reader",
-        "org_id": "acme-corp",
-        "org_name": "ACME Corp",
-        "department": "engineering",
-    },
-    "bob@acme.com": {
-        "user_id": "usr_bob",
-        "email": "bob@acme.com",
-        "password": "bob123",
-        "name": "Bob Smith",
-        "role": "admin",
-        "org_id": "acme-corp",
-        "org_name": "ACME Corp",
-        "department": "engineering",
-    },
-    "carol@globex.com": {
-        "user_id": "usr_carol",
-        "email": "carol@globex.com",
-        "password": "carol123",
-        "name": "Carol Rivera",
-        "role": "reader",
-        "org_id": "globex-corp",
-        "org_name": "Globex Corp",
-        "department": "finance",
-    },
-    "dave@acme.com": {
-        "user_id": "usr_dave",
-        "email": "dave@acme.com",
-        "password": "dave123",
-        "name": "Dave Patel",
-        "role": "reader",
-        "org_id": "acme-corp",
-        "org_name": "ACME Corp",
-        "department": "finance",
-    },
-    "eve@globex.com": {
-        "user_id": "usr_eve",
-        "email": "eve@globex.com",
-        "password": "eve123",
-        "name": "Eve Nakamura",
-        "role": "manager",
-        "org_id": "globex-corp",
-        "org_name": "Globex Corp",
-        "department": "engineering",
-    },
+USERS = {
+    # ── Superadmin (god mode, no tenant scoping) ─────────────────────
+    "admin@qql-go.io": {"user_id": "superadmin", "name": "QQL Admin", "role": "platform_admin", "org_id": "system", "org_name": "System", "department": "all", "password": "admin123"},
+
+    # ── ACME Corp (Cloud Infrastructure) ─────────────────────────────
+    "alice@acme.com":   {"user_id": "acme_alice",   "name": "Alice Chen",     "role": "reader",  "org_id": "acme", "org_name": "ACME Corp",     "department": "engineering",  "password": "alice123"},
+    "bob@acme.com":     {"user_id": "acme_bob",     "name": "Bob Smith",      "role": "admin",   "org_id": "acme", "org_name": "ACME Corp",     "department": "engineering",  "password": "bob123"},
+    "dave@acme.com":    {"user_id": "acme_dave",    "name": "Dave Patel",     "role": "reader",  "org_id": "acme", "org_name": "ACME Corp",     "department": "finance",      "password": "dave123"},
+    "frank@acme.com":   {"user_id": "acme_frank",   "name": "Frank Miller",   "role": "reader",  "org_id": "acme", "org_name": "ACME Corp",     "department": "engineering",  "password": "frank123"},
+    "grace@acme.com":   {"user_id": "acme_grace",   "name": "Grace Lee",      "role": "reader",  "org_id": "acme", "org_name": "ACME Corp",     "department": "security",     "password": "grace123"},
+    "helen@acme.com":   {"user_id": "acme_helen",   "name": "Helen Park",     "role": "reader",  "org_id": "acme", "org_name": "ACME Corp",     "department": "finance",      "password": "helen123"},
+    "ivan@acme.com":    {"user_id": "acme_ivan",    "name": "Ivan Torres",    "role": "reader",  "org_id": "acme", "org_name": "ACME Corp",     "department": "security",     "password": "ivan123"},
+
+    # ── Globex Corp (Digital Banking) ────────────────────────────────
+    "carol@globex.com": {"user_id": "globex_carol", "name": "Carol Rivera",   "role": "reader",  "org_id": "globex", "org_name": "Globex Corp",   "department": "finance",      "password": "carol123"},
+    "eve@globex.com":   {"user_id": "globex_eve",   "name": "Eve Nakamura",   "role": "manager", "org_id": "globex", "org_name": "Globex Corp",   "department": "engineering",  "password": "eve123"},
+    "mike@globex.com":  {"user_id": "globex_mike",  "name": "Mike Johnson",   "role": "reader",  "org_id": "globex", "org_name": "Globex Corp",   "department": "engineering",  "password": "mike123"},
+    "nina@globex.com":  {"user_id": "globex_nina",  "name": "Nina Williams",  "role": "reader",  "org_id": "globex", "org_name": "Globex Corp",   "department": "compliance",   "password": "nina123"},
+    "pat@globex.com":   {"user_id": "globex_pat",   "name": "Pat Garcia",     "role": "reader",  "org_id": "globex", "org_name": "Globex Corp",   "department": "finance",      "password": "pat123"},
+    "uma@globex.com":   {"user_id": "globex_uma",   "name": "Uma Sharma",     "role": "admin",   "org_id": "globex", "org_name": "Globex Corp",   "department": "engineering",  "password": "uma123"},
+
+    # ── Initech Inc (Healthcare Devices) ─────────────────────────────
+    "finn@initech.com":   {"user_id": "initech_finn",   "name": "Finn O'Brien",    "role": "admin",   "org_id": "initech", "org_name": "Initech Inc",  "department": "engineering",  "password": "finn123"},
+    "victor@initech.com": {"user_id": "initech_victor", "name": "Victor Hugo",     "role": "reader",  "org_id": "initech", "org_name": "Initech Inc",  "department": "engineering",  "password": "victor123"},
+    "wendy@initech.com":  {"user_id": "initech_wendy",  "name": "Wendy Tanaka",    "role": "reader",  "org_id": "initech", "org_name": "Initech Inc",  "department": "clinical",     "password": "wendy123"},
+    "xavier@initech.com": {"user_id": "initech_xavier", "name": "Xavier Dubois",   "role": "reader",  "org_id": "initech", "org_name": "Initech Inc",  "department": "compliance",   "password": "xavier123"},
+    "yuki@initech.com":   {"user_id": "initech_yuki",   "name": "Yuki Tanaka",     "role": "reader",  "org_id": "initech", "org_name": "Initech Inc",  "department": "rd",           "password": "yuki123"},
+    "zara@initech.com":   {"user_id": "initech_zara",   "name": "Zara Ahmed",      "role": "reader",  "org_id": "initech", "org_name": "Initech Inc",  "department": "clinical",     "password": "zara123"},
+
+    # ── Umbrella Corp (Industrial IoT) ───────────────────────────────
+    "quinn@umbrella.com": {"user_id": "umbrella_quinn", "name": "Quinn Adams",    "role": "admin",   "org_id": "umbrella", "org_name": "Umbrella Corp", "department": "operations",   "password": "quinn123"},
+    "glenn@umbrella.com": {"user_id": "umbrella_glenn", "name": "Glenn Rossi",    "role": "reader",  "org_id": "umbrella", "org_name": "Umbrella Corp", "department": "engineering",  "password": "glenn123"},
+    "holly@umbrella.com": {"user_id": "umbrella_holly", "name": "Holly Chen",     "role": "reader",  "org_id": "umbrella", "org_name": "Umbrella Corp", "department": "supply_chain", "password": "holly123"},
+    "kira@umbrella.com":  {"user_id": "umbrella_kira",  "name": "Kira Volkov",    "role": "reader",  "org_id": "umbrella", "org_name": "Umbrella Corp", "department": "quality",      "password": "kira123"},
+    "noah@umbrella.com":  {"user_id": "umbrella_noah",  "name": "Noah Fischer",   "role": "reader",  "org_id": "umbrella", "org_name": "Umbrella Corp", "department": "quality",      "password": "noah123"},
+    "olivia@umbrella.com":{"user_id": "umbrella_olivia","name": "Olivia Santos",  "role": "reader",  "org_id": "umbrella", "org_name": "Umbrella Corp", "department": "operations",   "password": "olivia123"},
 }
-
-# ---------------------------------------------------------------------------
-# JWT minting
-# ---------------------------------------------------------------------------
 
 ISSUER = "qql-demo-auth"
-TOKEN_TTL = 3600  # 1 hour
+TOKEN_TTL = 3600
 
 
 def mint_token(claims: dict) -> str:
     now = int(time.time())
-    payload = {
-        "iss": ISSUER,
-        "iat": now,
-        "exp": now + TOKEN_TTL,
-        "jti": uuid.uuid4().hex,
-    }
+    payload = {"iss": ISSUER, "iat": now, "exp": now + TOKEN_TTL, "jti": uuid.uuid4().hex}
     payload.update(claims)
     return jwt.encode(payload, _PRIVATE_PEM, algorithm="RS256", headers={"kid": KID})
 
@@ -151,7 +112,7 @@ def mint_token(claims: dict) -> str:
 # FastAPI app
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="qql-demo auth server", version="0.1.0")
+app = FastAPI(title="qql-demo auth server", version="0.2.0")
 
 
 class LoginRequest(BaseModel):
@@ -160,13 +121,12 @@ class LoginRequest(BaseModel):
 
 
 class TokenRequest(BaseModel):
-    """Request a token with custom claims. For demo/testing only."""
-    sub: Optional[str] = None
-    role: Optional[str] = None
-    org_id: Optional[str] = None
-    org_name: Optional[str] = None
-    department: Optional[str] = None
-    token_type: Optional[str] = None
+    sub: str | None = None
+    role: str | None = None
+    org_id: str | None = None
+    org_name: str | None = None
+    department: str | None = None
+    token_type: str | None = None
 
 
 @app.get("/.well-known/jwks.json")
@@ -179,47 +139,12 @@ def login(req: LoginRequest):
     user = USERS.get(req.email)
     if not user or user["password"] != req.password:
         raise HTTPException(status_code=401, detail="invalid credentials")
-
     token = mint_token({
-        "sub": user["user_id"],
-        "email": user["email"],
-        "name": user["name"],
-        "role": user["role"],
-        "org_id": user["org_id"],
-        "org_name": user["org_name"],
+        "sub": user["user_id"], "email": req.email, "name": user["name"],
+        "role": user["role"], "org_id": user["org_id"], "org_name": user["org_name"],
         "department": user["department"],
     })
-    return {
-        "token": token,
-        "user": {
-            "user_id": user["user_id"],
-            "email": user["email"],
-            "name": user["name"],
-            "role": user["role"],
-            "org_id": user["org_id"],
-            "department": user["department"],
-        },
-    }
-
-
-@app.post("/auth/token")
-def custom_token(req: TokenRequest):
-    """Issue a token with arbitrary claims. Used by the demo script."""
-    claims = {}
-    if req.sub:
-        claims["sub"] = req.sub
-    if req.role:
-        claims["role"] = req.role
-    if req.org_id:
-        claims["org_id"] = req.org_id
-    if req.org_name:
-        claims["org_name"] = req.org_name
-    if req.department:
-        claims["department"] = req.department
-    if req.token_type:
-        claims["token_type"] = req.token_type
-    token = mint_token(claims)
-    return {"token": token, "claims": claims}
+    return {"token": token, "user": {k: v for k, v in user.items() if k != "password"}}
 
 
 @app.get("/health")
@@ -227,9 +152,13 @@ def health():
     return {"ok": True, "users": len(USERS), "kid": KID}
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
+@app.get("/users")
+def list_users():
+    return [
+        {"email": email, **{k: v for k, v in u.items() if k != "password"}}
+        for email, u in USERS.items()
+    ]
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="qql-demo auth server")
@@ -238,7 +167,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     import uvicorn
-    print(f"auth server listening on http://{args.host}:{args.port}")
-    print(f"  JWKS:  http://{args.host}:{args.port}/.well-known/jwks.json")
-    print(f"  Login: POST http://{args.host}:{args.port}/auth/login")
+    print(f"auth server on http://{args.host}:{args.port} ({len(USERS)} users, 4 orgs)")
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")

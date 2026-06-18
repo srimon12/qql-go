@@ -6,46 +6,22 @@ from utils import GW_URL, DEMO_USERS, api_post, login, scroll_points
 
 # All demo users with their expected access
 USER_PROFILES = {
-    "alice@acme.com": {
-        "password": "alice123",
-        "name": "Alice Chen",
-        "role": "reader",
-        "org": "acme-corp",
-        "dept": "engineering",
-        "label": "Alice — reader, acme-corp, engineering",
-    },
-    "bob@acme.com": {
-        "password": "bob123",
-        "name": "Bob Smith",
-        "role": "admin",
-        "org": "acme-corp",
-        "dept": "engineering",
-        "label": "Bob — admin, acme-corp",
-    },
-    "carol@globex.com": {
-        "password": "carol123",
-        "name": "Carol Rivera",
-        "role": "reader",
-        "org": "globex-corp",
-        "dept": "finance",
-        "label": "Carol — reader, globex-corp, finance",
-    },
-    "dave@acme.com": {
-        "password": "dave123",
-        "name": "Dave Patel",
-        "role": "reader",
-        "org": "acme-corp",
-        "dept": "finance",
-        "label": "Dave — reader, acme-corp, finance",
-    },
-    "eve@globex.com": {
-        "password": "eve123",
-        "name": "Eve Nakamura",
-        "role": "manager",
-        "org": "globex-corp",
-        "dept": "engineering",
-        "label": "Eve — manager, globex-corp, engineering",
-    },
+    # ACME Corp
+    "alice@acme.com":   {"password": "alice123",   "name": "Alice Chen",     "role": "reader",  "org": "acme",     "dept": "engineering",  "label": "Alice · acme · eng · reader"},
+    "bob@acme.com":     {"password": "bob123",     "name": "Bob Smith",      "role": "admin",   "org": "acme",     "dept": "engineering",  "label": "Bob · acme · eng · admin"},
+    "dave@acme.com":    {"password": "dave123",    "name": "Dave Patel",     "role": "reader",  "org": "acme",     "dept": "finance",      "label": "Dave · acme · finance · reader"},
+    "grace@acme.com":   {"password": "grace123",   "name": "Grace Lee",      "role": "reader",  "org": "acme",     "dept": "security",     "label": "Grace · acme · security · reader"},
+    # Globex Corp
+    "carol@globex.com": {"password": "carol123",   "name": "Carol Rivera",   "role": "reader",  "org": "globex",   "dept": "finance",      "label": "Carol · globex · finance · reader"},
+    "eve@globex.com":   {"password": "eve123",     "name": "Eve Nakamura",   "role": "manager", "org": "globex",   "dept": "engineering",  "label": "Eve · globex · eng · manager"},
+    "uma@globex.com":   {"password": "uma123",     "name": "Uma Sharma",     "role": "admin",   "org": "globex",   "dept": "engineering",  "label": "Uma · globex · eng · admin"},
+    # Initech Inc
+    "finn@initech.com":   {"password": "finn123",   "name": "Finn O'Brien",  "role": "admin",   "org": "initech",  "dept": "engineering",  "label": "Finn · initech · eng · admin"},
+    "wendy@initech.com":  {"password": "wendy123",  "name": "Wendy Tanaka",  "role": "reader",  "org": "initech",  "dept": "clinical",     "label": "Wendy · initech · clinical · reader"},
+    # Umbrella Corp
+    "quinn@umbrella.com": {"password": "quinn123",  "name": "Quinn Adams",   "role": "admin",   "org": "umbrella", "dept": "operations",   "label": "Quinn · umbrella · ops · admin"},
+    "glenn@umbrella.com": {"password": "glenn123",  "name": "Glenn Rossi",   "role": "reader",  "org": "umbrella", "dept": "engineering",  "label": "Glenn · umbrella · eng · reader"},
+    "kira@umbrella.com":  {"password": "kira123",   "name": "Kira Volkov",   "role": "reader",  "org": "umbrella", "dept": "quality",      "label": "Kira · umbrella · quality · reader"},
 }
 
 
@@ -58,10 +34,10 @@ def render():
     Forbidden documents are never scored, never retrieved, never in the prompt.
 
     **Policy rules applied:**
-    - **Readers**: `WHERE tenant_id = <org> AND department IN (<dept>, all) AND access_level != 'confidential'`
-    - **Admins**: `WHERE tenant_id = <org>` (sees all departments, all access levels)
-    - **Managers**: `WHERE tenant_id = <org>` (read + write)
-    - **Agents**: `WHERE access_level = 'public'` (public docs only, any tenant)
+    - **Readers**: `WHERE org = <org_id> AND team IN (dept, all) AND access != 'confidential'`
+    - **Admins**: `WHERE org = <org_id>` (sees all teams, all access levels)
+    - **Managers**: `WHERE org = <org_id>` (read + write)
+    - **Agents**: `WHERE access = 'public'` (public docs only, any org)
     """)
 
     # Query input
@@ -120,15 +96,15 @@ def _run_comparison(query: str, emails: list[str]):
                 if pts:
                     for pt in pts:
                         p = pt.get("payload", {})
-                        src = p.get("source", "?")
-                        dept = p.get("department", "?")
-                        acc = p.get("access_level", "?")
-                        tid = p.get("tenant_id", "?")
+                        src = p.get("doc_type", p.get("source", "?"))
+                        org = p.get("org", "?")
+                        team = p.get("team", "?")
+                        acc = p.get("access", "?")
                         text = p.get("text", "")
 
-                        with st.expander(f"{src} — {tid}/{dept}/{acc}"):
+                        with st.expander(f"{src} — {org}/{team}/{acc}"):
                             st.write(text)
-                            st.caption(f"tenant: {tid} · dept: {dept} · access: {acc}")
+                            st.caption(f"org: {org} · team: {team} · access: {acc}")
                 else:
                     st.info("No documents returned")
             else:

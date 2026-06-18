@@ -379,21 +379,17 @@ def main() -> None:
         console.print("[green]✓[/green] binary built")
         console.print()
 
-        # ── Seed data ──────────────────────────────────────────────────
-        seed_file = SCRIPT_DIR / "01-seed.qql"
-        console.print(f"[cyan]seeding:[/cyan] {seed_file.name}")
+        # ── Seed data via gateway ──────────────────────────────────────
+        console.print("[cyan]seeding via gateway...[/cyan]")
         result = subprocess.run(
-            [str(BINARY), "execute", str(seed_file)],
-            cwd=str(REPO_ROOT),
+            [sys.executable, str(SCRIPT_DIR / "seed.py"), "--gateway", gw_url, "--auth", auth_url],
             capture_output=True,
             text=True,
         )
         if result.returncode != 0:
             console.print(f"[red]✗[/red] seed failed: {result.stderr.strip()}")
             sys.exit(1)
-        # Count lines in output as a rough indicator.
-        lines = [l for l in result.stdout.strip().split("\n") if l.strip()]
-        console.print(f"[green]✓[/green] seeded ({len(lines)} statements executed)")
+        console.print("[green]✓[/green] seeded")
         console.print()
 
         # ── Start auth server ──────────────────────────────────────────
