@@ -338,5 +338,105 @@
   {
     "label": "Formula + RRF fusion",
     "json": "{\"prefetch\":{\"prefetch\":[{\"query\":{\"indices\":[1,42],\"values\":[0.22,0.8]},\"using\":\"sparse\",\"limit\":100},{\"query\":[0.01,0.45,0.67],\"using\":\"dense\",\"limit\":100}],\"query\":{\"rrf\":{}},\"limit\":100},\"query\":{\"formula\":{\"sum\":[\"$score\",{\"mult\":[0.1,{\"exp_decay\":{\"x\":{\"datetime_key\":\"published_at\"},\"target\":{\"datetime\":\"2026-01-01\"},\"scale\":15552000,\"midpoint\":0.5}}]}]}},\"limit\":10}"
+  },
+  {
+    "label": "Single prefetch with USING",
+    "json": "{\"prefetch\":{\"query\":[0.1,0.2,0.3],\"using\":\"dense\",\"limit\":50},\"query\":[0.4,0.5,0.6],\"using\":\"colbert\",\"limit\":10}"
+  },
+  {
+    "label": "Multi-prefetch different USING (PDF retrieval)",
+    "json": "{\"prefetch\":[{\"query\":[0.1,0.2,0.3],\"using\":\"mean_pooling_columns\",\"limit\":100},{\"query\":[0.1,0.2,0.3],\"using\":\"mean_pooling_rows\",\"limit\":100}],\"query\":[0.1,0.2,0.3],\"using\":\"original\",\"limit\":10,\"with_payload\":true}"
+  },
+  {
+    "label": "Create multivector collection (PDF retrieval)",
+    "json": "{\"collection_name\":\"pdf_retrieval\",\"vectors\":{\"original\":{\"size\":128,\"distance\":\"Cosine\",\"multivector_config\":{\"comparator\":\"max_sim\"},\"hnsw_config\":{\"m\":0}},\"mean_pooling_columns\":{\"size\":128,\"distance\":\"Cosine\",\"multivector_config\":{\"comparator\":\"max_sim\"}},\"mean_pooling_rows\":{\"size\":128,\"distance\":\"Cosine\",\"multivector_config\":{\"comparator\":\"max_sim\"}}}}"
+  },
+  {
+    "label": "Insert with named multivector vectors",
+    "json": "{\"points\":[{\"id\":1,\"vector\":{\"dense\":[0.1,0.2,0.3],\"colbert\":[[0.1,0.2],[0.3,0.4],[0.5,0.6]]},\"payload\":{\"text\":\"sample document\"}}]}"
+  },
+  {
+    "label": "Nested prefetch with USING",
+    "json": "{\"prefetch\":{\"prefetch\":{\"query\":[0.1,0.2,0.3],\"using\":\"dense_small\",\"limit\":200},\"query\":[0.1,0.2,0.3],\"using\":\"dense_full\",\"limit\":50},\"query\":[[0.1,0.2],[0.3,0.4]],\"using\":\"colbert\",\"limit\":10}"
+  },
+  {
+    "label": "Prefetch with filter per prefetch",
+    "json": "{\"prefetch\":[{\"query\":[0.1,0.2,0.3],\"using\":\"dense\",\"limit\":50,\"filter\":{\"must\":[{\"key\":\"category\",\"match\":{\"value\":\"tech\"}}]}},{\"query\":[0.1,0.2,0.3],\"using\":\"sparse\",\"limit\":50}],\"query\":{\"fusion\":\"rrf\"},\"limit\":10}"
+  },
+  {
+    "label": "Multi-prefetch with text query and model",
+    "json": "{\"prefetch\":[{\"query\":{\"text\":\"machine learning\",\"model\":\"all-MiniLM-L6-v2\"},\"using\":\"dense\",\"limit\":50},{\"query\":{\"text\":\"machine learning\",\"model\":\"bm25\"},\"using\":\"sparse\",\"limit\":50}],\"query\":{\"fusion\":\"dbsf\"},\"limit\":10,\"with_payload\":true}"
+  },
+  {
+    "label": "Single prefetch vector rescore with USING",
+    "json": "{\"prefetch\":{\"query\":[0.1,0.2,0.3,0.4],\"using\":\"mrl_64\",\"limit\":500},\"query\":[0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8],\"using\":\"full_128\",\"limit\":10}"
+  },
+  {
+    "label": "3-level nested prefetch with USING",
+    "json": "{\"prefetch\":{\"prefetch\":{\"prefetch\":{\"query\":[0.1,0.2],\"using\":\"tiny\",\"limit\":1000},\"query\":[0.1,0.2,0.3],\"using\":\"medium\",\"limit\":100},\"query\":[0.1,0.2,0.3,0.4],\"using\":\"large\",\"limit\":50},\"query\":[[0.1,0.2],[0.3,0.4]],\"using\":\"colbert\",\"limit\":10}"
+  },
+  {
+    "label": "Multi-prefetch with score_threshold",
+    "json": "{\"prefetch\":[{\"query\":[0.1,0.2,0.3],\"using\":\"dense\",\"limit\":100,\"score_threshold\":0.5},{\"query\":[0.1,0.2,0.3],\"using\":\"sparse\",\"limit\":100}],\"query\":{\"fusion\":\"rrf\"},\"limit\":10}"
+  },
+  {
+    "label": "Multi-prefetch with offset per prefetch",
+    "json": "{\"prefetch\":[{\"query\":[0.1,0.2,0.3],\"using\":\"dense\",\"limit\":50},{\"query\":[0.1,0.2,0.3],\"using\":\"sparse\",\"limit\":50}],\"query\":{\"fusion\":\"rrf\"},\"limit\":10,\"offset\":20}"
+  },
+  {
+    "label": "Create collection 2 named vectors no multivector",
+    "json": "{\"vectors\":{\"dense\":{\"size\":384,\"distance\":\"Cosine\"},\"image\":{\"size\":512,\"distance\":\"Dot\"}}}"
+  },
+  {
+    "label": "Create collection 1 multivector 1 regular",
+    "json": "{\"vectors\":{\"dense\":{\"size\":384,\"distance\":\"Cosine\"},\"colbert\":{\"size\":128,\"distance\":\"Cosine\",\"multivector_config\":{\"comparator\":\"max_sim\"},\"hnsw_config\":{\"m\":0}}}}"
+  },
+  {
+    "label": "Insert single unnamed vector",
+    "json": "{\"points\":[{\"id\":42,\"vector\":[0.1,0.2,0.3,0.4],\"payload\":{\"title\":\"test\"}}]}"
+  },
+  {
+    "label": "Insert multiple points with vectors",
+    "json": "{\"points\":[{\"id\":1,\"vector\":{\"dense\":[0.1,0.2],\"sparse\":[0.3,0.4]},\"payload\":{\"a\":1}},{\"id\":2,\"vector\":{\"dense\":[0.5,0.6],\"sparse\":[0.7,0.8]},\"payload\":{\"a\":2}}]}"
+  },
+  {
+    "label": "Search with all fields combined",
+    "json": "{\"query\":[0.1,0.2,0.3],\"using\":\"dense\",\"filter\":{\"must\":[{\"key\":\"status\",\"match\":{\"value\":\"active\"}}]},\"with_payload\":{\"include\":[\"title\",\"score\"]},\"with_vectors\":[\"dense\"],\"score_threshold\":0.7,\"limit\":5,\"offset\":10}"
+  },
+  {
+    "label": "Search with using + group_by + group_size",
+    "json": "{\"query\":[0.1,0.2,0.3],\"using\":\"image\",\"group_by\":\"category\",\"group_size\":3,\"limit\":9,\"with_payload\":true}"
+  },
+  {
+    "label": "Multivector 2D query with USING",
+    "json": "{\"query\":[[0.1,0.2,0.3],[0.4,0.5,0.6],[0.7,0.8,0.9]],\"using\":\"colbert\",\"limit\":5}"
+  },
+  {
+    "label": "Wrapped endpoint search",
+    "json": "{\"method\":\"POST\",\"path\":\"/collections/docs/points/search\",\"body\":{\"query\":[0.1,0.2,0.3],\"using\":\"dense\",\"limit\":5}}"
+  },
+  {
+    "label": "Wrapped endpoint recommend",
+    "json": "{\"method\":\"POST\",\"path\":\"/collections/docs/points/recommend\",\"body\":{\"positive\":[1,2],\"negative\":[3],\"limit\":5}}"
+  },
+  {
+    "label": "Batch search mixed recommend+search",
+    "json": "{\"searches\":[{\"query\":[0.1,0.2,0.3],\"limit\":3},{\"query\":{\"recommend\":{\"positive\":[1,2],\"negative\":[3]}},\"limit\":5}]}"
+  },
+  {
+    "label": "Multi-prefetch RRF with weights and filter",
+    "json": "{\"prefetch\":[{\"query\":[0.1,0.2],\"using\":\"dense\",\"limit\":50,\"filter\":{\"must\":[{\"key\":\"lang\",\"match\":{\"value\":\"en\"}}]}},{\"query\":{\"text\":\"hello\",\"model\":\"bm25\"},\"using\":\"sparse\",\"limit\":50}],\"query\":{\"rrf\":{\"weights\":[2.0,1.0]}},\"limit\":10,\"with_payload\":true}"
+  },
+  {
+    "label": "Multi-prefetch DBSF with score_threshold",
+    "json": "{\"prefetch\":[{\"query\":[0.1,0.2,0.3],\"using\":\"dense\",\"limit\":100,\"score_threshold\":0.3},{\"query\":[0.1,0.2,0.3],\"using\":\"sparse\",\"limit\":100,\"score_threshold\":0.2}],\"query\":{\"fusion\":\"dbsf\"},\"limit\":10}"
+  },
+  {
+    "label": "Insert with vectors field (old format)",
+    "json": "{\"points\":[{\"id\":10,\"vectors\":{\"dense\":[0.1,0.2,0.3],\"image\":[0.4,0.5,0.6]},\"payload\":{\"name\":\"old format\"}}]}"
+  },
+  {
+    "label": "Single prefetch array with text model",
+    "json": "{\"prefetch\":[{\"query\":{\"text\":\"deep learning\",\"model\":\"all-MiniLM-L6-v2\"},\"using\":\"dense\",\"limit\":50}],\"query\":{\"text\":\"deep learning\",\"model\":\"colbert\"},\"using\":\"colbert\",\"limit\":10}"
   }
 ]

@@ -32,6 +32,13 @@ func convertUpsert(input, collection string) ([]string, error) {
 			payload["id"] = point.ID
 		}
 
+		// Include vector data if present
+		if point.Vector != nil {
+			payload["vector"] = point.Vector
+		} else if len(point.Vectors) > 0 {
+			payload["vector"] = point.Vectors
+		}
+
 		// Build VALUES dict
 		values := buildValuesDict(payload)
 		stmts = append(stmts, fmt.Sprintf("INSERT INTO %s VALUES %s", collection, values))

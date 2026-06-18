@@ -17,9 +17,24 @@ func convertRESTQueryToAST(req *RESTQueryRequest, collection string) (*ast.Query
 		stmt.Limit = *req.Limit
 	}
 
+	if req.Offset != nil {
+		stmt.Offset = *req.Offset
+	}
+
 	if req.Filter != nil {
 		f := convertRESTFilter(req.Filter)
 		stmt.QueryFilter = f
+	}
+
+	// Using
+	if req.Using != "" {
+		using := req.Using
+		stmt.Using = &using
+	}
+
+	// WithPayload
+	if req.WithPayload != nil {
+		stmt.WithPayload = buildPayloadSelector(req.WithPayload)
 	}
 
 	if len(req.Defaults) > 0 {
@@ -63,6 +78,17 @@ func convertRESTPrefetchToAST(pf *RESTPrefetch, collection, prefix string) (*ast
 	}
 	if pf.Filter != nil {
 		stmt.QueryFilter = convertRESTFilter(pf.Filter)
+	}
+
+	// Using
+	if pf.Using != "" {
+		using := pf.Using
+		stmt.Using = &using
+	}
+
+	// ScoreThreshold
+	if pf.ScoreThreshold != nil {
+		stmt.ScoreThreshold = pf.ScoreThreshold
 	}
 
 	// Handle Nested Prefetches

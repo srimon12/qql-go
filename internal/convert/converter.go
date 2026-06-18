@@ -125,6 +125,10 @@ func convertByStructure(input string) ([]string, error) {
 	if len(raw.Query) > 0 {
 		// Raw vector array: [0.2, 0.1, 0.9, 0.7]
 		if raw.Query[0] == '[' {
+			// If there's a prefetch, route through formula query path for CTE generation
+			if len(raw.Prefetch) > 0 {
+				return convertFormulaQuery(input, "unknown")
+			}
 			return convertSearch(input, "unknown")
 		}
 		// Raw string ID: "43cf51e2-8777-..."
@@ -154,6 +158,9 @@ func convertByStructure(input string) ([]string, error) {
 				return convertRelevanceFeedback(input, "unknown")
 			}
 			if len(queryObj.Text) > 0 {
+				if len(raw.Prefetch) > 0 {
+					return convertFormulaQuery(input, "unknown")
+				}
 				return convertSearch(input, "unknown")
 			}
 			if len(queryObj.Fusion) > 0 {
@@ -172,6 +179,9 @@ func convertByStructure(input string) ([]string, error) {
 				return convertSearch(input, "unknown")
 			}
 			if len(queryObj.Indices) > 0 {
+				if len(raw.Prefetch) > 0 {
+					return convertFormulaQuery(input, "unknown")
+				}
 				return convertSearch(input, "unknown")
 			}
 		}

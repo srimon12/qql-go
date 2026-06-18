@@ -5,20 +5,25 @@ import (
 )
 
 type RESTQueryRequest struct {
-	Prefetch json.RawMessage `json:"prefetch"`
-	Query    RESTQuery       `json:"query"`
-	Filter   *RESTFilter     `json:"filter"`
-	Limit    *int            `json:"limit"`
-	Defaults map[string]any  `json:"defaults"`
+	Prefetch    json.RawMessage `json:"prefetch"`
+	Query       RESTQuery       `json:"query"`
+	Filter      *RESTFilter     `json:"filter"`
+	Limit       *int            `json:"limit"`
+	Offset      *int            `json:"offset"`
+	Defaults    map[string]any  `json:"defaults"`
+	Using       string          `json:"using"`
+	WithPayload any             `json:"with_payload"`
 }
 
 type RESTPrefetch struct {
-	Prefetch json.RawMessage `json:"prefetch"`
-	Query    RESTQuery       `json:"query"`
-	Document any             `json:"document"`
-	Vector   any             `json:"vector"`
-	Filter   *RESTFilter     `json:"filter"`
-	Limit    *int            `json:"limit"`
+	Prefetch       json.RawMessage `json:"prefetch"`
+	Query          RESTQuery       `json:"query"`
+	Document       any             `json:"document"`
+	Vector         any             `json:"vector"`
+	Filter         *RESTFilter     `json:"filter"`
+	Limit          *int            `json:"limit"`
+	Using          string          `json:"using"`
+	ScoreThreshold *float64        `json:"score_threshold"`
 }
 
 type RESTQuery struct {
