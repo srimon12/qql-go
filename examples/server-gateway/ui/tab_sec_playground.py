@@ -36,7 +36,7 @@ def render():
         st.warning("⚠️ Please login from the sidebar to use the Security Playground.")
         return
 
-    st.info(f"**Logged in as:** {claims.get('email', '-')} | Tenant: `{claims.get('org_id', '-')}` | Department: `{claims.get('department', '-')}` | Role: `{claims.get('role', '-')}`")
+    st.info(f"**Logged in as:** {claims.get('name', claims.get('user_id', '-'))} | Tenant: `{claims.get('org_id', '-')}` | Department: `{claims.get('department', '-')}` | Role: `{claims.get('role', '-')}`")
 
     st.divider()
 
@@ -204,7 +204,7 @@ def render():
                     else:
                         st.warning(f"Policy filtered results: Direct={len(rest_ids)}, Gateway={len(qql_ids)}")
                         st.info(f"""
-                        💡 **Policy Enforcement:** You queried as **{claims.get('email')}** (Tenant: `{claims.get('org_id')}`, Dept: `{claims.get('department')}`).
+                        💡 **Policy Enforcement:** You queried as **{claims.get('name', claims.get('user_id', '-'))}** (Tenant: `{claims.get('org_id')}`, Dept: `{claims.get('department')}`).
                         - Direct: **{len(rest_ids)}** points {rest_ids}
                         - Gateway: **{len(qql_ids)}** points {qql_ids}
                         """)
