@@ -61,7 +61,7 @@ def render():
         st.warning("Select at least 2 users to compare")
         return
 
-    if st.button("▶ Run comparison", type="primary", use_container_width=True):
+    if st.button("▶ Run comparison", type="primary", width="stretch"):
         _run_comparison(query, selected_emails)
 
 

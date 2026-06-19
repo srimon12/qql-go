@@ -40,7 +40,7 @@ with st.sidebar:
         col2.metric("Org", u.get("org_id", "-"))
         if u.get("department"):
             st.metric("Department", u.get("department", "-"))
-        if st.button("Logout", use_container_width=True):
+        if st.button("Logout", width="stretch"):
             st.session_state.token = None
             st.session_state.user = None
             st.rerun()
@@ -51,7 +51,7 @@ with st.sidebar:
             options=list(DEMO_USERS.keys()),
             format_func=lambda x: DEMO_USERS[x]["label"],
         )
-        if st.button("Login", use_container_width=True, type="primary"):
+        if st.button("Login", width="stretch", type="primary"):
             result = login(login_user, DEMO_USERS[login_user]["password"])
             if result and "token" in result:
                 st.session_state.token = result["token"]

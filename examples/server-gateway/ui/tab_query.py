@@ -20,7 +20,7 @@ def render():
         )
     with col2:
         st.markdown("###")
-        run_query = st.button("▶ Execute", type="primary", use_container_width=True)
+        run_query = st.button("▶ Execute", type="primary", width="stretch")
 
     if run_query and query:
         if not st.session_state.token:
@@ -78,7 +78,7 @@ def _show_result(result: dict):
             if item.get("text") and "text" not in row:
                 row["text"] = item["text"]
             rows.append(row)
-        st.dataframe(rows, use_container_width=True)
+        st.dataframe(rows, width="stretch")
         return
 
     # SCROLL results: dict with points: [{id, payload: {...}}]
@@ -90,7 +90,7 @@ def _show_result(result: dict):
                 row.update(item["payload"])
             row["id"] = item.get("id")
             rows.append(row)
-        st.dataframe(rows, use_container_width=True)
+        st.dataframe(rows, width="stretch")
         return
 
     # Fallback

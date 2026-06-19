@@ -129,7 +129,7 @@ def render():
             help="Edit the raw Qdrant REST JSON payload here."
         )
 
-        convert_clicked = st.button("🔄 Convert to QQL", type="primary", use_container_width=True)
+        convert_clicked = st.button("🔄 Convert to QQL", type="primary", width="stretch")
 
     with col_right:
         st.subheader("💻 Output: Generated QQL")
@@ -180,7 +180,7 @@ def render():
                 help="The direct Qdrant HTTP REST URL (usually port :6333) used to execute direct REST payloads."
             )
             
-            compare_btn = st.button("⚡ Run Comparison", type="secondary", use_container_width=True)
+            compare_btn = st.button("⚡ Run Comparison", type="secondary", width="stretch")
             
             if compare_btn:
                 st.session_state.convert_compare_ran = True

@@ -121,7 +121,7 @@ def render():
 
     # --- Run Query ---
     st.markdown("### 3. Run Query & Compare Results")
-    run_btn = st.button("⚡ Execute Query", type="primary", use_container_width=True)
+    run_btn = st.button("⚡ Execute Query", type="primary", width="stretch")
 
     if run_btn and qql_stmt:
         with st.spinner("Executing queries..."):

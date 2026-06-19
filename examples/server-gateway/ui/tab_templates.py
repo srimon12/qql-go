@@ -52,9 +52,9 @@ def render():
             data = decode_data(result.get("data"))
             if data:
                 if isinstance(data, list):
-                    st.dataframe(data, use_container_width=True)
+                    st.dataframe(data, width="stretch")
                 elif isinstance(data, dict) and "points" in data:
-                    st.dataframe(data["points"], use_container_width=True)
+                    st.dataframe(data["points"], width="stretch")
                 else:
                     st.json(data)
         else:
