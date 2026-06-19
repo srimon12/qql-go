@@ -329,7 +329,7 @@ func lookupKeyword(s string) (TokenKind, bool) {
 			}
 			buf[i] = c
 		}
-		if kind, ok := keywords[string(buf[:len(s)])]; ok {
+		if kind, ok := lookupKeywordFast(buf[:len(s)]); ok {
 			return kind, true
 		}
 		return 0, false
