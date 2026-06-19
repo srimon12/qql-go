@@ -123,7 +123,15 @@ func FormatQueryStmt(q *QueryStmt) string {
 		} else if q.QueryID != nil {
 			parts = append(parts, fmt.Sprintf("QUERY %s", formatValue(q.QueryID)))
 		} else {
-			parts = append(parts, "QUERY '<query_text>'")
+			// Pure fusion query — no search target, just fuse prefetch results
+			if len(q.PrefetchRefs) > 0 && q.FusionType != nil {
+				parts = append(parts, "FUSION "+*q.FusionType)
+				q.FusionType = nil // already emitted, prevent duplicate
+			} else if len(q.PrefetchRefs) == 0 {
+				parts = append(parts, "QUERY '<query_text>'")
+			} else {
+				parts = append(parts, "QUERY")
+			}
 		}
 	case QueryModeRecommend:
 		parts = append(parts, "QUERY RECOMMEND")
@@ -173,10 +181,14 @@ func FormatQueryStmt(q *QueryStmt) string {
 	// USING + FUSION
 	if q.Type == QueryTypeHybrid {
 		parts = append(parts, "USING HYBRID")
+	} else if q.Type == QueryTypeSparse {
+		if q.Using != nil {
+			parts = append(parts, "USING SPARSE "+formatValue(*q.Using))
+		} else {
+			parts = append(parts, "USING SPARSE")
+		}
 	} else if q.Using != nil {
 		parts = append(parts, "USING "+formatValue(*q.Using))
-	} else if q.Type == QueryTypeSparse {
-		parts = append(parts, "USING SPARSE")
 	}
 
 	if q.FusionType != nil {

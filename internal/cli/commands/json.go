@@ -72,9 +72,10 @@ type DumpResponse struct {
 }
 
 type SearchHit struct {
-	ID    string  `json:"id"`
-	Score float32 `json:"score"`
-	Text  string  `json:"text,omitempty"`
+	ID      string         `json:"id"`
+	Score   float32        `json:"score"`
+	Text    string         `json:"text,omitempty"`
+	Payload map[string]any `json:"payload,omitempty"`
 }
 
 type GroupedSearchResult struct {

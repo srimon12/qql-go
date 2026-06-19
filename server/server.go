@@ -11,6 +11,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/srimon12/qql-go/gen/qqlpbconnect"
+	"github.com/srimon12/qql-go/internal/config"
 	"github.com/srimon12/qql-go/pkg/qql"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -29,6 +30,37 @@ type Config struct {
 	QdrantAPIKey string
 	// ShutdownTimeout is the grace period for in-flight requests.
 	ShutdownTimeout time.Duration
+	// QQLConfig is the QQL executor config (embedding, inference, BM25, etc.).
+	QQLConfig *config.Config
+
+	// Gateway configuration (optional — if set, enables auth + policy + audit).
+	Gateway *GatewayConfig
+}
+
+// GatewayConfig holds the full gateway policy enforcement configuration.
+type GatewayConfig struct {
+	// JWTValidator validates JWT tokens from the Authorization header.
+	// If nil, JWT validation is skipped (no auth).
+	JWTValidator *JWTValidator
+
+	// PolicyEngine evaluates JWT claims against policy rules.
+	// If nil, no policy enforcement is applied.
+	PolicyEngine *PolicyEngine
+
+	// PolicyReloader watches the policy file for changes and atomically swaps.
+	// If set, PolicyEngine is derived from it.
+	PolicyReloader *PolicyReloader
+
+	// RateLimiter enforces per-tenant request rate limits.
+	// If nil, no rate limiting is applied.
+	RateLimiter *RateLimiter
+
+	// Templates is the query template engine for agent-safe operations.
+	// If nil, template execution is disabled.
+	Templates *TemplateEngine
+
+	// Audit is the structured audit logger.
+	Audit *AuditLogger
 }
 
 // Run starts the QQL Connect RPC server. It blocks until the server shuts down.
@@ -51,10 +83,23 @@ func Run(cfg Config) error {
 	}
 
 	// Build Connect handler
-	handler := NewHandler(qdrantClient)
+	handler := NewHandlerWithConfig(qdrantClient, cfg.QQLConfig)
+
+	// Build interceptor chain.
+	var interceptors []connect.Interceptor
+	if cfg.Gateway != nil && cfg.Gateway.Audit != nil {
+		// Rate limiter goes first (cheapest check).
+		if cfg.Gateway.RateLimiter != nil {
+			interceptors = append(interceptors, rateLimitInterceptor(cfg.Gateway.RateLimiter))
+		}
+		interceptors = append(interceptors, chainInterceptors(cfg.Gateway))
+	} else {
+		interceptors = append(interceptors, loggingInterceptor())
+	}
+
 	path, svcHandler := qqlpbconnect.NewQQLHandler(
 		handler,
-		connect.WithInterceptors(loggingInterceptor()),
+		connect.WithInterceptors(interceptors...),
 	)
 
 	// Build HTTP mux
@@ -93,6 +138,17 @@ func Run(cfg Config) error {
 	}()
 
 	fmt.Fprintf(os.Stderr, "qql-gateway %s listening on %s (qdrant: %s)\n", Version, cfg.ListenAddr, cfg.QdrantURL)
+	if cfg.Gateway != nil {
+		if cfg.Gateway.JWTValidator != nil {
+			fmt.Fprintf(os.Stderr, "  auth: JWKS enabled\n")
+		}
+		if cfg.Gateway.PolicyEngine != nil {
+			fmt.Fprintf(os.Stderr, "  policy: enabled\n")
+		}
+		if cfg.Gateway.Audit != nil {
+			fmt.Fprintf(os.Stderr, "  audit: enabled\n")
+		}
+	}
 
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("server error: %w", err)

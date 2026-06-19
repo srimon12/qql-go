@@ -150,3 +150,96 @@ func TestParseFormulaMatch(t *testing.T) {
 	assert.Len(t, match2.Values, 1)
 	assert.Equal(t, "premium", match2.Values[0])
 }
+
+func TestParseFormulaDivDefault(t *testing.T) {
+	tests := []struct {
+		name       string
+		query      string
+		hasDefault bool
+		val        float64
+	}{
+		{
+			name:       "div without default",
+			query:      "QUERY 'test' FROM my_col BOOST ($score / popularity)",
+			hasDefault: false,
+		},
+		{
+			name:       "div with default",
+			query:      "QUERY 'test' FROM my_col BOOST ($score / popularity [default=1.5])",
+			hasDefault: true,
+			val:        1.5,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.query)
+			require.NoError(t, err)
+
+			p := NewParser()
+			stmt, err := p.Parse(tokens)
+			require.NoError(t, err)
+
+			qStmt, ok := stmt.(*ast.QueryStmt)
+			require.True(t, ok)
+
+			div, ok := qStmt.Formula.(ast.FormulaDiv)
+			require.True(t, ok)
+
+			if tt.hasDefault {
+				require.NotNil(t, div.ByZeroDefault)
+				assert.Equal(t, tt.val, *div.ByZeroDefault)
+			} else {
+				assert.Nil(t, div.ByZeroDefault)
+			}
+		})
+	}
+}
+
+func TestParseFormulaDecayParams(t *testing.T) {
+	tests := []struct {
+		name    string
+		query   string
+		wantErr bool
+		check   func(t *testing.T, expr ast.FormulaExpr)
+	}{
+		{
+			name:    "decay with decay parameter",
+			query:   "QUERY 'test' FROM my_col BOOST (gauss_decay(geo_distance(48.8, 2.3, location), target=0.0, scale=1000.0, decay=0.8))",
+			wantErr: false,
+			check: func(t *testing.T, expr ast.FormulaExpr) {
+				d, ok := expr.(ast.FormulaDecay)
+				require.True(t, ok)
+				require.NotNil(t, d.Scale)
+				assert.Equal(t, 1000.0, *d.Scale)
+				require.NotNil(t, d.Midpoint)
+				assert.Equal(t, 0.8, *d.Midpoint)
+			},
+		},
+		{
+			name:    "decay with scale expression errors",
+			query:   "QUERY 'test' FROM my_col BOOST (gauss_decay(geo_distance(48.8, 2.3, location), target=0.0, scale=popularity, midpoint=0.5))",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &lexer.Lexer{}
+			tokens, err := l.Tokenize(tt.query)
+			require.NoError(t, err)
+
+			p := NewParser()
+			stmt, err := p.Parse(tokens)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				qStmt, ok := stmt.(*ast.QueryStmt)
+				require.True(t, ok)
+				tt.check(t, qStmt.Formula)
+			}
+		})
+	}
+}

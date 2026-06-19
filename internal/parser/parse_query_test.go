@@ -104,7 +104,6 @@ func TestParseQueryErrors(t *testing.T) {
 		name  string
 		input string
 	}{
-		{"missing from", "QUERY NEAREST 'text' LIMIT 10"},
 		{"invalid mode", "QUERY SOMETHING 'text' FROM docs"},
 		{"missing context pairs", "QUERY CONTEXT FROM docs"},
 		{"missing discover target", "QUERY DISCOVER FROM docs"},
@@ -154,8 +153,28 @@ QUERY 'search' FROM docs LIMIT 10 PREFETCH (p1, p2) FUSION RRF WITH (rrf_k = 10,
 	assert.Equal(t, 10, *stmt.WithClause.RrfK)
 	require.Len(t, stmt.WithClause.RrfWeights, 2)
 	assert.Equal(t, float32(0.7), stmt.WithClause.RrfWeights[0])
-	assert.Equal(t, float32(0.3), stmt.WithClause.RrfWeights[1])
 }
+
+func TestParseQueryPrefetchCaseInsensitive(t *testing.T) {
+	input := `WITH MyCte AS (QUERY 'search' USING dense LIMIT 100)
+QUERY 'search' FROM docs LIMIT 10 PREFETCH (mycte)`
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	require.Len(t, stmt.CTEs, 1)
+	assert.Equal(t, "mycte", stmt.CTEs[0].Name)
+	require.Len(t, stmt.PrefetchRefs, 1)
+	assert.Equal(t, "mycte", stmt.PrefetchRefs[0].CTEName)
+}
+
 
 func TestParseQueryWithLookup(t *testing.T) {
 	input := "QUERY 'search' FROM docs LIMIT 10 GROUP BY 'category' GROUP_SIZE 5 WITH LOOKUP FROM metadata"

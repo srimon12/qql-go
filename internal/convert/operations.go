@@ -80,7 +80,7 @@ func convertSearch(input []byte, collection string) ([]string, error) {
 	}
 
 	// Query handling: check raw query (ID string, vector array, object with text/model/indices)
-	if qm, ok := req.QueryRaw.(map[string]interface{}); ok {
+	if qm, ok := req.QueryRaw.(map[string]any); ok {
 		if t, ok := qm["text"]; ok {
 			if s, ok := t.(string); ok {
 				stmt.QueryText = &s
@@ -101,7 +101,7 @@ func convertSearch(input []byte, collection string) ([]string, error) {
 		}
 	} else if s, ok := req.QueryRaw.(string); ok && s != "" {
 		stmt.QueryID = s
-	} else if vec, ok := req.QueryRaw.([]interface{}); ok && len(vec) > 0 {
+	} else if vec, ok := req.QueryRaw.([]any); ok && len(vec) > 0 {
 		raw := make([]float64, len(vec))
 		for i, v := range vec {
 			switch f := v.(type) {
@@ -112,7 +112,7 @@ func convertSearch(input []byte, collection string) ([]string, error) {
 			}
 		}
 		stmt.RawVector = raw
-	} else if vec, ok := req.Vector.([]interface{}); ok && len(vec) > 0 {
+	} else if vec, ok := req.Vector.([]any); ok && len(vec) > 0 {
 		raw := make([]float64, len(vec))
 		for i, v := range vec {
 			switch f := v.(type) {
@@ -163,7 +163,7 @@ func convertSearch(input []byte, collection string) ([]string, error) {
 
 	// WithLookup
 	if req.WithLookup != nil {
-		if lookupMap, ok := req.WithLookup.(map[string]interface{}); ok {
+		if lookupMap, ok := req.WithLookup.(map[string]any); ok {
 			if coll, ok := lookupMap["collection"]; ok {
 				if s, ok := coll.(string); ok {
 					stmt.WithLookupCollection = &s
@@ -174,7 +174,7 @@ func convertSearch(input []byte, collection string) ([]string, error) {
 
 	// Lookup from
 	if req.LookupFrom != nil {
-		if lookupMap, ok := req.LookupFrom.(map[string]interface{}); ok {
+		if lookupMap, ok := req.LookupFrom.(map[string]any); ok {
 			if coll, ok := lookupMap["collection"]; ok {
 				if s, ok := coll.(string); ok {
 					stmt.LookupFrom = s
@@ -256,7 +256,7 @@ func convertRecommend(input []byte, collection string) ([]string, error) {
 		parts = append(parts, fmt.Sprintf("USING '%s'", req.Using))
 	}
 	if req.LookupFrom != nil {
-		if lookupMap, ok := req.LookupFrom.(map[string]interface{}); ok {
+		if lookupMap, ok := req.LookupFrom.(map[string]any); ok {
 			if coll, ok := lookupMap["collection"]; ok {
 				if cn, ok := coll.(string); ok {
 					if vec, ok := lookupMap["vector"]; ok {

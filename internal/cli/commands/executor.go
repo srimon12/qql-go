@@ -54,7 +54,12 @@ func (e *Executor) ExecuteResult(query string) (*ExecResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	return e.ExecuteNode(node)
+}
 
+// ExecuteNode executes a pre-parsed AST node. This allows the gateway to
+// transform the AST (e.g. inject policy filters) before execution.
+func (e *Executor) ExecuteNode(node ast.ASTNode) (*ExecResponse, error) {
 	switch n := node.(type) {
 	case *ast.ShowCollectionsStmt:
 		return e.doShowCollections()
@@ -863,7 +868,11 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			plan.WriteString("Action: Delete point by ID\n")
 		}
 	case *ast.UpdateVectorStmt:
-		fmt.Fprintf(&plan, "Statement: UPDATE %s SET VECTOR = [...] WHERE id = '%v'\n", n.Collection, n.PointID)
+		name := ""
+		if n.VectorName != nil {
+			name = fmt.Sprintf(" '%s'", *n.VectorName)
+		}
+		fmt.Fprintf(&plan, "Statement: UPDATE %s SET VECTOR%s = [...] WHERE id = '%v'\n", n.Collection, name, n.PointID)
 		fmt.Fprintf(&plan, "Vector length: %d\n", len(n.Vector))
 		plan.WriteString("Action: Update point vector\n")
 	case *ast.UpdatePayloadStmt:
@@ -1364,7 +1373,14 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 		if err != nil {
 			return nil, err
 		}
-		vectorsConfig = qdrant.NewVectorsConfigMap(collectionVectorParams(denseSize, n.Rerank))
+		params := collectionVectorParams(denseSize, n.Rerank)
+		if n.DenseVector != nil {
+			if vp, ok := params[denseVectorName]; ok {
+				delete(params, denseVectorName)
+				params[*n.DenseVector] = vp
+			}
+		}
+		vectorsConfig = qdrant.NewVectorsConfigMap(params)
 	}
 
 	collection := &qdrant.CreateCollection{
@@ -1402,8 +1418,12 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 		}
 		collection.SparseVectorsConfig = qdrant.NewSparseVectorsConfig(sparseMap)
 	} else if n.Hybrid || n.Rerank {
+		sparseName := sparseVectorName
+		if n.SparseVector != nil {
+			sparseName = *n.SparseVector
+		}
 		collection.SparseVectorsConfig = qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
-			sparseVectorName: {
+			sparseName: {
 				Modifier: qdrant.Modifier_Idf.Enum(),
 			},
 		})

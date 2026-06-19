@@ -87,6 +87,10 @@ The `text` field is required for auto-vectorization.
 
 The `vector` key stores pre-computed vectors. Use a map of named vectors for multi-vector collections. Each value can be a 1D array (dense) or 2D array (multivector).
 
+> [!WARNING]
+> Payload keys that collide with QQL reserved keywords (such as `type`, `limit`, `using`, etc.) must be quoted (e.g. `{'type': 'document'}`). Otherwise, they will cause a parser syntax error.
+
+
 ## QUERY
 
 The unified query statement with multiple modes:
@@ -167,6 +171,15 @@ QUERY 'search' FROM <collection> LIMIT 10
     sparse SCORE THRESHOLD 0.3
   )
   FUSION RRF WITH (rrf_k = 20, rrf_weights = [0.6, 0.4])
+
+-- Pure fusion (no search target, just fuse CTE results)
+FUSION RRF LIMIT 10 PREFETCH (dense, sparse)
+
+-- Pure fusion with CTEs
+WITH
+  _pf0 AS (QUERY 'search' USING 'dense' LIMIT 100),
+  _pf1 AS (QUERY 'search' USING 'sparse' LIMIT 100)
+FUSION RRF LIMIT 10 PREFETCH (_pf0, _pf1)
 
 -- PDF retrieval: two-stage with mean-pooled vectors
 WITH

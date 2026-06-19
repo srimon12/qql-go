@@ -32,6 +32,12 @@ func convertRESTQueryToAST(req *RESTQueryRequest, collection string) (*ast.Query
 		stmt.Using = &using
 	}
 
+	// Fusion — explicitly declared by the user in the REST payload
+	if req.Query.Fusion != "" {
+		fusion := req.Query.Fusion
+		stmt.FusionType = &fusion
+	}
+
 	// WithPayload
 	if req.WithPayload != nil {
 		stmt.WithPayload = buildPayloadSelector(req.WithPayload)
@@ -72,6 +78,12 @@ func convertRESTPrefetchToAST(pf *RESTPrefetch, collection, prefix string) (*ast
 	if pf.Using != "" {
 		using := pf.Using
 		stmt.Using = &using
+	}
+
+	// Fusion — explicitly declared by the user in the prefetch REST payload
+	if pf.Query.Fusion != "" {
+		fusion := pf.Query.Fusion
+		stmt.FusionType = &fusion
 	}
 
 	// ScoreThreshold

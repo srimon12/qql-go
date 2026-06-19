@@ -24,6 +24,7 @@ Translate user intent directly into QQL syntax:
 - Hybrid retrieval with DBSF fusion -> `USING HYBRID FUSION DBSF`
 - Hybrid retrieval with tuned RRF -> `USING HYBRID WITH (rrf_k = ..., rrf_weights = [...])`
 - Multi-stage retrieval -> `WITH <name> AS (...), ... QUERY ... PREFETCH (name1, name2) FUSION RRF`
+- Pure fusion (no search target) -> `FUSION RRF LIMIT <n> PREFETCH (<name1>, <name2>)`
 - Multi-stage with different vectors -> `WITH _pf0 AS (QUERY ... USING 'dense'), _pf1 AS (QUERY ... USING 'sparse') QUERY ... USING 'colbert' PREFETCH (_pf0, _pf1)`
 - PDF retrieval (ColBERT/ColPali) -> create with `MULTIVECTOR (comparator = 'max_sim')` + `HNSW (m = 0)`, search with prefetch + USING
 - Keyword-only retrieval -> `USING SPARSE`
@@ -92,7 +93,7 @@ INSERT INTO <name> VALUES { 'text': '...', 'category': '...' }, {...}, {...}
 -- Insert with pre-computed named vectors (dense + multivector)
 INSERT INTO <name> VALUES { 'id': 1, 'text': '...', 'vector': {'dense': [0.1, 0.2], 'colbert': [[0.1, 0.2], [0.3, 0.4]]} }
 
-UPDATE <name> SET VECTOR = [<float>, ...] WHERE id = <id>
+UPDATE <name> SET VECTOR ['vector_name'] = [<float>, ...] WHERE id = <id>
 UPDATE <name> SET PAYLOAD = {...} WHERE <filter_expression>
 DELETE FROM <name> WHERE <filter_expression>
 ```
@@ -115,18 +116,22 @@ FROM <collection>
   [RERANK [MODEL '<model>']]
   [EXACT]
   [LIMIT <n>] [OFFSET <n>] [SCORE THRESHOLD <float>]
+
+-- Pure fusion (no search target, just fuse CTE results)
+FUSION <RRF | DBSF> [FROM <collection>] [LIMIT <n>] [PREFETCH (<name1>, <name2>)]
 ```
 
 ### BOOST Formula Expressions
 The `BOOST` clause applies a mathematical expression to modify search scores.
 - **Variables:** `$score` (current score), bare names for payload fields (e.g., `popularity`, `freshness`)
-- **Operators:** `+`, `-`, `*`, `/` with standard precedence (`*` and `/` before `+` and `-`)
+- **Operators:** `+`, `-`, `*`, `/` (where `/` supports optional `[default=value]` suffix for division-by-zero safety)
 - **Functions:** `ABS(x)`, `SQRT(x)`, `LOG(x)`, `LN(x)`, `EXP(x)`, `POW(base, exp)`
 - **Geo:** `GEO_DISTANCE(lat, lon, field)` or `GEO_DISTANCE({'lat': x, 'lon': y}, field)`
-- **Decay:** `GAUSS_DECAY(x, target, scale, midpoint)`, `EXP_DECAY(...)`, `LIN_DECAY(...)` — supports kwargs: `gauss_decay(x, scale=5000)`
+- **Decay:** `GAUSS_DECAY(x, target, scale, midpoint)`, `EXP_DECAY(...)`, `LIN_DECAY(...)` — supports kwargs: `gauss_decay(x, scale=5000, decay=0.5)` or `gauss_decay(x, target=datetime('2026-01-01'), scale=30d, midpoint=0.5)`
 - **Datetime:** `datetime('2026-01-01T00:00:00Z')` (literal), `datetime_key('field')` (payload field)
 - **Conditional:** `CASE WHEN <filter> THEN <expr> ELSE <expr> END`
 - **Defaults:** `DEFAULTS (var1 = 1.0, var2 = 0.0)` — fallback values for missing payload fields
+
 
 Examples:
 ```sql
@@ -141,6 +146,10 @@ BOOST ($score + exp_decay(datetime_key('published_at'), target=datetime('2026-06
 ```sql
 WITH <name> AS (QUERY ... USING '<vector>' [LIMIT <n>]) [, <name> AS (QUERY ...)]
 QUERY ... FROM <collection> USING '<vector>' PREFETCH (<name>, ...) FUSION RRF LIMIT <n>
+
+-- Pure fusion (no search target)
+WITH <name> AS (QUERY ...), <name> AS (QUERY ...)
+FUSION RRF LIMIT <n> PREFETCH (<name1>, <name2>)
 ```
 
 **Notes:**

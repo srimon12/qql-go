@@ -67,6 +67,11 @@ WITH dense AS (QUERY 'care' USING dense LIMIT 200),
      sparse AS (QUERY 'care' USING sparse LIMIT 300)
 QUERY 'care' FROM docs LIMIT 10 PREFETCH (dense, sparse) FUSION RRF
 
+-- Pure fusion (no search target, just combine CTE results)
+WITH dense AS (QUERY 'care' USING dense LIMIT 200),
+     sparse AS (QUERY 'care' USING sparse LIMIT 300)
+FUSION RRF LIMIT 10 PREFETCH (dense, sparse)
+
 -- Recommendation by example
 QUERY RECOMMEND WITH (positive = ('id-1', 'id-2'), negative = ('id-3')) FROM docs LIMIT 5
 
@@ -119,8 +124,10 @@ INSERT INTO docs VALUES {'id': 1, 'text': 'hello', 'topic': 'search'} USING HYBR
 INSERT INTO docs VALUES {'id': 1, 'vector': {'dense': [0.1, 0.2, 0.3], 'colbert': [[0.1, 0.2], [0.3, 0.4]]}}
 SELECT * FROM docs WHERE id = 1
 SCROLL FROM docs WHERE topic = 'search' LIMIT 10
+UPDATE docs SET VECTOR 'colbert' = [0.1, 0.2, 0.3] WHERE id = 1
 UPDATE docs SET PAYLOAD = {'status': 'reviewed'} WHERE id = 1
 DELETE FROM docs WHERE status = 'archived'
+
 ```
 
 ### Score boosting (BOOST)

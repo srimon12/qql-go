@@ -136,7 +136,23 @@ func (p *Parser) parseFormulaInfixExpression(left ast.FormulaExpr) (ast.FormulaE
 	case lexer.TokenKindStar:
 		return ast.FormulaMul{Left: left, Right: right}, nil
 	case lexer.TokenKindSlash:
-		return ast.FormulaDiv{Left: left, Right: right}, nil
+		var byZeroDefault *float64
+		if p.peek().Kind == lexer.TokenKindLbracket && p.peekNext().Kind == lexer.TokenKindIdentifier && asciiEqual(p.peekNext().Value, "DEFAULT") {
+			p.advance() // consume '['
+			p.advance() // consume 'default'
+			if _, err := p.expect(lexer.TokenKindEquals); err != nil {
+				return nil, err
+			}
+			val, err := p.parseNumericLiteral()
+			if err != nil {
+				return nil, err
+			}
+			byZeroDefault = &val
+			if _, err := p.expect(lexer.TokenKindRbracket); err != nil {
+				return nil, err
+			}
+		}
+		return ast.FormulaDiv{Left: left, Right: right, ByZeroDefault: byZeroDefault}, nil
 	default:
 		return nil, errors.NewQQLSyntaxError("Unknown formula operator: "+tok.Value, tok.Pos)
 	}
@@ -361,10 +377,14 @@ func (p *Parser) parseFormulaFunctionCall(funcName string, pos int) (ast.Formula
 		if len(args) > 2 {
 			if c, ok := args[2].(ast.FormulaConstant); ok {
 				scale = &c.Value
+			} else {
+				return nil, errors.NewQQLSyntaxError("scale argument in decay function must be a constant", pos)
 			}
 		} else if val, ok := kwargs["scale"]; ok {
 			if c, ok := val.(ast.FormulaConstant); ok {
 				scale = &c.Value
+			} else {
+				return nil, errors.NewQQLSyntaxError("scale argument in decay function must be a constant", pos)
 			}
 		}
 
@@ -372,10 +392,20 @@ func (p *Parser) parseFormulaFunctionCall(funcName string, pos int) (ast.Formula
 		if len(args) > 3 {
 			if c, ok := args[3].(ast.FormulaConstant); ok {
 				midpoint = &c.Value
+			} else {
+				return nil, errors.NewQQLSyntaxError("midpoint/decay argument in decay function must be a constant", pos)
 			}
 		} else if val, ok := kwargs["midpoint"]; ok {
 			if c, ok := val.(ast.FormulaConstant); ok {
 				midpoint = &c.Value
+			} else {
+				return nil, errors.NewQQLSyntaxError("midpoint argument in decay function must be a constant", pos)
+			}
+		} else if val, ok := kwargs["decay"]; ok {
+			if c, ok := val.(ast.FormulaConstant); ok {
+				midpoint = &c.Value
+			} else {
+				return nil, errors.NewQQLSyntaxError("decay argument in decay function must be a constant", pos)
 			}
 		}
 

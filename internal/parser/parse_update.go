@@ -19,6 +19,11 @@ func (p *Parser) parseUpdate() (ast.ASTNode, error) {
 	switch p.peek().Kind {
 	case lexer.TokenKindVector:
 		p.advance()
+		var vectorName *string
+		if p.peek().Kind == lexer.TokenKindString || p.peek().Kind == lexer.TokenKindIdentifier {
+			nameTok := p.advance()
+			vectorName = &nameTok.Value
+		}
 		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
 			return nil, err
 		}
@@ -51,6 +56,7 @@ func (p *Parser) parseUpdate() (ast.ASTNode, error) {
 			Collection: collection,
 			PointID:    pointID,
 			Vector:     vector,
+			VectorName: vectorName,
 		}, nil
 	case lexer.TokenKindPayload:
 		p.advance()

@@ -1,0 +1,23 @@
+# Query templates for the gateway demo.
+# Agents and applications invoke these by name instead of writing raw QQL.
+# Variables use {name} syntax. JWT claims are available as {claims.<field>}.
+
+templates:
+  search_docs:
+    description: "Search documents with hybrid retrieval"
+    query: "QUERY '{query}' FROM docs LIMIT {limit} USING HYBRID"
+    require_claims: []
+
+  scroll_tenant:
+    description: "Scroll documents scoped to the caller's tenant"
+    query: "SCROLL FROM docs LIMIT {limit}"
+    require_claims: []
+
+  search_by_topic:
+    description: "Search within a specific topic"
+    query: "QUERY '{query}' FROM docs LIMIT {limit} WHERE topic = '{topic}' USING HYBRID"
+    require_claims: []
+
+  list_collections:
+    description: "List all collections"
+    query: "SHOW COLLECTIONS"
