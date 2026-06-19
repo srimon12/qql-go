@@ -1,7 +1,7 @@
 # QQL / Qdrant Compatibility Matrix
 
 > This document tracks which QQL versions support which Qdrant features, across both Python and Go implementations.
-> Last updated: 2026-05-21
+> Last updated: 2026-06-19
 
 ## Legend
 
@@ -24,16 +24,16 @@
 |---|---|---|---|---|
 | Create collection | `create_collection` | ✅ v1.0 | ✅ v0.1 | Go auto-creates on insert; Python supports explicit create and insert-time create paths |
 | Create with custom distance | `distance: DOT / EUCLID / MANHATTAN / COSINE` | ❌ | ❌ | Locked to COSINE |
-| Create with quantization | `quantization_config` | ✅ v1.4 | ✅ v0.1.4 | `QUANTIZE SCALAR|BINARY|PRODUCT|TURBO` |
-| Create with on-disk payload | `on_disk_payload` | ❌ | ✅ v0.2.0 | Go supports via `WITH PARAMS { on_disk_payload: true }` |
-| Create with HNSW config | `hnsw_config` | ✅ v2.5.0 | ✅ v0.2.0 | Go and Python now support `WITH HNSW { ... }` block |
-| Create with optimizer config | `optimizers_config` | ✅ v2.5.0 | ✅ v0.2.0 | Via `WITH OPTIMIZERS { ... }` block |
-| Create with vectors config | `vectors_config` | ✅ v2.5.0 | ✅ v0.2.0 | Via `WITH VECTORS { on_disk: true }` |
-| Create with collection params | `CollectionParams` | ✅ v2.5.0 | ✅ v0.2.0 | Via `WITH PARAMS { replication_factor, write_consistency_factor, on_disk_payload }` |
+| Create with quantization | `quantization_config` | ✅ v1.4 | ✅ v0.4.0 | `WITH QUANTIZATION (type = 'scalar'|'binary'|'product'|'turbo', ...)` |
+| Create with on-disk payload | `on_disk_payload` | ❌ | ✅ v0.2.0 | Go supports via `WITH PARAMS (on_disk_payload = true)` |
+| Create with HNSW config | `hnsw_config` | ✅ v2.5.0 | ✅ v0.2.0 | Go and Python now support `WITH HNSW (...)` block |
+| Create with optimizer config | `optimizers_config` | ✅ v2.5.0 | ✅ v0.2.0 | Via `WITH OPTIMIZERS (...)` block |
+| Create with vectors config | `vectors_config` | ✅ v2.5.0 | ✅ v0.2.0 | Via `WITH VECTORS (on_disk = true)` |
+| Create with collection params | `CollectionParams` | ✅ v2.5.0 | ✅ v0.2.0 | Via `WITH PARAMS (replication_factor = N, ...)` |
 | Alter collection | `update_collection` | ✅ v2.5.0 | ✅ v0.2.0 | `ALTER COLLECTION ... WITH ... QUANTIZE` |
 | Alter with quantization disable | `Disabled.DISABLED` | ✅ v2.5.0 | ✅ v0.2.0 | `QUANTIZE DISABLED` |
 | Create with sparse vectors | `sparse_vectors_config` | ✅ v1.0 | ✅ v0.1 | Via `HYBRID` |
-| Create with multivectors | `multivector_config` | ❌ | ⚠️ v0.1 | Go supports `CREATE COLLECTION ... HYBRID RERANK` with a ColBERT multivector; Python has no equivalent collection topology |
+| Create with multivectors | `multivector_config` | ❌ | ✅ v0.5.0 | Go supports ColBERT/ColPali named vectors via `WITH MULTIVECTOR (comparator = 'max_sim')` and `HNSW (m = 0)` |
 | Drop collection | `delete_collection` | ✅ v1.0 | ✅ v0.1 | |
 | List collections | `get_collections` | ✅ v1.0 | ✅ v0.1 | `SHOW COLLECTIONS` |
 | Collection info | `get_collection` | ✅ v2.5.0 | ✅ v0.2.0 | Both support `SHOW COLLECTION <name>`. Go now shows per-vector on_disk, hnsw inline_storage, read_fan_out_factor, on_disk_payload |
@@ -48,7 +48,7 @@
 | Insert bulk | `upsert` (batch) | ✅ v1.0 | ✅ v0.1 | |
 | Get point by ID | `retrieve` | ✅ v2.2 | ✅ v0.1.4 | `SELECT` statement |
 | Update payload | `set_payload` | ✅ v2.3 | ✅ v0.1.5 | `UPDATE ... SET PAYLOAD` |
-| Update vector | `update_vectors` | ✅ v2.3 | ✅ v0.1.5 | `UPDATE ... SET VECTOR` |
+| Update vector | `update_vectors` | ✅ v2.3 | ✅ v0.5.0 | `UPDATE ... SET VECTOR ['vector_name']` |
 | Delete point by ID | `delete` | ✅ v1.0 | ✅ v0.1 | |
 | Delete points by filter | `delete` (filter) | ✅ v2.5.0 | ✅ v0.1 | Both support filter-based `DELETE FROM ... WHERE ...` |
 | Delete payload keys | `delete_payload` | ❌ | ❌ | Gap |
@@ -63,17 +63,17 @@
 | Hybrid search (RRF) | `query_points` + `Fusion.RRF` | ✅ v1.0 | ✅ v0.1 | |
 | Sparse-only search | `query_points` (sparse vector) | ✅ v1.0 | ✅ v0.1 | |
 | Exact search | `exact=true` | ✅ v1.0 | ✅ v0.1 | `EXACT` shorthand |
-| HNSW ef tuning | `search_params.hnsw_ef` | ✅ v1.0 | ✅ v0.1 | `WITH { hnsw_ef: N }` |
-| ACORN filtered search | `search_params.acorn` | ✅ v1.0 | ✅ v0.1 | `WITH { acorn: true }` |
+| HNSW ef tuning | `search_params.hnsw_ef` | ✅ v1.0 | ✅ v0.1 | `WITH (hnsw_ef = N)` |
+| ACORN filtered search | `search_params.acorn` | ✅ v1.0 | ✅ v0.1 | `WITH (acorn = true)` |
 | Search with filters | `filter` | ✅ v1.0 | ✅ v0.1 | `WHERE` clause |
 | Grouped search | `query_points_groups` | ✅ v2.3 | ✅ v0.1.5 | `GROUP BY ... [GROUP_SIZE ...]` |
 | Search pagination | `offset` | ✅ v2.5.0 | ✅ v0.2.0 | `OFFSET <n>`; not compatible with `GROUP BY` |
-| Batch search | `search_batch` | ❌ | ❌ | Gap |
-| MMR diversity | `diversity` param (v1.15+) | ✅ v2.5.0 | ✅ v0.2.0 | `WITH { mmr_diversity, mmr_candidates }` for dense search and the dense leg of hybrid search |
-| Score boosting | `rescore` / `formula` | ❌ | ❌ | Gap |
-| Multivector search | `multivector` | ❌ | ⚠️ v0.1 | Go supports the ColBERT multivector path for cloud rerank collections, not a general multivector search surface |
+| Batch search | `search_batch` / `query_batch` | ✅ v2.5.0 | ✅ v0.4.0 | Go supports query batching via Connect RPC gateway `ExecBatch` or public SDK `BatchQuery` |
+| MMR diversity | `diversity` param (v1.15+) | ✅ v2.5.0 | ✅ v0.2.0 | `WITH (mmr_diversity = D, mmr_candidates = N)` for dense search and the dense leg of hybrid search |
+| Score boosting | `rescore` / `formula` | ✅ v2.5.0 | ✅ v0.4.0 | Formula Pratt parsing engine compiling to Qdrant formula. Supports division defaults and decay targets in `v0.5.0` |
+| Multivector search | `multivector` | ❌ | ✅ v0.5.0 | Go supports named vectors and late-interaction (ColBERT) querying |
 | Rerank (cross-encoder) | `rerank` / Fastembed | ✅ v1.0 (local FastEmbed post-processing) | ⚠️ v0.1 (cloud only) | Go supports cloud rerank queries, but local/external rerank is not implemented |
-| Relevance feedback | `feedback` query | ❌ | ❌ | Gap |
+| Relevance feedback | `feedback` query | ❌ | ✅ v0.5.0 | Exposes `QUERY RELEVANCE FEEDBACK` modes in executor |
 
 ### Recommend
 
@@ -92,14 +92,14 @@
 
 | Feature | Qdrant API | Python `qql-cli` | Go `qql-go` | Notes |
 |---|---|---|---|---|
-| Keyword index | `create_payload_index` | ✅ v2.5.0 | ✅ v0.1 | Both support keyword indexes; both support advanced keyword params via `WITH { is_tenant, on_disk, enable_hnsw }` |
+| Keyword index | `create_payload_index` | ✅ v2.5.0 | ✅ v0.1 | Both support keyword indexes; both support advanced keyword params via `WITH (...)` |
 | Integer index | `create_payload_index` | ✅ v2.5.0 | ✅ v0.1 | |
 | Float index | `create_payload_index` | ✅ v2.5.0 | ✅ v0.1 | |
 | Bool index | `create_payload_index` | ✅ v2.5.0 | ✅ v0.1 | |
-| Full-text index | `create_payload_index` (text) | ✅ v2.5.0 | ✅ v0.1 | Both support text tokenizer/index tuning via `WITH { ... }` |
+| Full-text index | `create_payload_index` (text) | ✅ v2.5.0 | ✅ v0.1 | Both support text tokenizer/index tuning via `WITH (...)` |
 | Geo index | `create_payload_index` (geo) | ✅ v2.5.0 | ✅ v0.1 | Basic geo index support in both |
 | Datetime index | `create_payload_index` (datetime) | ✅ v2.5.0 | ✅ v0.1 | |
-| UUID index | `create_payload_index` (uuid) | ✅ v2.5.0 | ✅ v0.1 | Both support advanced UUID params via `WITH { is_tenant, on_disk, enable_hnsw }` |
+| UUID index | `create_payload_index` (uuid) | ✅ v2.5.0 | ✅ v0.1 | Both support advanced UUID params via `WITH (...)` |
 
 ### Filtering
 
@@ -129,15 +129,16 @@
 | QQL Version | Minimum Qdrant | Recommended Qdrant | Tested Qdrant Versions |
 |---|---|---|---|
 | Python 2.5.0 | 1.13.0 | 1.13.x | 1.13.0 |
-| Go 0.3.0 | 1.13.0 | 1.13.x | 1.13.0 |
+| Go 0.4.0 | 1.13.0 | 1.13.x | 1.13.0 |
+| Go 0.5.0 | 1.13.0 | 1.13.x | 1.13.0 |
 
 ### Language Support
 
 | QQL Version | Python `qql-cli` | Go `qql-go` | Feature Parity |
 |---|---|---|---|
-| Current | 2.5.0 | 0.3.0 | ~99% |
+| Current | 2.5.0 | 0.5.0 | ~100% |
 | Target (Phase 1) | 2.5.0 | 0.3.0 | ~99% |
-| Target (Phase 2) | 2.5.0 | 0.4.0 | ~100% |
+| Target (Phase 2) | 2.5.0 | 0.5.0 | ~100% |
 
 ---
 

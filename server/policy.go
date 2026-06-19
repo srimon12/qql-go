@@ -98,9 +98,9 @@ type EvaluatedPolicy struct {
 	InjectOp        string
 	// InjectFilters holds multiple filter conditions to inject (AND logic).
 	// Each entry is resolved independently from claims or static values.
-	InjectFilters   []ResolvedFilter
-	MaxLimit        int
-	MatchedRule     int // index of matched rule, -1 if none
+	InjectFilters []ResolvedFilter
+	MaxLimit      int
+	MatchedRule   int // index of matched rule, -1 if none
 }
 
 // ResolvedFilter is a single resolved filter condition ready for injection.

@@ -175,7 +175,6 @@ QUERY 'search' FROM docs LIMIT 10 PREFETCH (mycte)`
 	assert.Equal(t, "mycte", stmt.PrefetchRefs[0].CTEName)
 }
 
-
 func TestParseQueryWithLookup(t *testing.T) {
 	input := "QUERY 'search' FROM docs LIMIT 10 GROUP BY 'category' GROUP_SIZE 5 WITH LOOKUP FROM metadata"
 	l := &lexer.Lexer{}

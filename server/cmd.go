@@ -5,8 +5,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/srimon12/qql-go/internal/config"
 	"github.com/spf13/cobra"
+	"github.com/srimon12/qql-go/internal/config"
 )
 
 // NewServeCmd returns the cobra command for `qql-go serve`.
@@ -24,7 +24,7 @@ func NewServeCmd() *cobra.Command {
 		roleClaim    string
 		tenantClaim  string
 
-		policyFile  string
+		policyFile   string
 		policyReload bool
 
 		auditEnable bool
@@ -38,7 +38,7 @@ func NewServeCmd() *cobra.Command {
 		templateFile string
 
 		// Embedding flags.
-		inferenceMode    string
+		inferenceMode      string
 		embeddingEndpoint  string
 		embeddingModel     string
 		embeddingDimension int

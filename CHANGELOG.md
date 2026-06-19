@@ -6,6 +6,10 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 ## [Unreleased]
 
+- No unreleased changes yet.
+
+## [0.5.0] - 2026-06-19
+
 ### Added
 
 - **Multivector (ColBERT) support** — `CREATE COLLECTION` accepts `WITH MULTIVECTOR (comparator = 'max_sim')` on named vectors for ColBERT/ColPali-style late interaction models. `HNSW (m = 0)` disables HNSW indexing on reranking vectors, reducing RAM and speeding up inserts.

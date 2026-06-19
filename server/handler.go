@@ -180,7 +180,7 @@ func (h *Handler) ExecBatch(
 		}
 
 		results := make([]*qqlpb.ExecResponse, len(nodes))
-		
+
 		if qqlResults != nil {
 			// Fast path succeeded
 			for i, result := range qqlResults {
@@ -449,8 +449,6 @@ func transformNode(injector *ASTInjector, node ast.ASTNode) error {
 		return nil
 	}
 }
-
-
 
 // collectionFromNode extracts the collection name from an AST node.
 func collectionFromNode(node ast.ASTNode) string {

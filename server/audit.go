@@ -89,7 +89,7 @@ func (al *AuditLogger) LogDenied(claims *JWTClaims, operation, collection, reaso
 
 type auditMetaKey struct{}
 
-// AuditMeta is a mutable object stored in the request context. 
+// AuditMeta is a mutable object stored in the request context.
 // Handlers populate this with AST data (e.g. injected filters, specific collection)
 // so the interceptor can log it accurately.
 type AuditMeta struct {

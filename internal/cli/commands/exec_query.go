@@ -473,7 +473,6 @@ func (e *Executor) buildCTEPrefetch(ctx context.Context, stmt *ast.QueryStmt, ct
 	return pq, nil
 }
 
-
 func (e *Executor) executeFlatQuery(ctx context.Context, p *pipeline.QueryPipeline, state *pipeline.QueryState) (*ExecResponse, error) {
 	req := p.BuildFlatRequest(state)
 	// Always request payload — users want to see the data.

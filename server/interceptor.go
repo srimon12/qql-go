@@ -126,13 +126,13 @@ func (c *chainInt) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 
 		// Step 4: Audit log.
 		latency := time.Since(start)
-		
+
 		entry := AuditEntry{
 			Timestamp: time.Now(),
 			Operation: operationFromProcedure(procedure),
 			LatencyMs: latency.Milliseconds(),
 		}
-		
+
 		if meta.Collection != "" {
 			entry.Collection = meta.Collection
 		}
@@ -146,7 +146,7 @@ func (c *chainInt) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 			entry.LimitCapped = meta.LimitCapped
 		}
 		entry.RuleIndex = meta.RuleIndex
-		
+
 		if err != nil {
 			entry.Status = "error"
 			entry.Error = err.Error()
@@ -154,7 +154,7 @@ func (c *chainInt) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 			entry.Status = "ok"
 			entry.Allowed = true
 		}
-		
+
 		// Fill claims
 		if claims != nil {
 			entry.Subject = claims.Subject
@@ -162,7 +162,7 @@ func (c *chainInt) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 			entry.TenantID = claims.TenantID
 			entry.Roles = claims.Roles
 		}
-		
+
 		c.cfg.Audit.Log(entry)
 
 		return resp, err
