@@ -62,8 +62,8 @@ func (c *chainInt) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 		start := time.Now()
 		procedure := req.Spec().Procedure
 
-		// Skip auth for health checks and convert (utility endpoints).
-		if procedure == "/qql.QQL/Health" || procedure == "/qql.QQL/Convert" {
+		// Skip auth for health checks, convert, and explain (utility endpoints).
+		if procedure == "/qql.QQL/Health" || procedure == "/qql.QQL/Convert" || procedure == "/qql.QQL/Explain" {
 			resp, err := next(ctx, req)
 			c.cfg.Audit.Log(AuditEntry{
 				Timestamp: time.Now(),
