@@ -67,6 +67,11 @@ WITH dense AS (QUERY 'care' USING dense LIMIT 200),
      sparse AS (QUERY 'care' USING sparse LIMIT 300)
 QUERY 'care' FROM docs LIMIT 10 PREFETCH (dense, sparse) FUSION RRF
 
+-- Pure fusion (no search target, just combine CTE results)
+WITH dense AS (QUERY 'care' USING dense LIMIT 200),
+     sparse AS (QUERY 'care' USING sparse LIMIT 300)
+FUSION RRF LIMIT 10 PREFETCH (dense, sparse)
+
 -- Recommendation by example
 QUERY RECOMMEND WITH (positive = ('id-1', 'id-2'), negative = ('id-3')) FROM docs LIMIT 5
 

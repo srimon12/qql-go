@@ -168,6 +168,15 @@ QUERY 'search' FROM <collection> LIMIT 10
   )
   FUSION RRF WITH (rrf_k = 20, rrf_weights = [0.6, 0.4])
 
+-- Pure fusion (no search target, just fuse CTE results)
+FUSION RRF LIMIT 10 PREFETCH (dense, sparse)
+
+-- Pure fusion with CTEs
+WITH
+  _pf0 AS (QUERY 'search' USING 'dense' LIMIT 100),
+  _pf1 AS (QUERY 'search' USING 'sparse' LIMIT 100)
+FUSION RRF LIMIT 10 PREFETCH (_pf0, _pf1)
+
 -- PDF retrieval: two-stage with mean-pooled vectors
 WITH
   _pf0 AS (QUERY [0.1, 0.2, 0.3] USING 'mean_pooling_columns' LIMIT 100),

@@ -24,6 +24,7 @@ Translate user intent directly into QQL syntax:
 - Hybrid retrieval with DBSF fusion -> `USING HYBRID FUSION DBSF`
 - Hybrid retrieval with tuned RRF -> `USING HYBRID WITH (rrf_k = ..., rrf_weights = [...])`
 - Multi-stage retrieval -> `WITH <name> AS (...), ... QUERY ... PREFETCH (name1, name2) FUSION RRF`
+- Pure fusion (no search target) -> `FUSION RRF LIMIT <n> PREFETCH (<name1>, <name2>)`
 - Multi-stage with different vectors -> `WITH _pf0 AS (QUERY ... USING 'dense'), _pf1 AS (QUERY ... USING 'sparse') QUERY ... USING 'colbert' PREFETCH (_pf0, _pf1)`
 - PDF retrieval (ColBERT/ColPali) -> create with `MULTIVECTOR (comparator = 'max_sim')` + `HNSW (m = 0)`, search with prefetch + USING
 - Keyword-only retrieval -> `USING SPARSE`
@@ -115,6 +116,9 @@ FROM <collection>
   [RERANK [MODEL '<model>']]
   [EXACT]
   [LIMIT <n>] [OFFSET <n>] [SCORE THRESHOLD <float>]
+
+-- Pure fusion (no search target, just fuse CTE results)
+FUSION <RRF | DBSF> [FROM <collection>] [LIMIT <n>] [PREFETCH (<name1>, <name2>)]
 ```
 
 ### BOOST Formula Expressions
@@ -141,6 +145,10 @@ BOOST ($score + exp_decay(datetime_key('published_at'), target=datetime('2026-06
 ```sql
 WITH <name> AS (QUERY ... USING '<vector>' [LIMIT <n>]) [, <name> AS (QUERY ...)]
 QUERY ... FROM <collection> USING '<vector>' PREFETCH (<name>, ...) FUSION RRF LIMIT <n>
+
+-- Pure fusion (no search target)
+WITH <name> AS (QUERY ...), <name> AS (QUERY ...)
+FUSION RRF LIMIT <n> PREFETCH (<name1>, <name2>)
 ```
 
 **Notes:**
