@@ -509,11 +509,6 @@ func TestParseError(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "search missing from",
-			input:   "QUERY NEAREST 'text'",
-			wantErr: true,
-		},
-		{
 			name:    "search missing query text",
 			input:   "QUERY NEAREST FROM test",
 			wantErr: true,

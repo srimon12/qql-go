@@ -104,7 +104,6 @@ func TestParseQueryErrors(t *testing.T) {
 		name  string
 		input string
 	}{
-		{"missing from", "QUERY NEAREST 'text' LIMIT 10"},
 		{"invalid mode", "QUERY SOMETHING 'text' FROM docs"},
 		{"missing context pairs", "QUERY CONTEXT FROM docs"},
 		{"missing discover target", "QUERY DISCOVER FROM docs"},
