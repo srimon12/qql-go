@@ -1,0 +1,359 @@
+{
+  "1. Simple Semantic Search": {
+    "description": "Standard dense vector search on the 'dense' vector space.",
+    "json": {
+      "query": {
+        "text": "microservices architecture",
+        "model": "text-embedding-all-minilm-l6-v2-embedding"
+      },
+      "using": "dense",
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "2. Sparse Keyword Search": {
+    "description": "Retrieve documents matching keywords using the BM25 'sparse' vector.",
+    "json": {
+      "query": {
+        "text": "Kubernetes",
+        "model": "Qdrant/bm25"
+      },
+      "using": "sparse",
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "3. Hybrid Retrieval (Dense + Sparse)": {
+    "description": "Performs dense and sparse retrieval in parallel, combining results using RRF fusion.",
+    "json": {
+      "prefetch": [
+        {
+          "query": {
+            "text": "microservices design",
+            "model": "text-embedding-all-minilm-l6-v2-embedding"
+          },
+          "using": "dense"
+        },
+        {
+          "query": {
+            "text": "microservices design",
+            "model": "Qdrant/bm25"
+          },
+          "using": "sparse"
+        }
+      ],
+      "query": {
+        "fusion": "rrf"
+      },
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "4. Metadata Filtering (Keyword match)": {
+    "description": "Dense search with an added metadata filter restricting documents to specific fields.",
+    "json": {
+      "query": {
+        "text": "vulnerability disclosure",
+        "model": "text-embedding-all-minilm-l6-v2-embedding"
+      },
+      "using": "dense",
+      "filter": {
+        "must": [
+          {"key": "priority", "match": {"value": "high"}}
+        ]
+      },
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "5. Complex Multi-clause Filter": {
+    "description": "Combines multiple MUST and SHOULD clauses (AND/OR logics) on priority and city.",
+    "json": {
+      "query": {
+        "text": "security compliance",
+        "model": "text-embedding-all-minilm-l6-v2-embedding"
+      },
+      "using": "dense",
+      "filter": {
+        "must": [
+          {"key": "status", "match": {"value": "active"}}
+        ],
+        "should": [
+          {"key": "city", "match": {"value": "San Francisco"}},
+          {"key": "city", "match": {"value": "London"}}
+        ]
+      },
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "6. Negative Filtering (Exclude priority)": {
+    "description": "Dense search excluding critical documents.",
+    "json": {
+      "query": {
+        "text": "architecture design",
+        "model": "text-embedding-all-minilm-l6-v2-embedding"
+      },
+      "using": "dense",
+      "filter": {
+        "must_not": [
+          {"key": "priority", "match": {"value": "critical"}}
+        ]
+      },
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "7. Numeric Range Filter": {
+    "description": "Dense search filtered by numeric range constraint (year >= 2025).",
+    "json": {
+      "query": {
+        "text": "OAuth2 configuration",
+        "model": "text-embedding-all-minilm-l6-v2-embedding"
+      },
+      "using": "dense",
+      "filter": {
+        "must": [
+          {"key": "year", "range": {"gte": 2025}}
+        ]
+      },
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "8. Text Match Filter (Partial/Substring)": {
+    "description": "Queries documents where the title contains the text 'design'.",
+    "json": {
+      "query": {
+        "text": "ACME microservices",
+        "model": "text-embedding-all-minilm-l6-v2-embedding"
+      },
+      "using": "dense",
+      "filter": {
+        "must": [
+          {"key": "title", "match": {"text": "design"}}
+        ]
+      },
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "9. Score Boosting (Priority high)": {
+    "description": "Boosts document similarity score using a formula if the document priority is 'high'.",
+    "json": {
+      "query": {
+        "formula": {
+          "sum": [
+            "$score",
+            {
+              "mult": [
+                2.0,
+                {"key": "priority", "match": {"value": "high"}}
+              ]
+            }
+          ]
+        }
+      },
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "10. Score Boosting with Decay Formula": {
+    "description": "Applies a linear decay factor based on the document's year (fresher documents ranked higher).",
+    "json": {
+      "query": {
+        "formula": {
+          "sum": [
+            "$score",
+            {
+              "linear": {
+                "x": "year",
+                "target": 2026,
+                "scale": 5,
+                "midpoint": 0.5
+              }
+            }
+          ]
+        }
+      },
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "11. Multi-stage Prefetch with Threshold": {
+    "description": "A prefetch query with a minimum similarity threshold of 0.5 and limit.",
+    "json": {
+      "prefetch": [
+        {
+          "query": {
+            "text": "vulnerability disclosure",
+            "model": "text-embedding-all-minilm-l6-v2-embedding"
+          },
+          "using": "dense",
+          "score_threshold": 0.5,
+          "limit": 10
+        }
+      ],
+      "query": {
+        "fusion": "rrf"
+      },
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "12. 3-Level Nested Prefetch": {
+    "description": "Multi-stage prefetch hierarchy combining nested levels of retrieval.",
+    "json": {
+      "prefetch": [
+        {
+          "prefetch": [
+            {
+              "query": {
+                "text": "Kubernetes and Go",
+                "model": "text-embedding-all-minilm-l6-v2-embedding"
+              },
+              "using": "dense",
+              "limit": 5
+            }
+          ],
+          "query": {
+            "text": "gRPC gateway logs",
+            "model": "text-embedding-all-minilm-l6-v2-embedding"
+          },
+          "using": "dense",
+          "limit": 5
+        }
+      ],
+      "query": {
+        "fusion": "rrf"
+      },
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "13. MMR (Maximal Marginal Relevance)": {
+    "description": "Maximizes result diversity (diversity index 0.7, evaluating 10 candidates).",
+    "json": {
+      "query": {
+        "nearest": {
+          "document": {
+            "text": "incident response playbook",
+            "model": "text-embedding-all-minilm-l6-v2-embedding"
+          }
+        },
+        "mmr": {
+          "diversity": 0.7,
+          "candidates_limit": 10
+        }
+      },
+      "using": "dense",
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "14. Relevance Feedback": {
+    "description": "Query using target-less relevance feedback, specifying positive/negative anchors.",
+    "json": {
+      "query": {
+        "relevance_feedback": {
+          "target": 1001,
+          "feedback": [
+            {"positive": 1002, "score": 1.0},
+            {"negative": 1003, "score": 0.5}
+          ]
+        }
+      },
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "15. Batch Search (Multi-query)": {
+    "description": "Performs multiple queries in parallel as a single batch operation.",
+    "json": {
+      "searches": [
+        {
+          "query": {
+            "text": "Kubernetes setup",
+            "model": "text-embedding-all-minilm-l6-v2-embedding"
+          },
+          "using": "dense",
+          "limit": 3
+        },
+        {
+          "query": {
+            "text": "OAuth2 configuration",
+            "model": "text-embedding-all-minilm-l6-v2-embedding"
+          },
+          "using": "dense",
+          "limit": 3
+        }
+      ]
+    }
+  },
+  "16. Group By Retrieval": {
+    "description": "Group points by metadata key (e.g. topic) returning grouped points.",
+    "json": {
+      "query": {
+        "text": "ACME microservices",
+        "model": "text-embedding-all-minilm-l6-v2-embedding"
+      },
+      "using": "dense",
+      "group_by": "topic",
+      "group_size": 2,
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "17. Order By Search": {
+    "description": "Retrieve points ordered by a specific payload field (e.g. year descending).",
+    "json": {
+      "query": {
+        "order_by": {
+          "key": "year",
+          "direction": "desc"
+        }
+      },
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "18. Random Sample query": {
+    "description": "Retrieve a random sample of documents.",
+    "json": {
+      "query": {
+        "sample": {}
+      },
+      "limit": 5,
+      "with_payload": true
+    }
+  },
+  "19. Capped Limit Enforcement": {
+    "description": "Query requesting 100 results, showing how Gateway caps it based on role policies.",
+    "json": {
+      "query": {
+        "text": "remote policy",
+        "model": "text-embedding-all-minilm-l6-v2-embedding"
+      },
+      "using": "dense",
+      "limit": 100,
+      "with_payload": true
+    }
+  },
+  "20. Match Any (Multiple Orgs)": {
+    "description": "Search with filter matching any of multiple organization values.",
+    "json": {
+      "query": {
+        "text": "engineering best practices",
+        "model": "text-embedding-all-minilm-l6-v2-embedding"
+      },
+      "using": "dense",
+      "filter": {
+        "must": [
+          {"key": "org", "match": {"any": ["acme", "globex"]}}
+        ]
+      },
+      "limit": 5,
+      "with_payload": true
+    }
+  }
+}
