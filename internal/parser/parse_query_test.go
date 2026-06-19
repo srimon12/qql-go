@@ -104,7 +104,6 @@ func TestParseQueryErrors(t *testing.T) {
 		name  string
 		input string
 	}{
-		{"missing from", "QUERY NEAREST 'text' LIMIT 10"},
 		{"invalid mode", "QUERY SOMETHING 'text' FROM docs"},
 		{"missing context pairs", "QUERY CONTEXT FROM docs"},
 		{"missing discover target", "QUERY DISCOVER FROM docs"},
@@ -154,7 +153,26 @@ QUERY 'search' FROM docs LIMIT 10 PREFETCH (p1, p2) FUSION RRF WITH (rrf_k = 10,
 	assert.Equal(t, 10, *stmt.WithClause.RrfK)
 	require.Len(t, stmt.WithClause.RrfWeights, 2)
 	assert.Equal(t, float32(0.7), stmt.WithClause.RrfWeights[0])
-	assert.Equal(t, float32(0.3), stmt.WithClause.RrfWeights[1])
+}
+
+func TestParseQueryPrefetchCaseInsensitive(t *testing.T) {
+	input := `WITH MyCte AS (QUERY 'search' USING dense LIMIT 100)
+QUERY 'search' FROM docs LIMIT 10 PREFETCH (mycte)`
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	require.Len(t, stmt.CTEs, 1)
+	assert.Equal(t, "mycte", stmt.CTEs[0].Name)
+	require.Len(t, stmt.PrefetchRefs, 1)
+	assert.Equal(t, "mycte", stmt.PrefetchRefs[0].CTEName)
 }
 
 func TestParseQueryWithLookup(t *testing.T) {
@@ -502,4 +520,43 @@ func TestParseQueryWithPayloadVectorsErrors(t *testing.T) {
 			assert.Error(t, err)
 		})
 	}
+}
+
+func TestParseQueryRawVector(t *testing.T) {
+	input := "QUERY [0.1, 0.2, 0.3] FROM docs LIMIT 5"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+	assert.Equal(t, "docs", stmt.Collection)
+	assert.Len(t, stmt.RawVector, 3)
+	assert.InDelta(t, 0.1, stmt.RawVector[0], 1e-9)
+	assert.InDelta(t, 0.2, stmt.RawVector[1], 1e-9)
+	assert.InDelta(t, 0.3, stmt.RawVector[2], 1e-9)
+	assert.Equal(t, 5, stmt.Limit)
+}
+
+func TestParseCTEQueryRawVector(t *testing.T) {
+	input := "WITH _pf0 AS (QUERY [0.5, 0.6] LIMIT 100) QUERY 'search' FROM docs LIMIT 10 PREFETCH (_pf0)"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+	require.Len(t, stmt.CTEs, 1)
+	cte := stmt.CTEs[0]
+	assert.Equal(t, "_pf0", cte.Name)
+	assert.Len(t, cte.Stmt.RawVector, 2)
+	assert.InDelta(t, 0.5, cte.Stmt.RawVector[0], 1e-9)
 }

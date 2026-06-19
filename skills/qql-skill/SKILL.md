@@ -15,7 +15,7 @@ Read these reference documents **ONLY** when you need details on their specific 
 - [references/qql-gaps.md](references/qql-gaps.md) — Read if a user asks for unsupported features (ReadConsistency, Timeout, ShardKeySelector).
 - [references/qql-examples.md](references/qql-examples.md) — Read for advanced examples (CTEs, MMR, Context patterns).
 
-For runnable demo scripts, see `scripts/demo_retrieval_modes.py`, `scripts/demo_medical_records.py`, and `scripts/demo_kitchen_sink.py`.
+For runnable demo scripts, see `scripts/demo_retrieval_modes.py`, `scripts/demo_medical_records.py`, `scripts/demo_kitchen_sink.py`, and `scripts/demo_multivector.py`.
 
 ## Intent Mapping
 Translate user intent directly into QQL syntax:
@@ -24,6 +24,9 @@ Translate user intent directly into QQL syntax:
 - Hybrid retrieval with DBSF fusion -> `USING HYBRID FUSION DBSF`
 - Hybrid retrieval with tuned RRF -> `USING HYBRID WITH (rrf_k = ..., rrf_weights = [...])`
 - Multi-stage retrieval -> `WITH <name> AS (...), ... QUERY ... PREFETCH (name1, name2) FUSION RRF`
+- Pure fusion (no search target) -> `FUSION RRF LIMIT <n> PREFETCH (<name1>, <name2>)`
+- Multi-stage with different vectors -> `WITH _pf0 AS (QUERY ... USING 'dense'), _pf1 AS (QUERY ... USING 'sparse') QUERY ... USING 'colbert' PREFETCH (_pf0, _pf1)`
+- PDF retrieval (ColBERT/ColPali) -> create with `MULTIVECTOR (comparator = 'max_sim')` + `HNSW (m = 0)`, search with prefetch + USING
 - Keyword-only retrieval -> `USING SPARSE`
 - Query by point ID -> `QUERY <id> FROM <collection>`
 - Recommendation by example -> `QUERY RECOMMEND WITH (positive = (...), negative = (...))`
@@ -42,6 +45,9 @@ Translate user intent directly into QQL syntax:
 - Exact point lookup -> `SELECT * FROM <collection> WHERE id = <id>`
 - Browse points -> `SCROLL FROM <collection> [AFTER <id>] LIMIT <n>`
 - Batch ingest -> `INSERT INTO <collection> VALUES {...}, {...}`
+- Insert with pre-computed vectors -> `INSERT INTO <col> VALUES {'id': 1, 'vector': {'dense': [...], 'colbert': [[...]]}}`
+- Convert Python SDK to QQL -> `python3 sdks/python/qql_intercept.py your_script.py`
+- Convert REST JSON to QQL -> `qql-go convert payload.json`
 
 ## QQL Capabilities & Grammar
 
@@ -55,6 +61,12 @@ CREATE COLLECTION <name> [HYBRID [RERANK]]
   [WITH PARAMS (replication_factor = <n>, ...)]
   [WITH QUANTIZATION (type = 'scalar'|'binary'|'product'|'turbo', ...)]
   [USING MODEL '<model>' | USING HYBRID [DENSE MODEL '<model>']]
+
+-- Named vectors with per-vector config
+CREATE COLLECTION <name> (
+  dense VECTOR(384, COSINE),
+  colbert VECTOR(128, COSINE) WITH MULTIVECTOR (comparator = 'max_sim') WITH HNSW (m = 0)
+)
 
 ALTER COLLECTION <name> ... -- Supports WITH HNSW, WITH OPTIMIZERS, WITH PARAMS, WITH QUANTIZATION (disabled = true)
 SHOW COLLECTIONS
@@ -78,7 +90,10 @@ CREATE INDEX ON COLLECTION <name> FOR <field> TYPE <keyword|integer|float|bool|u
 INSERT INTO <name> VALUES { 'text': '...', 'category': '...' }, {...}, {...}
   [USING [HYBRID [DENSE MODEL '<m>' SPARSE MODEL '<m>'] | MODEL '<m>']]
 
-UPDATE <name> SET VECTOR = [<float>, ...] WHERE id = <id>
+-- Insert with pre-computed named vectors (dense + multivector)
+INSERT INTO <name> VALUES { 'id': 1, 'text': '...', 'vector': {'dense': [0.1, 0.2], 'colbert': [[0.1, 0.2], [0.3, 0.4]]} }
+
+UPDATE <name> SET VECTOR ['vector_name'] = [<float>, ...] WHERE id = <id>
 UPDATE <name> SET PAYLOAD = {...} WHERE <filter_expression>
 DELETE FROM <name> WHERE <filter_expression>
 ```
@@ -101,18 +116,22 @@ FROM <collection>
   [RERANK [MODEL '<model>']]
   [EXACT]
   [LIMIT <n>] [OFFSET <n>] [SCORE THRESHOLD <float>]
+
+-- Pure fusion (no search target, just fuse CTE results)
+FUSION <RRF | DBSF> [FROM <collection>] [LIMIT <n>] [PREFETCH (<name1>, <name2>)]
 ```
 
 ### BOOST Formula Expressions
 The `BOOST` clause applies a mathematical expression to modify search scores.
 - **Variables:** `$score` (current score), bare names for payload fields (e.g., `popularity`, `freshness`)
-- **Operators:** `+`, `-`, `*`, `/` with standard precedence (`*` and `/` before `+` and `-`)
+- **Operators:** `+`, `-`, `*`, `/` (where `/` supports optional `[default=value]` suffix for division-by-zero safety)
 - **Functions:** `ABS(x)`, `SQRT(x)`, `LOG(x)`, `LN(x)`, `EXP(x)`, `POW(base, exp)`
 - **Geo:** `GEO_DISTANCE(lat, lon, field)` or `GEO_DISTANCE({'lat': x, 'lon': y}, field)`
-- **Decay:** `GAUSS_DECAY(x, target, scale, midpoint)`, `EXP_DECAY(...)`, `LIN_DECAY(...)` — supports kwargs: `gauss_decay(x, scale=5000)`
+- **Decay:** `GAUSS_DECAY(x, target, scale, midpoint)`, `EXP_DECAY(...)`, `LIN_DECAY(...)` — supports kwargs: `gauss_decay(x, scale=5000, decay=0.5)` or `gauss_decay(x, target=datetime('2026-01-01'), scale=30d, midpoint=0.5)`
 - **Datetime:** `datetime('2026-01-01T00:00:00Z')` (literal), `datetime_key('field')` (payload field)
 - **Conditional:** `CASE WHEN <filter> THEN <expr> ELSE <expr> END`
 - **Defaults:** `DEFAULTS (var1 = 1.0, var2 = 0.0)` — fallback values for missing payload fields
+
 
 Examples:
 ```sql
@@ -125,15 +144,21 @@ BOOST ($score + exp_decay(datetime_key('published_at'), target=datetime('2026-06
 
 ### CTEs (Common Table Expressions)
 ```sql
-WITH <name> AS (QUERY ...) [, <name> AS (QUERY ...)]
-QUERY ... FROM <collection> PREFETCH (<name>, ...) FUSION RRF LIMIT <n>
+WITH <name> AS (QUERY ... USING '<vector>' [LIMIT <n>]) [, <name> AS (QUERY ...)]
+QUERY ... FROM <collection> USING '<vector>' PREFETCH (<name>, ...) FUSION RRF LIMIT <n>
+
+-- Pure fusion (no search target)
+WITH <name> AS (QUERY ...), <name> AS (QUERY ...)
+FUSION RRF LIMIT <n> PREFETCH (<name1>, <name2>)
 ```
 
 **Notes:**
+- Each CTE can target a different named vector with `USING '<vector>'`.
 - `PREFETCH` references CTE names, not inline queries.
 - Each prefetch ref can have an inline `WHERE` filter and `SCORE THRESHOLD`.
 - `OFFSET` cannot be used with `GROUP BY`.
 - Filters use standard SQL operators: `=`, `!=`, `>`, `<`, `BETWEEN ... AND ...`, `IN (...)`, `IS NULL`, `IS EMPTY`, `AND`, `OR`, `NOT`.
+- For PDF retrieval with ColBERT: create collection with `MULTIVECTOR` + `HNSW (m = 0)`, search with prefetch USING mean-pooled vectors, rerank with original.
 
 ## Agent and Script Output Contract
 For automation, use structured output:
@@ -143,6 +168,8 @@ For automation, use structured output:
 - `qql-go doctor --quiet --json`
 - `qql-go connect --quiet --json --url <url> ...`
 - `qql-go dump --quiet --json [--batch-size <n>] <collection> <output.qql>`
+- `qql-go convert --quiet <payload.json>` — REST JSON to QQL
+- `python3 sdks/python/qql_intercept.py <script.py>` — Python SDK to QQL
 
 **Script format:** `.qql` files use newline-delimited statements **WITHOUT semicolons**.
 ```sql

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tqql.proto\x12\x03qql\"#\n\x0b\x45xecRequest\x12\x14\n\x05query\x18\x01 \x01(\tR\x05query\"j\n\x0c\x45xecResponse\x12\x0e\n\x02ok\x18\x01 \x01(\x08R\x02ok\x12\x1c\n\toperation\x18\x02 \x01(\tR\toperation\x12\x18\n\x07message\x18\x03 \x01(\tR\x07message\x12\x12\n\x04\x64\x61ta\x18\x04 \x01(\x0cR\x04\x64\x61ta\"b\n\x10\x45xecBatchRequest\x12*\n\x07queries\x18\x01 \x03(\x0b\x32\x10.qql.ExecRequestR\x07queries\x12\"\n\rstop_on_error\x18\x02 \x01(\x08R\x0bstopOnError\"@\n\x11\x45xecBatchResponse\x12+\n\x07results\x18\x01 \x03(\x0b\x32\x11.qql.ExecResponseR\x07results\":\n\x0e\x45xplainRequest\x12\x14\n\x05query\x18\x01 \x01(\tR\x05query\x12\x12\n\x04json\x18\x02 \x01(\x08R\x04json\"K\n\x0f\x45xplainResponse\x12\x0e\n\x02ok\x18\x01 \x01(\x08R\x02ok\x12\x14\n\x05query\x18\x02 \x01(\tR\x05query\x12\x12\n\x04plan\x18\x03 \x01(\tR\x04plan\"\x0f\n\rHealthRequest\"z\n\x0eHealthResponse\x12\x18\n\x07version\x18\x01 \x01(\tR\x07version\x12)\n\x10qdrant_connected\x18\x02 \x01(\x08R\x0fqdrantConnected\x12#\n\rqdrant_status\x18\x03 \x01(\tR\x0cqdrantStatus2\xd7\x01\n\x03QQL\x12+\n\x04\x45xec\x12\x10.qql.ExecRequest\x1a\x11.qql.ExecResponse\x12:\n\tExecBatch\x12\x15.qql.ExecBatchRequest\x1a\x16.qql.ExecBatchResponse\x12\x34\n\x07\x45xplain\x12\x13.qql.ExplainRequest\x1a\x14.qql.ExplainResponse\x12\x31\n\x06Health\x12\x12.qql.HealthRequest\x1a\x13.qql.HealthResponseB&Z$github.com/srimon12/qql-go/gen/qqlpbb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tqql.proto\x12\x03qql\"3\n\x0e\x43onvertRequest\x12!\n\x0cjson_payload\x18\x01 \x01(\tR\x0bjsonPayload\"W\n\x0f\x43onvertResponse\x12\x0e\n\x02ok\x18\x01 \x01(\x08R\x02ok\x12\x1e\n\nstatements\x18\x02 \x03(\tR\nstatements\x12\x14\n\x05\x65rror\x18\x03 \x01(\tR\x05\x65rror\"#\n\x0b\x45xecRequest\x12\x14\n\x05query\x18\x01 \x01(\tR\x05query\"j\n\x0c\x45xecResponse\x12\x0e\n\x02ok\x18\x01 \x01(\x08R\x02ok\x12\x1c\n\toperation\x18\x02 \x01(\tR\toperation\x12\x18\n\x07message\x18\x03 \x01(\tR\x07message\x12\x12\n\x04\x64\x61ta\x18\x04 \x01(\x0cR\x04\x64\x61ta\"b\n\x10\x45xecBatchRequest\x12*\n\x07queries\x18\x01 \x03(\x0b\x32\x10.qql.ExecRequestR\x07queries\x12\"\n\rstop_on_error\x18\x02 \x01(\x08R\x0bstopOnError\"@\n\x11\x45xecBatchResponse\x12+\n\x07results\x18\x01 \x03(\x0b\x32\x11.qql.ExecResponseR\x07results\":\n\x0e\x45xplainRequest\x12\x14\n\x05query\x18\x01 \x01(\tR\x05query\x12\x12\n\x04json\x18\x02 \x01(\x08R\x04json\"K\n\x0f\x45xplainResponse\x12\x0e\n\x02ok\x18\x01 \x01(\x08R\x02ok\x12\x14\n\x05query\x18\x02 \x01(\tR\x05query\x12\x12\n\x04plan\x18\x03 \x01(\tR\x04plan\"\x0f\n\rHealthRequest\"z\n\x0eHealthResponse\x12\x18\n\x07version\x18\x01 \x01(\tR\x07version\x12)\n\x10qdrant_connected\x18\x02 \x01(\x08R\x0fqdrantConnected\x12#\n\rqdrant_status\x18\x03 \x01(\tR\x0cqdrantStatus2\x8d\x02\n\x03QQL\x12+\n\x04\x45xec\x12\x10.qql.ExecRequest\x1a\x11.qql.ExecResponse\x12:\n\tExecBatch\x12\x15.qql.ExecBatchRequest\x1a\x16.qql.ExecBatchResponse\x12\x34\n\x07\x45xplain\x12\x13.qql.ExplainRequest\x1a\x14.qql.ExplainResponse\x12\x31\n\x06Health\x12\x12.qql.HealthRequest\x1a\x13.qql.HealthResponse\x12\x34\n\x07\x43onvert\x12\x13.qql.ConvertRequest\x1a\x14.qql.ConvertResponseB&Z$github.com/srimon12/qql-go/gen/qqlpbb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,22 +32,26 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'qql_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z$github.com/srimon12/qql-go/gen/qqlpb'
-  _globals['_EXECREQUEST']._serialized_start=18
-  _globals['_EXECREQUEST']._serialized_end=53
-  _globals['_EXECRESPONSE']._serialized_start=55
-  _globals['_EXECRESPONSE']._serialized_end=161
-  _globals['_EXECBATCHREQUEST']._serialized_start=163
-  _globals['_EXECBATCHREQUEST']._serialized_end=261
-  _globals['_EXECBATCHRESPONSE']._serialized_start=263
-  _globals['_EXECBATCHRESPONSE']._serialized_end=327
-  _globals['_EXPLAINREQUEST']._serialized_start=329
-  _globals['_EXPLAINREQUEST']._serialized_end=387
-  _globals['_EXPLAINRESPONSE']._serialized_start=389
-  _globals['_EXPLAINRESPONSE']._serialized_end=464
-  _globals['_HEALTHREQUEST']._serialized_start=466
-  _globals['_HEALTHREQUEST']._serialized_end=481
-  _globals['_HEALTHRESPONSE']._serialized_start=483
-  _globals['_HEALTHRESPONSE']._serialized_end=605
-  _globals['_QQL']._serialized_start=608
-  _globals['_QQL']._serialized_end=823
+  _globals['_CONVERTREQUEST']._serialized_start=18
+  _globals['_CONVERTREQUEST']._serialized_end=69
+  _globals['_CONVERTRESPONSE']._serialized_start=71
+  _globals['_CONVERTRESPONSE']._serialized_end=158
+  _globals['_EXECREQUEST']._serialized_start=160
+  _globals['_EXECREQUEST']._serialized_end=195
+  _globals['_EXECRESPONSE']._serialized_start=197
+  _globals['_EXECRESPONSE']._serialized_end=303
+  _globals['_EXECBATCHREQUEST']._serialized_start=305
+  _globals['_EXECBATCHREQUEST']._serialized_end=403
+  _globals['_EXECBATCHRESPONSE']._serialized_start=405
+  _globals['_EXECBATCHRESPONSE']._serialized_end=469
+  _globals['_EXPLAINREQUEST']._serialized_start=471
+  _globals['_EXPLAINREQUEST']._serialized_end=529
+  _globals['_EXPLAINRESPONSE']._serialized_start=531
+  _globals['_EXPLAINRESPONSE']._serialized_end=606
+  _globals['_HEALTHREQUEST']._serialized_start=608
+  _globals['_HEALTHREQUEST']._serialized_end=623
+  _globals['_HEALTHRESPONSE']._serialized_start=625
+  _globals['_HEALTHRESPONSE']._serialized_end=747
+  _globals['_QQL']._serialized_start=750
+  _globals['_QQL']._serialized_end=1019
 # @@protoc_insertion_point(module_scope)

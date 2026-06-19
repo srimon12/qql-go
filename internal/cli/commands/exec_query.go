@@ -29,7 +29,10 @@ func (e *Executor) buildQueryStateAndPipeline(ctx context.Context, stmt *ast.Que
 		sparseVectorName = *stmt.Using
 	} else {
 		topo, err := e.resolveVectorTopology(ctx, stmt.Collection)
-		if err == nil && topo != nil && topo.DenseVector != nil && *topo.DenseVector != "" {
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve vector topology for collection '%s': %w", stmt.Collection, err)
+		}
+		if topo != nil && topo.DenseVector != nil && *topo.DenseVector != "" {
 			denseVectorName = *topo.DenseVector
 			if topo.SparseVector != nil && *topo.SparseVector != "" {
 				sparseVectorName = *topo.SparseVector
@@ -123,8 +126,52 @@ func (e *Executor) buildQueryStateAndPipeline(ctx context.Context, stmt *ast.Que
 		execPipeline.Add(&pipeline.OrderByNode{Field: *stmt.OrderByField, Asc: asc})
 	case ast.QueryModeSample:
 		execPipeline.Add(&pipeline.SampleNode{})
+
+	case ast.QueryModeRelevanceFeedback:
+		feedback := make([]struct {
+			Example any
+			Score   float64
+		}, len(stmt.FeedbackItems))
+		for i, item := range stmt.FeedbackItems {
+			feedback[i] = struct {
+				Example any
+				Score   float64
+			}{Example: item.Example, Score: item.Score}
+		}
+		node := &pipeline.RelevanceFeedbackNode{
+			Target:   stmt.FeedbackTarget,
+			Feedback: feedback,
+		}
+		if stmt.FeedbackStrategy != nil {
+			node.Strategy = &struct{ A, B, C float64 }{
+				A: stmt.FeedbackStrategy.A,
+				B: stmt.FeedbackStrategy.B,
+				C: stmt.FeedbackStrategy.C,
+			}
+		}
+		execPipeline.Add(node)
+
 	case ast.QueryModeNearest:
-		if stmt.QueryID != nil {
+		if len(stmt.RawVector) > 0 {
+			if stmt.Type == ast.QueryTypeHybrid {
+				if stmt.QueryText == nil {
+					return nil, fmt.Errorf("USING HYBRID with a raw dense vector requires a text query for the sparse vector")
+				}
+				execPipeline.Add(&pipeline.RawVectorNode{Vector: stmt.RawVector, VectorName: denseVectorName, Limit: uint64(stmt.Limit) * 10, AsPrefetch: true})
+				execPipeline.Add(&pipeline.SparseEmbedNode{Model: *sparseModel, VectorName: sparseVectorName, Limit: uint64(stmt.Limit) * 10, AsPrefetch: true})
+				if stmt.FusionType != nil {
+					execPipeline.Add(&pipeline.FusionNode{Mode: strings.ToLower(*stmt.FusionType)})
+				} else {
+					execPipeline.Add(&pipeline.FusionNode{Mode: "rrf"})
+				}
+			} else {
+				execPipeline.Add(&pipeline.RawVectorNode{Vector: stmt.RawVector, VectorName: denseVectorName})
+				if stmt.FusionType != nil {
+					execPipeline.Add(&pipeline.FusionNode{Mode: strings.ToLower(*stmt.FusionType)})
+					state.VectorName = ""
+				}
+			}
+		} else if stmt.QueryID != nil {
 			execPipeline.Add(&pipeline.RecommendNode{PositiveIDs: []any{stmt.QueryID}})
 		} else {
 			if stmt.QueryText != nil {
@@ -261,6 +308,11 @@ func (e *Executor) BuildQueryPoints(ctx context.Context, query string) (*qdrant.
 	if err != nil {
 		return nil, err
 	}
+	return e.BuildQueryPointsNode(ctx, node)
+}
+
+// BuildQueryPointsNode builds QueryPoints directly from an AST node.
+func (e *Executor) BuildQueryPointsNode(ctx context.Context, node ast.ASTNode) (*qdrant.QueryPoints, error) {
 	stmt, ok := node.(*ast.QueryStmt)
 	if !ok {
 		return nil, fmt.Errorf("expected QUERY statement, got %T", node)
@@ -304,8 +356,21 @@ func (e *Executor) buildCTEPrefetch(ctx context.Context, stmt *ast.QueryStmt, ct
 
 	denseModel := e.resolveDenseModel(stmt.Model)
 
+	// Scoped map of available CTEs (inheriting parents + local nested CTEs)
+	scopedMap := make(map[string]*qdrant.PrefetchQuery, len(cteMap)+len(stmt.CTEs))
+	for k, v := range cteMap {
+		scopedMap[k] = v
+	}
+	for _, localCte := range stmt.CTEs {
+		localPq, err := e.buildCTEPrefetch(ctx, localCte.Stmt, scopedMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build nested CTE '%s': %w", localCte.Name, err)
+		}
+		scopedMap[localCte.Name] = localPq
+	}
+
 	for _, ref := range stmt.PrefetchRefs {
-		if nested, ok := cteMap[ref.CTEName]; ok {
+		if nested, ok := scopedMap[ref.CTEName]; ok {
 			pq.Prefetch = append(pq.Prefetch, nested)
 		} else {
 			return nil, fmt.Errorf("unknown CTE referenced in prefetch: '%s'", ref.CTEName)
@@ -344,12 +409,12 @@ func (e *Executor) buildCTEPrefetch(ctx context.Context, stmt *ast.QueryStmt, ct
 	case ast.QueryModeRecommend:
 		pos := make([]*qdrant.VectorInput, len(stmt.PositiveIDs))
 		for i, id := range stmt.PositiveIDs {
-			pid, _ := buildPointID(id)
+			pid, _ := pipeline.ToPointID(id)
 			pos[i] = qdrant.NewVectorInputID(pid)
 		}
 		neg := make([]*qdrant.VectorInput, len(stmt.NegativeIDs))
 		for i, id := range stmt.NegativeIDs {
-			pid, _ := buildPointID(id)
+			pid, _ := pipeline.ToPointID(id)
 			neg[i] = qdrant.NewVectorInputID(pid)
 		}
 		pq.Query = qdrant.NewQueryRecommend(&qdrant.RecommendInput{
@@ -358,7 +423,17 @@ func (e *Executor) buildCTEPrefetch(ctx context.Context, stmt *ast.QueryStmt, ct
 		})
 
 	case ast.QueryModeNearest:
-		if stmt.QueryText != nil {
+		if stmt.Type == ast.QueryTypeHybrid {
+			return nil, fmt.Errorf("USING HYBRID is not supported inside CTE prefetch queries; define separate sparse and dense CTEs and combine them via prefetch references")
+		}
+
+		if len(stmt.RawVector) > 0 {
+			raw := make([]float32, len(stmt.RawVector))
+			for i, v := range stmt.RawVector {
+				raw[i] = float32(v)
+			}
+			pq.Query = qdrant.NewQueryDense(raw)
+		} else if stmt.QueryText != nil {
 			isSparse := stmt.Type == ast.QueryTypeSparse
 			if isSparse {
 				if e.usesLocalEmbeddings() {
@@ -390,7 +465,7 @@ func (e *Executor) buildCTEPrefetch(ctx context.Context, stmt *ast.QueryStmt, ct
 				}
 			}
 		} else if stmt.QueryID != nil {
-			pid, _ := buildPointID(stmt.QueryID)
+			pid, _ := pipeline.ToPointID(stmt.QueryID)
 			pq.Query = qdrant.NewQueryNearest(qdrant.NewVectorInputID(pid))
 		}
 	}
@@ -398,24 +473,12 @@ func (e *Executor) buildCTEPrefetch(ctx context.Context, stmt *ast.QueryStmt, ct
 	return pq, nil
 }
 
-// buildPointID converts a point ID value (string or int) to *qdrant.PointId.
-func buildPointID(val any) (*qdrant.PointId, error) {
-	switch v := val.(type) {
-	case string:
-		return qdrant.NewIDUUID(v), nil
-	case int:
-		return qdrant.NewIDNum(uint64(v)), nil
-	case uint64:
-		return qdrant.NewIDNum(v), nil
-	case float64:
-		return qdrant.NewIDNum(uint64(v)), nil
-	default:
-		return nil, fmt.Errorf("unsupported point id type %T", val)
-	}
-}
-
 func (e *Executor) executeFlatQuery(ctx context.Context, p *pipeline.QueryPipeline, state *pipeline.QueryState) (*ExecResponse, error) {
 	req := p.BuildFlatRequest(state)
+	// Always request payload — users want to see the data.
+	if req.WithPayload == nil {
+		req.WithPayload = qdrant.NewWithPayload(true)
+	}
 	results, err := e.client.Query(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query on qdrant: %w", err)
@@ -430,6 +493,14 @@ func (e *Executor) executeFlatQuery(ctx context.Context, p *pipeline.QueryPipeli
 		if textVal, ok := hit.Payload["text"]; ok {
 			formatted[i].Text = textVal.GetStringValue()
 		}
+		// Include full payload.
+		if hit.Payload != nil {
+			payload := make(map[string]any, len(hit.Payload))
+			for k, v := range hit.Payload {
+				payload[k] = qdrantValueToAny(v)
+			}
+			formatted[i].Payload = payload
+		}
 	}
 
 	return &ExecResponse{
@@ -442,6 +513,10 @@ func (e *Executor) executeFlatQuery(ctx context.Context, p *pipeline.QueryPipeli
 
 func (e *Executor) executeGroupedQuery(ctx context.Context, p *pipeline.QueryPipeline, state *pipeline.QueryState) (*ExecResponse, error) {
 	req := p.BuildGroupedRequest(state)
+	// Always request payload.
+	if req.WithPayload == nil {
+		req.WithPayload = qdrant.NewWithPayload(true)
+	}
 	groups, err := e.client.QueryGroups(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query groups on qdrant: %w", err)
@@ -458,6 +533,13 @@ func (e *Executor) executeGroupedQuery(ctx context.Context, p *pipeline.QueryPip
 			if textVal, ok := hit.Payload["text"]; ok {
 				hits[j].Text = textVal.GetStringValue()
 			}
+			if hit.Payload != nil {
+				payload := make(map[string]any, len(hit.Payload))
+				for k, v := range hit.Payload {
+					payload[k] = qdrantValueToAny(v)
+				}
+				hits[j].Payload = payload
+			}
 		}
 		formatted[i] = GroupedSearchResult{
 			GroupID: groupIDString(g.Id),
@@ -471,6 +553,39 @@ func (e *Executor) executeGroupedQuery(ctx context.Context, p *pipeline.QueryPip
 		Message:   fmt.Sprintf("Found %d groups", len(formatted)),
 		Data:      formatted,
 	}, nil
+}
+
+// qdrantValueToAny converts a qdrant.Value to a plain Go value for JSON serialization.
+func qdrantValueToAny(v *qdrant.Value) any {
+	if v == nil {
+		return nil
+	}
+	switch val := v.Kind.(type) {
+	case *qdrant.Value_StringValue:
+		return val.StringValue
+	case *qdrant.Value_IntegerValue:
+		return val.IntegerValue
+	case *qdrant.Value_DoubleValue:
+		return val.DoubleValue
+	case *qdrant.Value_BoolValue:
+		return val.BoolValue
+	case *qdrant.Value_ListValue:
+		arr := make([]any, len(val.ListValue.Values))
+		for i, item := range val.ListValue.Values {
+			arr[i] = qdrantValueToAny(item)
+		}
+		return arr
+	case *qdrant.Value_StructValue:
+		m := make(map[string]any, len(val.StructValue.Fields))
+		for k, item := range val.StructValue.Fields {
+			m[k] = qdrantValueToAny(item)
+		}
+		return m
+	case *qdrant.Value_NullValue:
+		return nil
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }
 
 func buildWithPayload(sel *ast.PayloadSelector) *qdrant.WithPayloadSelector {

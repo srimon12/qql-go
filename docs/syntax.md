@@ -25,6 +25,19 @@ CREATE COLLECTION docs (
   sparse VECTOR(768, DOT)
 )
 
+-- Multivector (ColBERT / ColPali) with HNSW disabled for reranking
+CREATE COLLECTION docs (
+  dense VECTOR(384, COSINE),
+  colbert VECTOR(128, COSINE) WITH MULTIVECTOR (comparator = 'max_sim') WITH HNSW (m = 0)
+)
+
+-- PDF retrieval: 3 named vectors (indexed + reranking)
+CREATE COLLECTION pdf_retrieval (
+  original VECTOR(128, COSINE) WITH MULTIVECTOR (comparator = 'max_sim') WITH HNSW (m = 0),
+  mean_pooling_columns VECTOR(128, COSINE) WITH MULTIVECTOR (comparator = 'max_sim'),
+  mean_pooling_rows VECTOR(128, COSINE) WITH MULTIVECTOR (comparator = 'max_sim')
+)
+
 -- Alter
 ALTER COLLECTION <name> WITH VECTORS (on_disk = true)
 ALTER COLLECTION <name> WITH HNSW (m = 32)
@@ -63,11 +76,20 @@ INSERT INTO <name> VALUES {'id': 1, 'text': 'hello'}, {'id': 2, 'text': 'world'}
 INSERT INTO <name> VALUES {'id': 1, 'text': 'hello'} USING HYBRID
 INSERT INTO <name> VALUES {'id': 1, 'text': 'hello'} USING MODEL '<model>'
 INSERT INTO <name> VALUES {'id': 1, 'text': 'hello'} USING HYBRID DENSE MODEL '<m1>' SPARSE MODEL '<m2>'
+
+-- Insert with pre-computed named vectors (dense + multivector)
+INSERT INTO docs VALUES {'id': 1, 'text': 'hello', 'vector': {'dense': [0.1, 0.2, 0.3], 'colbert': [[0.1, 0.2], [0.3, 0.4]]}}
 ```
 
 The `id` field is required. It must be an unsigned integer or UUID string.
 
 The `text` field is required for auto-vectorization.
+
+The `vector` key stores pre-computed vectors. Use a map of named vectors for multi-vector collections. Each value can be a 1D array (dense) or 2D array (multivector).
+
+> [!WARNING]
+> Payload keys that collide with QQL reserved keywords (such as `type`, `limit`, `using`, etc.) must be quoted (e.g. `{'type': 'document'}`). Otherwise, they will cause a parser syntax error.
+
 
 ## QUERY
 
@@ -132,6 +154,14 @@ QUERY SAMPLE FROM <collection> LIMIT <n> WHERE <filter>
 ### CTEs and Prefetch DAGs
 
 ```sql
+-- Multi-stage retrieval with named vectors
+WITH
+  dense AS (QUERY [0.1, 0.2, 0.3] USING 'dense' LIMIT 200),
+  sparse AS (QUERY [0.1, 0.2, 0.3] USING 'sparse' LIMIT 300)
+QUERY '<query>' FROM <collection> USING 'colbert' LIMIT 10
+  PREFETCH (dense, sparse)
+
+-- Per-prefetch filters and score thresholds
 WITH
   dense AS (QUERY 'search' USING dense LIMIT 200 WHERE category = 'tech'),
   sparse AS (QUERY 'search' USING sparse LIMIT 300)
@@ -141,6 +171,22 @@ QUERY 'search' FROM <collection> LIMIT 10
     sparse SCORE THRESHOLD 0.3
   )
   FUSION RRF WITH (rrf_k = 20, rrf_weights = [0.6, 0.4])
+
+-- Pure fusion (no search target, just fuse CTE results)
+FUSION RRF LIMIT 10 PREFETCH (dense, sparse)
+
+-- Pure fusion with CTEs
+WITH
+  _pf0 AS (QUERY 'search' USING 'dense' LIMIT 100),
+  _pf1 AS (QUERY 'search' USING 'sparse' LIMIT 100)
+FUSION RRF LIMIT 10 PREFETCH (_pf0, _pf1)
+
+-- PDF retrieval: two-stage with mean-pooled vectors
+WITH
+  _pf0 AS (QUERY [0.1, 0.2, 0.3] USING 'mean_pooling_columns' LIMIT 100),
+  _pf1 AS (QUERY [0.1, 0.2, 0.3] USING 'mean_pooling_rows' LIMIT 100)
+QUERY [0.1, 0.2, 0.3] FROM pdf_retrieval USING 'original' LIMIT 10
+  PREFETCH (_pf0, _pf1)
 ```
 
 CTEs can reference previously defined CTEs for nested prefetch DAGs.
@@ -287,3 +333,28 @@ qql-go dump --batch-size 100 <collection> <output.qql>
 ```
 
 Scripts are multi-statement QQL files. Statements are separated by newlines. Comments start with `--`.
+
+## Convert (REST JSON → QQL)
+
+```bash
+# From file
+qql-go convert payload.json
+
+# From stdin
+echo '{"points":[{"id":1,"payload":{"text":"hi"}}]}' | qql-go convert
+
+# Validate generated QQL with explain
+qql-go convert --validate payload.json
+
+# JSON output
+qql-go convert --json payload.json
+
+# Quiet output (only QQL, no headers)
+qql-go convert --quiet payload.json
+```
+
+The `convert` command accepts any Qdrant REST API JSON payload and outputs equivalent QQL statements. It auto-detects the operation type from the JSON structure.
+
+Supported operations: create collection, create index, upsert, search, query (with prefetch/formula/fusion), recommend, discover, scroll, get points, delete points, set payload.
+
+For Python SDK migration, see `sdks/python/qql_intercept.py`.

@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -63,7 +64,7 @@ func (p *Parser) parseFormulaExpr(precedence int) (ast.FormulaExpr, error) {
 
 func (p *Parser) formulaPrefixParseFn(kind lexer.TokenKind) prefixParseFn {
 	switch kind {
-	case lexer.TokenKindIdentifier, lexer.TokenKindScore, lexer.TokenKindOffset, lexer.TokenKindThreshold, lexer.TokenKindLookup:
+	case lexer.TokenKindIdentifier, lexer.TokenKindScore, lexer.TokenKindOffset, lexer.TokenKindThreshold, lexer.TokenKindLookup, lexer.TokenKindMatch:
 		return p.parseFormulaIdentifierOrFunc
 	case lexer.TokenKindInteger, lexer.TokenKindFloat:
 		return p.parseFormulaConstant
@@ -135,7 +136,23 @@ func (p *Parser) parseFormulaInfixExpression(left ast.FormulaExpr) (ast.FormulaE
 	case lexer.TokenKindStar:
 		return ast.FormulaMul{Left: left, Right: right}, nil
 	case lexer.TokenKindSlash:
-		return ast.FormulaDiv{Left: left, Right: right}, nil
+		var byZeroDefault *float64
+		if p.peek().Kind == lexer.TokenKindLbracket && p.peekNext().Kind == lexer.TokenKindIdentifier && asciiEqual(p.peekNext().Value, "DEFAULT") {
+			p.advance() // consume '['
+			p.advance() // consume 'default'
+			if _, err := p.expect(lexer.TokenKindEquals); err != nil {
+				return nil, err
+			}
+			val, err := p.parseNumericLiteral()
+			if err != nil {
+				return nil, err
+			}
+			byZeroDefault = &val
+			if _, err := p.expect(lexer.TokenKindRbracket); err != nil {
+				return nil, err
+			}
+		}
+		return ast.FormulaDiv{Left: left, Right: right, ByZeroDefault: byZeroDefault}, nil
 	default:
 		return nil, errors.NewQQLSyntaxError("Unknown formula operator: "+tok.Value, tok.Pos)
 	}
@@ -193,6 +210,32 @@ func (p *Parser) parseFormulaCaseExpression() (ast.FormulaExpr, error) {
 func (p *Parser) parseFormulaFunctionCall(funcName string, pos int) (ast.FormulaExpr, error) {
 	// Special cases that don't follow generic expression arguments
 	switch funcName {
+	case "match", "match_any":
+		fieldTok, err := p.expect(lexer.TokenKindIdentifier)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(lexer.TokenKindComma); err != nil {
+			return nil, err
+		}
+		var values []any
+		if p.peek().Kind == lexer.TokenKindLbracket {
+			vals, err := p.parseList()
+			if err != nil {
+				return nil, err
+			}
+			values = vals
+		} else {
+			single, err := p.parseValue()
+			if err != nil {
+				return nil, err
+			}
+			values = []any{single}
+		}
+		if _, err := p.expect(lexer.TokenKindRparen); err != nil {
+			return nil, err
+		}
+		return ast.FormulaMatchCondition{Field: fieldTok.Value, Values: values}, nil
 	case "datetime":
 		tok, err := p.expect(lexer.TokenKindString)
 		if err != nil {
@@ -334,10 +377,14 @@ func (p *Parser) parseFormulaFunctionCall(funcName string, pos int) (ast.Formula
 		if len(args) > 2 {
 			if c, ok := args[2].(ast.FormulaConstant); ok {
 				scale = &c.Value
+			} else {
+				return nil, errors.NewQQLSyntaxError("scale argument in decay function must be a constant", pos)
 			}
 		} else if val, ok := kwargs["scale"]; ok {
 			if c, ok := val.(ast.FormulaConstant); ok {
 				scale = &c.Value
+			} else {
+				return nil, errors.NewQQLSyntaxError("scale argument in decay function must be a constant", pos)
 			}
 		}
 
@@ -345,10 +392,20 @@ func (p *Parser) parseFormulaFunctionCall(funcName string, pos int) (ast.Formula
 		if len(args) > 3 {
 			if c, ok := args[3].(ast.FormulaConstant); ok {
 				midpoint = &c.Value
+			} else {
+				return nil, errors.NewQQLSyntaxError("midpoint/decay argument in decay function must be a constant", pos)
 			}
 		} else if val, ok := kwargs["midpoint"]; ok {
 			if c, ok := val.(ast.FormulaConstant); ok {
 				midpoint = &c.Value
+			} else {
+				return nil, errors.NewQQLSyntaxError("midpoint argument in decay function must be a constant", pos)
+			}
+		} else if val, ok := kwargs["decay"]; ok {
+			if c, ok := val.(ast.FormulaConstant); ok {
+				midpoint = &c.Value
+			} else {
+				return nil, errors.NewQQLSyntaxError("decay argument in decay function must be a constant", pos)
 			}
 		}
 
@@ -407,4 +464,18 @@ func (p *Parser) parseFormulaCallArgumentsAndKwargs() ([]ast.FormulaExpr, map[st
 	}
 
 	return args, kwargs, nil
+}
+
+// ParseFormulaString parses a standalone formula expression string into an AST FormulaExpr.
+// The input should be the body of a BOOST clause, e.g. "$score * 2.0 + MATCH(tag, ['h1'])"
+func ParseFormulaString(input string) (ast.FormulaExpr, error) {
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to tokenize formula: %w", err)
+	}
+	p := NewParser()
+	p.tokens = tokens
+	p.pos = 0
+	return p.parseFormulaExpr(precedenceLowest)
 }

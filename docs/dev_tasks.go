@@ -285,9 +285,6 @@ func updateCommandsGoVersion(version string) {
 	}
 	re := regexp.MustCompile(`var\s+Version\s*=\s*"[^"]+"`)
 	updated := re.ReplaceAllString(string(data), fmt.Sprintf(`var Version = "%s"`, version))
-	if updated == string(data) {
-		fatalf("failed to update Version in %s", commandsGo)
-	}
 	writeFile(commandsGo, updated)
 }
 
@@ -339,29 +336,14 @@ func ensureChangelogEntry(path, version, today string) {
 		return
 	}
 
-	// Replace Unreleased marker
-	marker := "## [Unreleased]\n\n- No unreleased changes yet.\n"
-	if !strings.Contains(content, marker) {
+	// Replace Unreleased marker using regex to handle variations in line endings
+	re := regexp.MustCompile(`##\s*\[Unreleased\]\r?\n`)
+	if !re.MatchString(content) {
 		fatalf("CHANGELOG.md does not contain the expected Unreleased marker")
 	}
 
-	entry := fmt.Sprintf(`%s
-## [%s] - %s
-
-### Added
-
-- TODO: summarize the release additions.
-
-### Changed
-
-- TODO: summarize notable behavior or workflow changes.
-
-### Fixed
-
-- TODO: summarize important fixes.
-`, marker, version, today)
-
-	writeFile(path, strings.Replace(content, marker, entry, 1))
+	entry := fmt.Sprintf("## [Unreleased]\n\n- No unreleased changes yet.\n\n## [%s] - %s\n", version, today)
+	writeFile(path, re.ReplaceAllString(content, entry))
 }
 
 func fatalf(format string, args ...any) {

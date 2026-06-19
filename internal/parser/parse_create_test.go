@@ -160,9 +160,9 @@ func TestParseCollectionConfigRejectsNonPositiveValues(t *testing.T) {
 		want  string
 	}{
 		{
-			name:  "hnsw m zero",
-			input: "CREATE COLLECTION docs WITH HNSW ( m = 0 )",
-			want:  "m must be a positive integer",
+			name:  "hnsw m under 4",
+			input: "CREATE COLLECTION docs WITH HNSW ( m = 3 )",
+			want:  "m must be 0 or >= 4",
 		},
 		{
 			name:  "params replication factor zero",

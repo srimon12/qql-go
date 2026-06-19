@@ -54,7 +54,12 @@ func (e *Executor) ExecuteResult(query string) (*ExecResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	return e.ExecuteNode(node)
+}
 
+// ExecuteNode executes a pre-parsed AST node. This allows the gateway to
+// transform the AST (e.g. inject policy filters) before execution.
+func (e *Executor) ExecuteNode(node ast.ASTNode) (*ExecResponse, error) {
 	switch n := node.(type) {
 	case *ast.ShowCollectionsStmt:
 		return e.doShowCollections()
@@ -446,7 +451,7 @@ const (
 	defaultInferenceMode    = "local"
 )
 
-var Version = "0.4.0"
+var Version = "0.5.0"
 
 type commandOutputMode struct {
 	json  bool
@@ -504,7 +509,12 @@ func NewClient(cfg *config.Config) (*qdrant.Client, error) {
 func (e *Executor) DumpCollection(collection, outputPath string, batchSize int) (string, error) {
 	ctx, cancel := e.defaultContext()
 	defer cancel()
-	written, skipped, err := dump.Collection(ctx, e.client, collection, outputPath, batchSize)
+	denseModel := e.resolveDenseModel(nil)
+	sparseModel := ""
+	if e.config != nil && e.config.SparseInferenceModel != "" {
+		sparseModel = e.config.SparseInferenceModel
+	}
+	written, skipped, err := dump.CollectionWithModel(ctx, e.client, collection, outputPath, batchSize, denseModel, sparseModel)
 	if err != nil {
 		return "", err
 	}
@@ -532,25 +542,25 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		plan.WriteString("Statement: SHOW COLLECTIONS\n")
 		plan.WriteString("Action: List all collections\n")
 	case *ast.ShowCollectionStmt:
-		plan.WriteString(fmt.Sprintf("Statement: SHOW COLLECTION %s\n", n.Collection))
+		fmt.Fprintf(&plan, "Statement: SHOW COLLECTION %s\n", n.Collection)
 		plan.WriteString("Action: Inspect collection diagnostics\n")
 	case *ast.CreateCollectionStmt:
-		plan.WriteString(fmt.Sprintf("Statement: CREATE COLLECTION %s\n", n.Collection))
+		fmt.Fprintf(&plan, "Statement: CREATE COLLECTION %s\n", n.Collection)
 		if n.Model != nil && *n.Model != "" {
-			plan.WriteString(fmt.Sprintf("Model: %s\n", *n.Model))
+			fmt.Fprintf(&plan, "Model: %s\n", *n.Model)
 		}
 		if n.Config != nil {
 			if n.Config.Hnsw != nil && n.Config.Hnsw.PayloadM != nil {
-				plan.WriteString(fmt.Sprintf("HNSW payload_m: %d\n", *n.Config.Hnsw.PayloadM))
+				fmt.Fprintf(&plan, "HNSW payload_m: %d\n", *n.Config.Hnsw.PayloadM)
 			}
 		}
 		if n.Config != nil && n.Config.Quantization != nil {
-			plan.WriteString(fmt.Sprintf("Quantization: %s\n", n.Config.Quantization.Type))
+			fmt.Fprintf(&plan, "Quantization: %s\n", n.Config.Quantization.Type)
 			if n.Config.Quantization.Quantile != nil {
-				plan.WriteString(fmt.Sprintf("Quantile: %.4f\n", *n.Config.Quantization.Quantile))
+				fmt.Fprintf(&plan, "Quantile: %.4f\n", *n.Config.Quantization.Quantile)
 			}
 			if n.Config.Quantization.TurboBits != nil {
-				plan.WriteString(fmt.Sprintf("Turbo bits: %g\n", *n.Config.Quantization.TurboBits))
+				fmt.Fprintf(&plan, "Turbo bits: %g\n", *n.Config.Quantization.TurboBits)
 			}
 			if n.Config.Quantization.AlwaysRAM {
 				plan.WriteString("Quantization storage: ALWAYS RAM\n")
@@ -563,9 +573,20 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		} else {
 			plan.WriteString("Type: DENSE\n")
 		}
+		for _, v := range n.Vectors {
+			fmt.Fprintf(&plan, "Vector: %s, Size: %d\n", v.Name, v.Size)
+			if v.Multivector != nil {
+				fmt.Fprintf(&plan, "  Multivector: comparator=%s\n", v.Multivector.Comparator)
+			}
+			if v.Hnsw != nil {
+				if v.Hnsw.M != nil {
+					fmt.Fprintf(&plan, "  HNSW m: %d\n", *v.Hnsw.M)
+				}
+			}
+		}
 		plan.WriteString("Action: Create new collection\n")
 	case *ast.AlterCollectionStmt:
-		plan.WriteString(fmt.Sprintf("Statement: ALTER COLLECTION %s\n", n.Collection))
+		fmt.Fprintf(&plan, "Statement: ALTER COLLECTION %s\n", n.Collection)
 		if n.Config != nil {
 			if n.Config.Hnsw != nil {
 				plan.WriteString("Alteration: HNSW config\n")
@@ -584,35 +605,35 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			if n.Config.QuantizationUpdate.Disabled {
 				plan.WriteString("Alteration: Disable quantization\n")
 			} else {
-				plan.WriteString(fmt.Sprintf("Alteration: %s quantization\n", n.Config.QuantizationUpdate.Config.Type))
+				fmt.Fprintf(&plan, "Alteration: %s quantization\n", n.Config.QuantizationUpdate.Config.Type)
 			}
 		}
 		plan.WriteString("Action: Alter existing collection\n")
 	case *ast.DropCollectionStmt:
-		plan.WriteString(fmt.Sprintf("Statement: DROP COLLECTION %s\n", n.Collection))
+		fmt.Fprintf(&plan, "Statement: DROP COLLECTION %s\n", n.Collection)
 		plan.WriteString("Action: Delete collection and all points\n")
 	case *ast.InsertStmt:
-		plan.WriteString(fmt.Sprintf("Statement: INSERT INTO %s\n", n.Collection))
+		fmt.Fprintf(&plan, "Statement: INSERT INTO %s\n", n.Collection)
 		if n.Model != nil && *n.Model != "" {
-			plan.WriteString(fmt.Sprintf("Model: %s\n", *n.Model))
+			fmt.Fprintf(&plan, "Model: %s\n", *n.Model)
 		}
 		if n.Hybrid {
 			plan.WriteString("Search: HYBRID (dense + sparse)\n")
 		} else {
 			plan.WriteString("Search: DENSE\n")
 		}
-		plan.WriteString(fmt.Sprintf("Rows: %d\n", len(n.ValuesList)))
+		fmt.Fprintf(&plan, "Rows: %d\n", len(n.ValuesList))
 		plan.WriteString("Action: Insert point(s) with auto-vectorization\n")
 	case *ast.SelectStmt:
-		plan.WriteString(fmt.Sprintf("Statement: SELECT * FROM %s WHERE id = '%v'\n", n.Collection, n.PointID))
+		fmt.Fprintf(&plan, "Statement: SELECT * FROM %s WHERE id = '%v'\n", n.Collection, n.PointID)
 		plan.WriteString("Action: Retrieve a single point by ID\n")
 	case *ast.ScrollStmt:
-		plan.WriteString(fmt.Sprintf("Statement: SCROLL FROM %s LIMIT %d\n", n.Collection, n.Limit))
+		fmt.Fprintf(&plan, "Statement: SCROLL FROM %s LIMIT %d\n", n.Collection, n.Limit)
 		if n.QueryFilter != nil {
-			plan.WriteString(fmt.Sprintf("Filter: %s\n", e.filterToString(n.QueryFilter)))
+			fmt.Fprintf(&plan, "Filter: %s\n", e.filterToString(n.QueryFilter))
 		}
 		if n.After != nil {
-			plan.WriteString(fmt.Sprintf("After: %v\n", n.After))
+			fmt.Fprintf(&plan, "After: %v\n", n.After)
 		}
 		plan.WriteString("Action: Scroll (paginate) through points\n")
 
@@ -628,18 +649,26 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			if n.OrderByField != nil {
 				field = *n.OrderByField
 			}
-			plan.WriteString(fmt.Sprintf("Statement: QUERY ORDER BY %s %s FROM %s LIMIT %v\n", field, dir, n.Collection, n.Limit))
+			fmt.Fprintf(&plan, "Statement: QUERY ORDER BY %s %s FROM %s LIMIT %v\n", field, dir, n.Collection, n.Limit)
 		case ast.QueryModeSample:
-			plan.WriteString(fmt.Sprintf("Statement: QUERY SAMPLE FROM %s LIMIT %v\n", n.Collection, n.Limit))
+			fmt.Fprintf(&plan, "Statement: QUERY SAMPLE FROM %s LIMIT %v\n", n.Collection, n.Limit)
+		case ast.QueryModeRelevanceFeedback:
+			fmt.Fprintf(&plan, "Statement: QUERY RELEVANCE FEEDBACK FROM %s LIMIT %v\n", n.Collection, n.Limit)
 		default:
-			plan.WriteString(fmt.Sprintf("Statement: QUERY %s FROM %s LIMIT %v\n", string(n.Mode), n.Collection, n.Limit))
+			fmt.Fprintf(&plan, "Statement: QUERY %s FROM %s LIMIT %v\n", string(n.Mode), n.Collection, n.Limit)
 		}
 
-		// Query text or ID
-		if n.QueryText != nil {
-			plan.WriteString(fmt.Sprintf("Query: '%s'\n", *n.QueryText))
+		// Query text, ID, or RawVector
+		if len(n.RawVector) > 0 {
+			var strs []string
+			for _, v := range n.RawVector {
+				strs = append(strs, fmt.Sprintf("%g", v))
+			}
+			fmt.Fprintf(&plan, "Raw Vector: [%s]\n", strings.Join(strs, ", "))
+		} else if n.QueryText != nil {
+			fmt.Fprintf(&plan, "Query: '%s'\n", *n.QueryText)
 		} else if n.QueryID != nil {
-			plan.WriteString(fmt.Sprintf("Query ID: %v\n", n.QueryID))
+			fmt.Fprintf(&plan, "Query ID: %v\n", n.QueryID)
 		}
 
 		// USING
@@ -647,23 +676,23 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			plan.WriteString("Using: HYBRID\n")
 		} else if n.Type == ast.QueryTypeSparse {
 			if n.Using != nil {
-				plan.WriteString(fmt.Sprintf("Using: SPARSE '%s'\n", *n.Using))
+				fmt.Fprintf(&plan, "Using: SPARSE '%s'\n", *n.Using)
 			} else {
 				plan.WriteString("Using: SPARSE\n")
 			}
 		} else if n.Using != nil {
-			plan.WriteString(fmt.Sprintf("Using: '%s'\n", *n.Using))
+			fmt.Fprintf(&plan, "Using: '%s'\n", *n.Using)
 		}
 
 		// WITH MODEL
 		if n.Model != nil {
-			plan.WriteString(fmt.Sprintf("Model: %s\n", *n.Model))
+			fmt.Fprintf(&plan, "Model: %s\n", *n.Model)
 		}
 
 		// WITH { ... } params
 		if n.WithClause != nil {
 			if n.WithClause.HnswEf > 0 {
-				plan.WriteString(fmt.Sprintf("HNSW ef: %d\n", n.WithClause.HnswEf))
+				fmt.Fprintf(&plan, "HNSW ef: %d\n", n.WithClause.HnswEf)
 			}
 			if n.WithClause.Exact {
 				plan.WriteString("Exact: true\n")
@@ -678,50 +707,50 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 				plan.WriteString("Quantization: enabled\n")
 			}
 			if n.WithClause.MmrDiversity != nil {
-				plan.WriteString(fmt.Sprintf("MMR diversity: %v\n", *n.WithClause.MmrDiversity))
+				fmt.Fprintf(&plan, "MMR diversity: %v\n", *n.WithClause.MmrDiversity)
 			}
 			if n.WithClause.MmrCandidates != nil {
-				plan.WriteString(fmt.Sprintf("MMR candidates: %v\n", *n.WithClause.MmrCandidates))
+				fmt.Fprintf(&plan, "MMR candidates: %v\n", *n.WithClause.MmrCandidates)
 			}
 			if n.WithClause.RrfK != nil {
-				plan.WriteString(fmt.Sprintf("RRF K: %d\n", *n.WithClause.RrfK))
+				fmt.Fprintf(&plan, "RRF K: %d\n", *n.WithClause.RrfK)
 			}
 			if len(n.WithClause.RrfWeights) > 0 {
-				plan.WriteString(fmt.Sprintf("RRF weights: %v\n", n.WithClause.RrfWeights))
+				fmt.Fprintf(&plan, "RRF weights: %v\n", n.WithClause.RrfWeights)
 			}
 		}
 
 		// WITH PAYLOAD / WITH VECTORS
 		if n.WithPayload != nil {
 			if n.WithPayload.Enable != nil {
-				plan.WriteString(fmt.Sprintf("With payload: %v\n", *n.WithPayload.Enable))
+				fmt.Fprintf(&plan, "With payload: %v\n", *n.WithPayload.Enable)
 			} else if len(n.WithPayload.Include) > 0 {
-				plan.WriteString(fmt.Sprintf("With payload include: %v\n", n.WithPayload.Include))
+				fmt.Fprintf(&plan, "With payload include: %v\n", n.WithPayload.Include)
 			} else if len(n.WithPayload.Exclude) > 0 {
-				plan.WriteString(fmt.Sprintf("With payload exclude: %v\n", n.WithPayload.Exclude))
+				fmt.Fprintf(&plan, "With payload exclude: %v\n", n.WithPayload.Exclude)
 			}
 		}
 		if n.WithVectors != nil {
 			if n.WithVectors.Enable != nil {
-				plan.WriteString(fmt.Sprintf("With vectors: %v\n", *n.WithVectors.Enable))
+				fmt.Fprintf(&plan, "With vectors: %v\n", *n.WithVectors.Enable)
 			} else if len(n.WithVectors.Vectors) > 0 {
-				plan.WriteString(fmt.Sprintf("With vectors: %v\n", n.WithVectors.Vectors))
+				fmt.Fprintf(&plan, "With vectors: %v\n", n.WithVectors.Vectors)
 			}
 		}
 
 		// WHERE
 		if n.QueryFilter != nil {
-			plan.WriteString(fmt.Sprintf("Filter: %s\n", e.filterToString(n.QueryFilter)))
+			fmt.Fprintf(&plan, "Filter: %s\n", e.filterToString(n.QueryFilter))
 		}
 
 		// OFFSET
 		if n.Offset > 0 {
-			plan.WriteString(fmt.Sprintf("Offset: %d\n", n.Offset))
+			fmt.Fprintf(&plan, "Offset: %d\n", n.Offset)
 		}
 
 		// SCORE THRESHOLD
 		if n.ScoreThreshold != nil {
-			plan.WriteString(fmt.Sprintf("Score threshold: %v\n", *n.ScoreThreshold))
+			fmt.Fprintf(&plan, "Score threshold: %v\n", *n.ScoreThreshold)
 		}
 
 		// LOOKUP FROM
@@ -730,26 +759,26 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			if n.LookupVector != nil {
 				vec = fmt.Sprintf(" VECTOR '%s'", *n.LookupVector)
 			}
-			plan.WriteString(fmt.Sprintf("Lookup from: %s%s\n", n.LookupFrom, vec))
+			fmt.Fprintf(&plan, "Lookup from: %s%s\n", n.LookupFrom, vec)
 		}
 
 		// GROUP BY / GROUP SIZE
 		if n.GroupBy != nil {
-			plan.WriteString(fmt.Sprintf("Group by: %s\n", *n.GroupBy))
+			fmt.Fprintf(&plan, "Group by: %s\n", *n.GroupBy)
 		}
 		if n.GroupSize != nil {
-			plan.WriteString(fmt.Sprintf("Group size: %d\n", *n.GroupSize))
+			fmt.Fprintf(&plan, "Group size: %d\n", *n.GroupSize)
 		}
 
 		// WITH LOOKUP
 		if n.WithLookupCollection != nil {
-			plan.WriteString(fmt.Sprintf("With lookup: %s\n", *n.WithLookupCollection))
+			fmt.Fprintf(&plan, "With lookup: %s\n", *n.WithLookupCollection)
 		}
 
 		// RERANK
 		if n.Rerank {
 			if n.RerankModel != nil {
-				plan.WriteString(fmt.Sprintf("Rerank: model '%s'\n", *n.RerankModel))
+				fmt.Fprintf(&plan, "Rerank: model '%s'\n", *n.RerankModel)
 			} else {
 				plan.WriteString("Rerank: enabled\n")
 			}
@@ -757,37 +786,48 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 
 		// STRATEGY
 		if n.Strategy != nil {
-			plan.WriteString(fmt.Sprintf("Strategy: %s\n", *n.Strategy))
+			fmt.Fprintf(&plan, "Strategy: %s\n", *n.Strategy)
 		}
 
 		// RECOMMEND mode details
 		if n.Mode == ast.QueryModeRecommend {
 			if len(n.PositiveIDs) > 0 {
-				plan.WriteString(fmt.Sprintf("Positive IDs: %v\n", n.PositiveIDs))
+				fmt.Fprintf(&plan, "Positive IDs: %v\n", n.PositiveIDs)
 			}
 			if len(n.NegativeIDs) > 0 {
-				plan.WriteString(fmt.Sprintf("Negative IDs: %v\n", n.NegativeIDs))
+				fmt.Fprintf(&plan, "Negative IDs: %v\n", n.NegativeIDs)
 			}
 		}
 
 		// CONTEXT mode details
 		if n.Mode == ast.QueryModeContext && len(n.ContextPairs) > 0 {
-			plan.WriteString(fmt.Sprintf("Context pairs: %d\n", len(n.ContextPairs)))
+			fmt.Fprintf(&plan, "Context pairs: %d\n", len(n.ContextPairs))
 		}
 
 		// DISCOVER mode details
 		if n.Mode == ast.QueryModeDiscover {
 			if n.Target != nil {
-				plan.WriteString(fmt.Sprintf("Target: %v\n", n.Target))
+				fmt.Fprintf(&plan, "Target: %v\n", n.Target)
 			}
 			if len(n.ContextPairs) > 0 {
-				plan.WriteString(fmt.Sprintf("Context pairs: %d\n", len(n.ContextPairs)))
+				fmt.Fprintf(&plan, "Context pairs: %d\n", len(n.ContextPairs))
+			}
+		}
+
+		// RELEVANCE FEEDBACK mode details
+		if n.Mode == ast.QueryModeRelevanceFeedback {
+			fmt.Fprintf(&plan, "Feedback target: %v\n", n.FeedbackTarget)
+			if len(n.FeedbackItems) > 0 {
+				fmt.Fprintf(&plan, "Feedback items: %d\n", len(n.FeedbackItems))
+			}
+			if n.FeedbackStrategy != nil {
+				fmt.Fprintf(&plan, "Strategy: %s (a=%g, b=%g, c=%g)\n", n.FeedbackStrategy.Type, n.FeedbackStrategy.A, n.FeedbackStrategy.B, n.FeedbackStrategy.C)
 			}
 		}
 
 		// CTEs
 		if len(n.CTEs) > 0 {
-			plan.WriteString(fmt.Sprintf("CTEs: %d defined\n", len(n.CTEs)))
+			fmt.Fprintf(&plan, "CTEs: %d defined\n", len(n.CTEs))
 		}
 
 		// PREFETCH refs
@@ -796,57 +836,61 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			for i, ref := range n.PrefetchRefs {
 				refs[i] = ref.CTEName
 			}
-			plan.WriteString(fmt.Sprintf("Prefetch: %v\n", refs))
+			fmt.Fprintf(&plan, "Prefetch: %v\n", refs)
 		}
 
 		// FUSION
 		if n.FusionType != nil {
-			plan.WriteString(fmt.Sprintf("Fusion: %s\n", *n.FusionType))
+			fmt.Fprintf(&plan, "Fusion: %s\n", *n.FusionType)
 		}
 
 		// FORMULA
 		if n.Formula != nil {
-			plan.WriteString(fmt.Sprintf("Formula: %s\n", ast.FormulaExprString(n.Formula)))
+			fmt.Fprintf(&plan, "Formula: %s\n", ast.FormulaExprString(n.Formula))
 		}
 		if len(n.FormulaDefaults) > 0 {
 			var defs []string
 			for k, v := range n.FormulaDefaults {
 				defs = append(defs, fmt.Sprintf("%s = %g", k, v))
 			}
-			plan.WriteString(fmt.Sprintf("Defaults: %s\n", strings.Join(defs, ", ")))
+			fmt.Fprintf(&plan, "Defaults: %s\n", strings.Join(defs, ", "))
 		}
 
 		plan.WriteString("Action: Universal Query\n")
 	case *ast.DeleteStmt:
 		if n.Field != "" {
-			plan.WriteString(fmt.Sprintf("Statement: DELETE FROM %s WHERE %s = '%v'\n",
-				n.Collection, n.Field, n.Value))
+			fmt.Fprintf(&plan, "Statement: DELETE FROM %s WHERE %s = '%v'\n",
+				n.Collection, n.Field, n.Value)
 			plan.WriteString("Action: Delete points by filter\n")
 		} else {
-			plan.WriteString(fmt.Sprintf("Statement: DELETE FROM %s WHERE id = '%v'\n",
-				n.Collection, n.PointID))
+			fmt.Fprintf(&plan, "Statement: DELETE FROM %s WHERE id = '%v'\n",
+				n.Collection, n.PointID)
 			plan.WriteString("Action: Delete point by ID\n")
 		}
 	case *ast.UpdateVectorStmt:
-		plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET VECTOR = [...] WHERE id = '%v'\n", n.Collection, n.PointID))
-		plan.WriteString(fmt.Sprintf("Vector length: %d\n", len(n.Vector)))
+		name := ""
+		if n.VectorName != nil {
+			name = fmt.Sprintf(" '%s'", *n.VectorName)
+		}
+		fmt.Fprintf(&plan, "Statement: UPDATE %s SET VECTOR%s = [...] WHERE id = '%v'\n", n.Collection, name, n.PointID)
+		fmt.Fprintf(&plan, "Vector length: %d\n", len(n.Vector))
 		plan.WriteString("Action: Update point vector\n")
 	case *ast.UpdatePayloadStmt:
 		if n.QueryFilter != nil {
-			plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET PAYLOAD = {...} WHERE %s\n", n.Collection, e.filterToString(n.QueryFilter)))
+			fmt.Fprintf(&plan, "Statement: UPDATE %s SET PAYLOAD = {...} WHERE %s\n", n.Collection, e.filterToString(n.QueryFilter))
 			plan.WriteString("Action: Update payload for points matching filter\n")
 		} else {
-			plan.WriteString(fmt.Sprintf("Statement: UPDATE %s SET PAYLOAD = {...} WHERE id = '%v'\n", n.Collection, n.PointID))
+			fmt.Fprintf(&plan, "Statement: UPDATE %s SET PAYLOAD = {...} WHERE id = '%v'\n", n.Collection, n.PointID)
 			plan.WriteString("Action: Update payload for point by ID\n")
 		}
 	case *ast.CreateIndexStmt:
-		plan.WriteString(fmt.Sprintf("Statement: CREATE INDEX ON COLLECTION %s FOR %s", n.Collection, n.Field))
+		fmt.Fprintf(&plan, "Statement: CREATE INDEX ON COLLECTION %s FOR %s", n.Collection, n.Field)
 		if n.FieldType != "" && n.FieldType != "keyword" {
-			plan.WriteString(fmt.Sprintf(" TYPE %s", n.FieldType))
+			fmt.Fprintf(&plan, " TYPE %s", n.FieldType)
 		}
 		plan.WriteString("\n")
 		if len(n.Options) > 0 {
-			plan.WriteString(fmt.Sprintf("Options: %v\n", n.Options))
+			fmt.Fprintf(&plan, "Options: %v\n", n.Options)
 		}
 		plan.WriteString("Action: Create payload index on field\n")
 	default:
@@ -1316,6 +1360,11 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 				}
 				vp.QuantizationConfig = cfg
 			}
+			if v.Multivector != nil {
+				vp.MultivectorConfig = &qdrant.MultiVectorConfig{
+					Comparator: qdrant.MultiVectorComparator_MaxSim,
+				}
+			}
 			paramsMap[v.Name] = vp
 		}
 		vectorsConfig = qdrant.NewVectorsConfigMap(paramsMap)
@@ -1324,7 +1373,14 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 		if err != nil {
 			return nil, err
 		}
-		vectorsConfig = qdrant.NewVectorsConfigMap(collectionVectorParams(denseSize, n.Rerank))
+		params := collectionVectorParams(denseSize, n.Rerank)
+		if n.DenseVector != nil {
+			if vp, ok := params[denseVectorName]; ok {
+				delete(params, denseVectorName)
+				params[*n.DenseVector] = vp
+			}
+		}
+		vectorsConfig = qdrant.NewVectorsConfigMap(params)
 	}
 
 	collection := &qdrant.CreateCollection{
@@ -1362,8 +1418,12 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 		}
 		collection.SparseVectorsConfig = qdrant.NewSparseVectorsConfig(sparseMap)
 	} else if n.Hybrid || n.Rerank {
+		sparseName := sparseVectorName
+		if n.SparseVector != nil {
+			sparseName = *n.SparseVector
+		}
 		collection.SparseVectorsConfig = qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
-			sparseVectorName: {
+			sparseName: {
 				Modifier: qdrant.Modifier_Idf.Enum(),
 			},
 		})

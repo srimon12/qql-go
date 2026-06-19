@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go 1.24+](https://img.shields.io/badge/Go-1.24%2B-00ADD8.svg)](https://go.dev/)
-[![Version](https://img.shields.io/badge/Version-0.4.0-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/Version-0.5.0-blue.svg)](VERSION)
 [![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)](https://github.com/srimon12/qql-go/releases)
 
 A single-binary CLI, SDK, and gateway for operating Qdrant vector databases with a SQL-like query language.
@@ -67,12 +67,40 @@ WITH dense AS (QUERY 'care' USING dense LIMIT 200),
      sparse AS (QUERY 'care' USING sparse LIMIT 300)
 QUERY 'care' FROM docs LIMIT 10 PREFETCH (dense, sparse) FUSION RRF
 
+-- Pure fusion (no search target, just combine CTE results)
+WITH dense AS (QUERY 'care' USING dense LIMIT 200),
+     sparse AS (QUERY 'care' USING sparse LIMIT 300)
+FUSION RRF LIMIT 10 PREFETCH (dense, sparse)
+
 -- Recommendation by example
 QUERY RECOMMEND WITH (positive = ('id-1', 'id-2'), negative = ('id-3')) FROM docs LIMIT 5
 
 -- Score shaping with BOOST
 QUERY 'emergency' FROM docs LIMIT 10
   BOOST (CASE WHEN priority = 'high' THEN 2.0 ELSE 1.0 END + GAUSS_DECAY(date, target: datetime('2026-01-01'), scale: 30d))
+```
+
+### Multivector (ColBERT / ColPali)
+
+Store and search with token-level vector representations for late interaction models:
+
+```sql
+-- Create collection with multivector (HNSW disabled for reranking)
+CREATE COLLECTION pdf_retrieval (
+  original VECTOR(128, COSINE) WITH MULTIVECTOR (comparator = 'max_sim') WITH HNSW (m = 0),
+  mean_pooling_columns VECTOR(128, COSINE) WITH MULTIVECTOR (comparator = 'max_sim'),
+  mean_pooling_rows VECTOR(128, COSINE) WITH MULTIVECTOR (comparator = 'max_sim')
+)
+
+-- Insert with named vectors
+INSERT INTO pdf_retrieval VALUES {'id': 1, 'vector': {'original': [[0.1, 0.2], [0.3, 0.4]], 'mean_pooling_columns': [[0.1, 0.2]], 'mean_pooling_rows': [[0.3, 0.4]]}}
+
+-- Two-stage retrieval: prefetch with mean-pooled, rerank with original
+WITH
+  _pf0 AS (QUERY [0.1, 0.2, 0.3] USING 'mean_pooling_columns' LIMIT 100),
+  _pf1 AS (QUERY [0.1, 0.2, 0.3] USING 'mean_pooling_rows' LIMIT 100)
+QUERY [0.1, 0.2, 0.3] FROM pdf_retrieval USING 'original' LIMIT 10
+  PREFETCH (_pf0, _pf1)
 ```
 
 ### Collection management
@@ -93,10 +121,13 @@ SHOW COLLECTION docs
 
 ```sql
 INSERT INTO docs VALUES {'id': 1, 'text': 'hello', 'topic': 'search'} USING HYBRID
+INSERT INTO docs VALUES {'id': 1, 'vector': {'dense': [0.1, 0.2, 0.3], 'colbert': [[0.1, 0.2], [0.3, 0.4]]}}
 SELECT * FROM docs WHERE id = 1
 SCROLL FROM docs WHERE topic = 'search' LIMIT 10
+UPDATE docs SET VECTOR 'colbert' = [0.1, 0.2, 0.3] WHERE id = 1
 UPDATE docs SET PAYLOAD = {'status': 'reviewed'} WHERE id = 1
 DELETE FROM docs WHERE status = 'archived'
+
 ```
 
 ### Score boosting (BOOST)
@@ -159,7 +190,33 @@ Start a gRPC-compatible server for remote access:
 qql-go gateway --listen :50051 --qdrant-url http://localhost:6334
 ```
 
-Exposes `Exec`, `ExecBatch`, `Explain`, and `Health` via Connect RPC (gRPC + gRPC-Web + HTTP/1.1). Auto-detects pure QUERY batches and routes to Qdrant's native `QueryBatch` API for single round-trip execution.
+Exposes `Exec`, `ExecBatch`, `Explain`, `Health`, and `Convert` via Connect RPC (gRPC + gRPC-Web + HTTP/1.1). Auto-detects pure QUERY batches and routes to Qdrant's native `QueryBatch` API for single round-trip execution.
+
+## Convert (REST JSON → QQL)
+
+Convert Qdrant REST API JSON to native QQL statements:
+
+```bash
+# From file
+qql-go convert payload.json
+
+# From stdin
+echo '{"points":[{"id":1,"payload":{"text":"hi"}}]}' | qql-go convert
+
+# Validate generated QQL
+qql-go convert --validate payload.json
+```
+
+For Python SDK migration, intercept HTTP calls and convert to QQL:
+
+```bash
+# Install qdrant-client in a venv
+uv venv .venv && source .venv/bin/activate && uv pip install qdrant-client
+
+# Intercept any Python script using QdrantClient
+python3 sdks/python/qql_intercept.py your_script.py
+python3 sdks/python/qql_intercept.py your_script.py -o output.qql
+```
 
 ## Agent and scripting mode
 

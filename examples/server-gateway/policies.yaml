@@ -1,0 +1,81 @@
+# qql-go gateway policy — 4 organizations, 12+ teams
+#
+# Access model:
+#   - Tenant isolation: org_id from JWT → WHERE org = <value>
+#   - Department scoping: team docs + org-wide docs (team=all)
+#   - Confidential: only admins and managers
+#   - Public: everyone (including agents)
+#
+# Rules evaluated top-to-bottom. First match wins.
+
+rules:
+  # ── Platform admin: god mode ────────────────────────────────────────
+  - match:
+      claims:
+        role: platform_admin
+    allow: [QUERY, INSERT, UPDATE, DELETE, SCROLL, SELECT, SHOW, CREATE, CREATE_INDEX, DROP, ALTER, EXPLAIN]
+
+  # ── Org admin: full access within tenant ────────────────────────────
+  - match:
+      claims:
+        role: admin
+    allow: [QUERY, INSERT, UPDATE, DELETE, SCROLL, SELECT, SHOW, CREATE, CREATE_INDEX, ALTER, EXPLAIN]
+    inject:
+      where:
+        field: org
+        from_claim: org_id
+        op: "="
+
+  # ── Manager: read + write, tenant scoped, can see confidential ─────
+  - match:
+      claims:
+        role: manager
+    allow: [QUERY, INSERT, UPDATE, SCROLL, SELECT, SHOW, EXPLAIN]
+    inject:
+      where:
+        field: org
+        from_claim: org_id
+        op: "="
+    limits:
+      max_limit: 200
+
+  # ── Department reader: tenant + team scoped, no confidential ────────
+  # Sees: own team docs + org-wide docs (team=all)
+  # Hides: confidential docs, other team docs
+  - match:
+      claims:
+        role: reader
+    allow: [QUERY, SCROLL, SELECT, SHOW, EXPLAIN]
+    collections: [docs]
+    inject:
+      filters:
+        - field: org
+          from_claim: org_id
+          op: "="
+        - field: team
+          from_claim: department
+          op: "in"
+        - field: access
+          value: "confidential"
+          op: "!="
+    limits:
+      max_limit: 50
+
+  # ── Agent: public docs only, any tenant ─────────────────────────────
+  - match:
+      claims:
+        token_type: agent
+    allow: [QUERY, SCROLL]
+    collections: [docs]
+    inject:
+      filters:
+        - field: access
+          value: "public"
+          op: "="
+    limits:
+      max_limit: 10
+
+  # ── Catch-all: deny ─────────────────────────────────────────────────
+  - match:
+      authenticated: true
+    allow: []

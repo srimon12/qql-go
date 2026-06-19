@@ -19,6 +19,11 @@ func (p *Parser) parseUpdate() (ast.ASTNode, error) {
 	switch p.peek().Kind {
 	case lexer.TokenKindVector:
 		p.advance()
+		var vectorName *string
+		if p.peek().Kind == lexer.TokenKindString || p.peek().Kind == lexer.TokenKindIdentifier {
+			nameTok := p.advance()
+			vectorName = &nameTok.Value
+		}
 		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
 			return nil, err
 		}
@@ -51,6 +56,7 @@ func (p *Parser) parseUpdate() (ast.ASTNode, error) {
 			Collection: collection,
 			PointID:    pointID,
 			Vector:     vector,
+			VectorName: vectorName,
 		}, nil
 	case lexer.TokenKindPayload:
 		p.advance()
@@ -106,21 +112,26 @@ func (p *Parser) parseDelete() (*ast.DeleteStmt, error) {
 	if _, err := p.expect(lexer.TokenKindWhere); err != nil {
 		return nil, err
 	}
-	tok := p.peek()
-	if tok.Kind == lexer.TokenKindId {
-		p.advance()
-		if _, err := p.expect(lexer.TokenKindEquals); err != nil {
-			return nil, err
+
+	// Try full filter expression first — handles AND/OR/NOT/between/in/match etc.
+	savedPos := p.pos
+	queryFilter, err := p.parseFilterExpr()
+	if err == nil {
+		// If it's a simple field = value, extract as simple delete
+		if cmp, ok := queryFilter.(*ast.CompareExpr); ok && cmp.Op == "=" {
+			if cmp.Field == "id" {
+				return &ast.DeleteStmt{Collection: collection, PointID: cmp.Value}, nil
+			}
+			return &ast.DeleteStmt{Collection: collection, Field: cmp.Field, Value: cmp.Value}, nil
 		}
-		pointID, err := p.parsePointIDValue("DELETE")
-		if err != nil {
-			return nil, err
-		}
-		return &ast.DeleteStmt{Collection: collection, PointID: pointID}, nil
+		return &ast.DeleteStmt{Collection: collection, QueryFilter: queryFilter}, nil
 	}
-	field, err := p.parseFieldPath()
-	if err != nil {
-		return nil, err
+
+	// Could not parse complex filter, fall back to simple field = value
+	p.pos = savedPos
+	field, ferr := p.parseFieldPath()
+	if ferr != nil {
+		return nil, ferr
 	}
 	if _, err := p.expect(lexer.TokenKindEquals); err != nil {
 		return nil, err

@@ -18,6 +18,16 @@ qql-go connect --url http://localhost:6334 --inference-mode local \
 
 ## Examples
 
+### `pdf-retrieval/` — Multivector PDF retrieval with ColBERT
+
+Two-stage retrieval with ColPali/ColQwen-style multivectors: mean-pooled vectors for fast first-stage, original multivectors for accurate reranking.
+
+**Best for:** PDF retrieval at scale, ColBERT/ColPali workloads.
+
+```bash
+bash examples/pdf-retrieval/run-demo.sh
+```
+
 ### `medical-showcase/` — Full QQL feature showcase
 
 Minimal Python script that demonstrates every QQL feature against 12 medical records: hybrid search, filters, grouped retrieval, recommend, context, discover, prefetch DAGs, parameterized RRF, mutations, and operations.
@@ -63,6 +73,7 @@ bash examples/medical-retrieval-ops/run-demo.sh
 | Audience | Example |
 |----------|---------|
 | Developer evaluating QQL | `medical-showcase/` |
+| PDF / ColBERT retrieval | `pdf-retrieval/` |
 | CI/ops engineer | `release-validation/` |
 | On-call / support | `retrieval-debug-runbook/` |
 | ML / retrieval engineer | `medical-retrieval-ops/` |

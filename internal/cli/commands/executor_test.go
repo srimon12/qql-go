@@ -155,6 +155,23 @@ func TestExecutorExplainDocumentedQueries(t *testing.T) {
 				"Action: Universal Query",
 			},
 		},
+		{
+			name:  "update named vector",
+			query: "UPDATE docs SET VECTOR 'colbert' = [1.0, 2.0] WHERE id = 12",
+			wants: []string{
+				"Statement: UPDATE docs SET VECTOR 'colbert' = [...] WHERE id = '12'",
+				"Vector length: 2",
+			},
+		},
+		{
+			name:  "nested CTE query",
+			query: "WITH p2 AS (WITH p1 AS (QUERY 'inner' USING dense LIMIT 50) QUERY 'outer' USING sparse LIMIT 100 PREFETCH (p1)) QUERY 'test' FROM docs PREFETCH (p2)",
+			wants: []string{
+				"Statement: QUERY NEAREST FROM docs LIMIT 10",
+				"Prefetch: [p2]",
+				"CTEs: 1 defined",
+			},
+		},
 	}
 
 	for _, tt := range tests {

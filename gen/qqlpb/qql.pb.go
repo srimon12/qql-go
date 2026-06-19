@@ -21,6 +21,110 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ConvertRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	JsonPayload   string                 `protobuf:"bytes,1,opt,name=json_payload,json=jsonPayload,proto3" json:"json_payload,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConvertRequest) Reset() {
+	*x = ConvertRequest{}
+	mi := &file_qql_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConvertRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConvertRequest) ProtoMessage() {}
+
+func (x *ConvertRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_qql_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConvertRequest.ProtoReflect.Descriptor instead.
+func (*ConvertRequest) Descriptor() ([]byte, []int) {
+	return file_qql_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ConvertRequest) GetJsonPayload() string {
+	if x != nil {
+		return x.JsonPayload
+	}
+	return ""
+}
+
+type ConvertResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Statements    []string               `protobuf:"bytes,2,rep,name=statements,proto3" json:"statements,omitempty"`
+	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConvertResponse) Reset() {
+	*x = ConvertResponse{}
+	mi := &file_qql_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConvertResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConvertResponse) ProtoMessage() {}
+
+func (x *ConvertResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_qql_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConvertResponse.ProtoReflect.Descriptor instead.
+func (*ConvertResponse) Descriptor() ([]byte, []int) {
+	return file_qql_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ConvertResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *ConvertResponse) GetStatements() []string {
+	if x != nil {
+		return x.Statements
+	}
+	return nil
+}
+
+func (x *ConvertResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
 type ExecRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The QQL query string, e.g. "QUERY 'search' FROM docs LIMIT 5 USING HYBRID"
@@ -31,7 +135,7 @@ type ExecRequest struct {
 
 func (x *ExecRequest) Reset() {
 	*x = ExecRequest{}
-	mi := &file_qql_proto_msgTypes[0]
+	mi := &file_qql_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -43,7 +147,7 @@ func (x *ExecRequest) String() string {
 func (*ExecRequest) ProtoMessage() {}
 
 func (x *ExecRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_qql_proto_msgTypes[0]
+	mi := &file_qql_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56,7 +160,7 @@ func (x *ExecRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecRequest.ProtoReflect.Descriptor instead.
 func (*ExecRequest) Descriptor() ([]byte, []int) {
-	return file_qql_proto_rawDescGZIP(), []int{0}
+	return file_qql_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ExecRequest) GetQuery() string {
@@ -79,7 +183,7 @@ type ExecResponse struct {
 
 func (x *ExecResponse) Reset() {
 	*x = ExecResponse{}
-	mi := &file_qql_proto_msgTypes[1]
+	mi := &file_qql_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -91,7 +195,7 @@ func (x *ExecResponse) String() string {
 func (*ExecResponse) ProtoMessage() {}
 
 func (x *ExecResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_qql_proto_msgTypes[1]
+	mi := &file_qql_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -104,7 +208,7 @@ func (x *ExecResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecResponse.ProtoReflect.Descriptor instead.
 func (*ExecResponse) Descriptor() ([]byte, []int) {
-	return file_qql_proto_rawDescGZIP(), []int{1}
+	return file_qql_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ExecResponse) GetOk() bool {
@@ -146,7 +250,7 @@ type ExecBatchRequest struct {
 
 func (x *ExecBatchRequest) Reset() {
 	*x = ExecBatchRequest{}
-	mi := &file_qql_proto_msgTypes[2]
+	mi := &file_qql_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -158,7 +262,7 @@ func (x *ExecBatchRequest) String() string {
 func (*ExecBatchRequest) ProtoMessage() {}
 
 func (x *ExecBatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_qql_proto_msgTypes[2]
+	mi := &file_qql_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -171,7 +275,7 @@ func (x *ExecBatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecBatchRequest.ProtoReflect.Descriptor instead.
 func (*ExecBatchRequest) Descriptor() ([]byte, []int) {
-	return file_qql_proto_rawDescGZIP(), []int{2}
+	return file_qql_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ExecBatchRequest) GetQueries() []*ExecRequest {
@@ -197,7 +301,7 @@ type ExecBatchResponse struct {
 
 func (x *ExecBatchResponse) Reset() {
 	*x = ExecBatchResponse{}
-	mi := &file_qql_proto_msgTypes[3]
+	mi := &file_qql_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -209,7 +313,7 @@ func (x *ExecBatchResponse) String() string {
 func (*ExecBatchResponse) ProtoMessage() {}
 
 func (x *ExecBatchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_qql_proto_msgTypes[3]
+	mi := &file_qql_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -222,7 +326,7 @@ func (x *ExecBatchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecBatchResponse.ProtoReflect.Descriptor instead.
 func (*ExecBatchResponse) Descriptor() ([]byte, []int) {
-	return file_qql_proto_rawDescGZIP(), []int{3}
+	return file_qql_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ExecBatchResponse) GetResults() []*ExecResponse {
@@ -243,7 +347,7 @@ type ExplainRequest struct {
 
 func (x *ExplainRequest) Reset() {
 	*x = ExplainRequest{}
-	mi := &file_qql_proto_msgTypes[4]
+	mi := &file_qql_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -255,7 +359,7 @@ func (x *ExplainRequest) String() string {
 func (*ExplainRequest) ProtoMessage() {}
 
 func (x *ExplainRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_qql_proto_msgTypes[4]
+	mi := &file_qql_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -268,7 +372,7 @@ func (x *ExplainRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExplainRequest.ProtoReflect.Descriptor instead.
 func (*ExplainRequest) Descriptor() ([]byte, []int) {
-	return file_qql_proto_rawDescGZIP(), []int{4}
+	return file_qql_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ExplainRequest) GetQuery() string {
@@ -296,7 +400,7 @@ type ExplainResponse struct {
 
 func (x *ExplainResponse) Reset() {
 	*x = ExplainResponse{}
-	mi := &file_qql_proto_msgTypes[5]
+	mi := &file_qql_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -308,7 +412,7 @@ func (x *ExplainResponse) String() string {
 func (*ExplainResponse) ProtoMessage() {}
 
 func (x *ExplainResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_qql_proto_msgTypes[5]
+	mi := &file_qql_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -321,7 +425,7 @@ func (x *ExplainResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExplainResponse.ProtoReflect.Descriptor instead.
 func (*ExplainResponse) Descriptor() ([]byte, []int) {
-	return file_qql_proto_rawDescGZIP(), []int{5}
+	return file_qql_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ExplainResponse) GetOk() bool {
@@ -353,7 +457,7 @@ type HealthRequest struct {
 
 func (x *HealthRequest) Reset() {
 	*x = HealthRequest{}
-	mi := &file_qql_proto_msgTypes[6]
+	mi := &file_qql_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -365,7 +469,7 @@ func (x *HealthRequest) String() string {
 func (*HealthRequest) ProtoMessage() {}
 
 func (x *HealthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_qql_proto_msgTypes[6]
+	mi := &file_qql_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -378,7 +482,7 @@ func (x *HealthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthRequest.ProtoReflect.Descriptor instead.
 func (*HealthRequest) Descriptor() ([]byte, []int) {
-	return file_qql_proto_rawDescGZIP(), []int{6}
+	return file_qql_proto_rawDescGZIP(), []int{8}
 }
 
 type HealthResponse struct {
@@ -392,7 +496,7 @@ type HealthResponse struct {
 
 func (x *HealthResponse) Reset() {
 	*x = HealthResponse{}
-	mi := &file_qql_proto_msgTypes[7]
+	mi := &file_qql_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -404,7 +508,7 @@ func (x *HealthResponse) String() string {
 func (*HealthResponse) ProtoMessage() {}
 
 func (x *HealthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_qql_proto_msgTypes[7]
+	mi := &file_qql_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -417,7 +521,7 @@ func (x *HealthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthResponse.ProtoReflect.Descriptor instead.
 func (*HealthResponse) Descriptor() ([]byte, []int) {
-	return file_qql_proto_rawDescGZIP(), []int{7}
+	return file_qql_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *HealthResponse) GetVersion() string {
@@ -445,7 +549,15 @@ var File_qql_proto protoreflect.FileDescriptor
 
 const file_qql_proto_rawDesc = "" +
 	"\n" +
-	"\tqql.proto\x12\x03qql\"#\n" +
+	"\tqql.proto\x12\x03qql\"3\n" +
+	"\x0eConvertRequest\x12!\n" +
+	"\fjson_payload\x18\x01 \x01(\tR\vjsonPayload\"W\n" +
+	"\x0fConvertResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x1e\n" +
+	"\n" +
+	"statements\x18\x02 \x03(\tR\n" +
+	"statements\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"#\n" +
 	"\vExecRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\"j\n" +
 	"\fExecResponse\x12\x0e\n" +
@@ -469,12 +581,13 @@ const file_qql_proto_rawDesc = "" +
 	"\x0eHealthResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12)\n" +
 	"\x10qdrant_connected\x18\x02 \x01(\bR\x0fqdrantConnected\x12#\n" +
-	"\rqdrant_status\x18\x03 \x01(\tR\fqdrantStatus2\xd7\x01\n" +
+	"\rqdrant_status\x18\x03 \x01(\tR\fqdrantStatus2\x8d\x02\n" +
 	"\x03QQL\x12+\n" +
 	"\x04Exec\x12\x10.qql.ExecRequest\x1a\x11.qql.ExecResponse\x12:\n" +
 	"\tExecBatch\x12\x15.qql.ExecBatchRequest\x1a\x16.qql.ExecBatchResponse\x124\n" +
 	"\aExplain\x12\x13.qql.ExplainRequest\x1a\x14.qql.ExplainResponse\x121\n" +
-	"\x06Health\x12\x12.qql.HealthRequest\x1a\x13.qql.HealthResponseB&Z$github.com/srimon12/qql-go/gen/qqlpbb\x06proto3"
+	"\x06Health\x12\x12.qql.HealthRequest\x1a\x13.qql.HealthResponse\x124\n" +
+	"\aConvert\x12\x13.qql.ConvertRequest\x1a\x14.qql.ConvertResponseB&Z$github.com/srimon12/qql-go/gen/qqlpbb\x06proto3"
 
 var (
 	file_qql_proto_rawDescOnce sync.Once
@@ -488,30 +601,34 @@ func file_qql_proto_rawDescGZIP() []byte {
 	return file_qql_proto_rawDescData
 }
 
-var file_qql_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_qql_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_qql_proto_goTypes = []any{
-	(*ExecRequest)(nil),       // 0: qql.ExecRequest
-	(*ExecResponse)(nil),      // 1: qql.ExecResponse
-	(*ExecBatchRequest)(nil),  // 2: qql.ExecBatchRequest
-	(*ExecBatchResponse)(nil), // 3: qql.ExecBatchResponse
-	(*ExplainRequest)(nil),    // 4: qql.ExplainRequest
-	(*ExplainResponse)(nil),   // 5: qql.ExplainResponse
-	(*HealthRequest)(nil),     // 6: qql.HealthRequest
-	(*HealthResponse)(nil),    // 7: qql.HealthResponse
+	(*ConvertRequest)(nil),    // 0: qql.ConvertRequest
+	(*ConvertResponse)(nil),   // 1: qql.ConvertResponse
+	(*ExecRequest)(nil),       // 2: qql.ExecRequest
+	(*ExecResponse)(nil),      // 3: qql.ExecResponse
+	(*ExecBatchRequest)(nil),  // 4: qql.ExecBatchRequest
+	(*ExecBatchResponse)(nil), // 5: qql.ExecBatchResponse
+	(*ExplainRequest)(nil),    // 6: qql.ExplainRequest
+	(*ExplainResponse)(nil),   // 7: qql.ExplainResponse
+	(*HealthRequest)(nil),     // 8: qql.HealthRequest
+	(*HealthResponse)(nil),    // 9: qql.HealthResponse
 }
 var file_qql_proto_depIdxs = []int32{
-	0, // 0: qql.ExecBatchRequest.queries:type_name -> qql.ExecRequest
-	1, // 1: qql.ExecBatchResponse.results:type_name -> qql.ExecResponse
-	0, // 2: qql.QQL.Exec:input_type -> qql.ExecRequest
-	2, // 3: qql.QQL.ExecBatch:input_type -> qql.ExecBatchRequest
-	4, // 4: qql.QQL.Explain:input_type -> qql.ExplainRequest
-	6, // 5: qql.QQL.Health:input_type -> qql.HealthRequest
-	1, // 6: qql.QQL.Exec:output_type -> qql.ExecResponse
-	3, // 7: qql.QQL.ExecBatch:output_type -> qql.ExecBatchResponse
-	5, // 8: qql.QQL.Explain:output_type -> qql.ExplainResponse
-	7, // 9: qql.QQL.Health:output_type -> qql.HealthResponse
-	6, // [6:10] is the sub-list for method output_type
-	2, // [2:6] is the sub-list for method input_type
+	2, // 0: qql.ExecBatchRequest.queries:type_name -> qql.ExecRequest
+	3, // 1: qql.ExecBatchResponse.results:type_name -> qql.ExecResponse
+	2, // 2: qql.QQL.Exec:input_type -> qql.ExecRequest
+	4, // 3: qql.QQL.ExecBatch:input_type -> qql.ExecBatchRequest
+	6, // 4: qql.QQL.Explain:input_type -> qql.ExplainRequest
+	8, // 5: qql.QQL.Health:input_type -> qql.HealthRequest
+	0, // 6: qql.QQL.Convert:input_type -> qql.ConvertRequest
+	3, // 7: qql.QQL.Exec:output_type -> qql.ExecResponse
+	5, // 8: qql.QQL.ExecBatch:output_type -> qql.ExecBatchResponse
+	7, // 9: qql.QQL.Explain:output_type -> qql.ExplainResponse
+	9, // 10: qql.QQL.Health:output_type -> qql.HealthResponse
+	1, // 11: qql.QQL.Convert:output_type -> qql.ConvertResponse
+	7, // [7:12] is the sub-list for method output_type
+	2, // [2:7] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
 	2, // [2:2] is the sub-list for extension extendee
 	0, // [0:2] is the sub-list for field type_name
@@ -528,7 +645,7 @@ func file_qql_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_qql_proto_rawDesc), len(file_qql_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

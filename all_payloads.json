@@ -1,0 +1,442 @@
+[
+  {
+    "label": "Score Boosting with MATCH",
+    "json": "{\"prefetch\":{\"query\":[0.2,0.8,0.3],\"limit\":50},\"query\":{\"formula\":{\"sum\":[\"$score\",{\"mult\":[0.5,{\"key\":\"tag\",\"match\":{\"any\":[\"h1\",\"h2\",\"h3\",\"h4\"]}}]},{\"mult\":[0.25,{\"key\":\"tag\",\"match\":{\"any\":[\"p\",\"li\"]}}]}]}},\"limit\":10}"
+  },
+  {
+    "label": "Geo Distance Decay",
+    "json": "{\"prefetch\":{\"query\":[0.2,0.8,0.3],\"limit\":50},\"query\":{\"formula\":{\"sum\":[\"$score\",{\"gauss_decay\":{\"x\":{\"geo_distance\":{\"origin\":{\"lat\":52.504043,\"lon\":13.393236},\"to\":\"geo.location\"}},\"scale\":5000}}]}},\"defaults\":{\"geo.location\":{\"lat\":48.137154,\"lon\":11.576124}}}"
+  },
+  {
+    "label": "Time-Based Score Boosting",
+    "json": "{\"prefetch\":{\"query\":[0.2,0.8,0.3],\"limit\":50},\"query\":{\"formula\":{\"sum\":[\"$score\",{\"exp_decay\":{\"x\":{\"datetime_key\":\"update_time\"},\"target\":{\"datetime\":\"2025-01-01T00:00:00Z\"},\"scale\":86400,\"midpoint\":0.5}}]}}}"
+  },
+  {
+    "label": "MMR Query",
+    "json": "{\"query\":{\"nearest\":[0.01,0.45,0.67],\"mmr\":{\"diversity\":0.5,\"candidates_limit\":100}},\"limit\":10}"
+  },
+  {
+    "label": "Relevance Feedback",
+    "json": "{\"query\":{\"relevance_feedback\":{\"target\":[0.1,0.9,0.23],\"feedback\":[{\"example\":111,\"score\":0.68},{\"example\":222,\"score\":0.72},{\"example\":333,\"score\":0.61}],\"strategy\":{\"naive\":{\"a\":0.12,\"b\":0.43,\"c\":0.03}}}}}"
+  },
+  {
+    "label": "Search with vector",
+    "json": "{\"vector\":[0.1,0.2,0.3],\"limit\":10,\"filter\":{\"must\":[{\"key\":\"category\",\"match\":{\"value\":\"tech\"}}]},\"with_payload\":{\"include\":[\"title\",\"body\"]},\"with_vector\":[\"dense\",\"sparse\"],\"score_threshold\":0.5,\"using\":\"dense\",\"params\":{\"hnsw_ef\":128}}"
+  },
+  {
+    "label": "Query with text/model",
+    "json": "{\"query\":{\"text\":\"time travel\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true}"
+  },
+  {
+    "label": "Filter exact keyword",
+    "json": "{\"query\":{\"text\":\"time travel\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must\":[{\"key\":\"author\",\"match\":{\"value\":\"H.G. Wells\"}}]}}"
+  },
+  {
+    "label": "Filter must_not",
+    "json": "{\"query\":{\"text\":\"time travel\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must_not\":[{\"key\":\"author\",\"match\":{\"value\":\"H.G. Wells\"}}]}}"
+  },
+  {
+    "label": "Filter multi must AND",
+    "json": "{\"query\":{\"text\":\"space opera\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must\":[{\"key\":\"author\",\"match\":{\"value\":\"Larry Niven\"}},{\"key\":\"author\",\"match\":{\"value\":\"Jerry Pournelle\"}}]}}"
+  },
+  {
+    "label": "Filter should OR",
+    "json": "{\"query\":{\"text\":\"space opera\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"should\":[{\"key\":\"author\",\"match\":{\"value\":\"Larry Niven\"}},{\"key\":\"author\",\"match\":{\"value\":\"Jerry Pournelle\"}}]}}"
+  },
+  {
+    "label": "Filter match any",
+    "json": "{\"query\":{\"text\":\"space opera\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must\":[{\"key\":\"author\",\"match\":{\"any\":[\"Larry Niven\",\"Jerry Pournelle\"]}}]}}"
+  },
+  {
+    "label": "Filter text match",
+    "json": "{\"query\":{\"text\":\"space opera\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must\":[{\"key\":\"title\",\"match\":{\"text\":\"space\"}}]}}"
+  },
+  {
+    "label": "Filter text_any",
+    "json": "{\"query\":{\"text\":\"space opera\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must\":[{\"key\":\"title\",\"match\":{\"text_any\":\"space war\"}}]}}"
+  },
+  {
+    "label": "Filter phrase",
+    "json": "{\"query\":{\"text\":\"time travel\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must\":[{\"key\":\"title\",\"match\":{\"phrase\":\"time machine\"}}]}}"
+  },
+  {
+    "label": "Batch search 3 queries",
+    "json": "{\"searches\":[{\"query\":{\"text\":\"time travel\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must\":[{\"key\":\"title\",\"match\":{\"text\":\"time travel\"}}]}},{\"query\":{\"text\":\"time travel\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true,\"filter\":{\"must\":[{\"key\":\"title\",\"match\":{\"text_any\":\"time travel\"}}]}},{\"query\":{\"text\":\"time travel\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"with_payload\":true}]}"
+  },
+  {
+    "label": "Hybrid prefetch + fusion",
+    "json": "{\"prefetch\":[{\"query\":{\"text\":\"9780553213515\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"},\"using\":\"description-dense\",\"score_threshold\":0.5},{\"query\":{\"text\":\"9780553213515\",\"model\":\"Qdrant/bm25\"},\"using\":\"isbn-bm25\"}],\"query\":{\"fusion\":\"rrf\"},\"limit\":10,\"with_payload\":true}"
+  },
+  {
+    "label": "Wrapped endpoint formula",
+    "json": "{\"method\":\"POST\",\"path\":\"/collections/docs/points/query\",\"body\":{\"prefetch\":{\"query\":[0.2,0.8],\"limit\":50},\"query\":{\"formula\":{\"sum\":[\"$score\",{\"mult\":[2,{\"key\":\"priority\",\"match\":{\"value\":\"high\"}}]}]}},\"limit\":5}}"
+  },
+  {
+    "label": "DISCOVER query",
+    "json": "{\"target\":100,\"context\":[{\"positive\":1,\"negative\":2},{\"positive\":3,\"negative\":4}],\"limit\":20,\"filter\":{\"must\":[{\"key\":\"status\",\"match\":{\"value\":\"active\"}}]}}"
+  },
+  {
+    "label": "RECOMMEND query",
+    "json": "{\"positive\":[\"abc\",\"def\"],\"negative\":[\"xyz\"],\"limit\":5,\"strategy\":\"average_vector\",\"filter\":{\"must_not\":[{\"key\":\"deleted\",\"match\":{\"value\":true}}]}}"
+  },
+  {
+    "label": "Upsert points",
+    "json": "{\"points\":[{\"id\":1,\"vector\":{\"description-dense\":{\"text\":\"A Victorian scientist builds a device\",\"model\":\"sentence-transformers/all-minilm-l6-v2\"}},\"payload\":{\"title\":\"The Time Machine\",\"author\":\"H.G. Wells\",\"isbn\":\"9780553213515\"}}]}"
+  },
+  {
+    "label": "Recommend with context + filter",
+    "json": "{\"query\":{\"recommend\":{\"positive\":[100,231],\"negative\":[718,[0.2,0.3,0.4,0.5]],\"strategy\":\"average_vector\"}},\"filter\":{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}}]}}"
+  },
+  {
+    "label": "Recommend with using",
+    "json": "{\"query\":{\"recommend\":{\"positive\":[100,231],\"negative\":[718]}},\"using\":\"image\",\"limit\":10}"
+  },
+  {
+    "label": "Recommend with lookup_from",
+    "json": "{\"query\":{\"recommend\":{\"positive\":[100,231],\"negative\":[718]}},\"limit\":10,\"lookup_from\":{\"collection\":\"external_collection\",\"vector\":\"external_vector\"}}"
+  },
+  {
+    "label": "Batch recommend",
+    "json": "{\"searches\":[{\"query\":{\"recommend\":{\"positive\":[100,231],\"negative\":[718]}},\"filter\":{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}}]},\"limit\":10},{\"query\":{\"recommend\":{\"positive\":[200,67],\"negative\":[300]}},\"filter\":{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}}]},\"limit\":10}]}"
+  },
+  {
+    "label": "Discovery target + context",
+    "json": "{\"query\":{\"discover\":{\"target\":[0.2,0.1,0.9,0.7],\"context\":[{\"positive\":100,\"negative\":718},{\"positive\":200,\"negative\":300}]}},\"limit\":10}"
+  },
+  {
+    "label": "Context search (no target)",
+    "json": "{\"query\":{\"context\":[{\"positive\":100,\"negative\":718},{\"positive\":200,\"negative\":300}]},\"limit\":10}"
+  },
+  {
+    "label": "Create books collection",
+    "json": "{\"vectors\":{\"description-dense\":{\"size\":384,\"distance\":\"Cosine\"}}}"
+  },
+  {
+    "label": "Create index text",
+    "json": "{\"field_name\":\"title\",\"field_schema\":{\"type\":\"text\",\"ascii_folding\":true}}"
+  },
+  {
+    "label": "Distance matrix pairs",
+    "json": "{\"sample\":10,\"limit\":2,\"filter\":{\"must\":{\"key\":\"color\",\"match\":{\"value\":\"red\"}}}}"
+  },
+  {
+    "label": "Set payload by filter",
+    "json": "{\"payload\":{\"status\":\"archived\"},\"filter\":{\"must\":[{\"key\":\"status\",\"match\":{\"value\":\"discharged\"}}]}}"
+  },
+  {
+    "label": "Scroll with range",
+    "json": "{\"limit\":10,\"filter\":{\"must\":[{\"key\":\"year\",\"range\":{\"gte\":2024,\"lte\":2026}}]}}"
+  },
+  {
+    "label": "Delete by filter",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"status\",\"match\":{\"value\":\"inactive\"}}]}}"
+  },
+  {
+    "label": "Get points",
+    "json": "{\"ids\":[1,\"uuid-123\"]}"
+  },
+  {
+    "label": "Delete points",
+    "json": "{\"points\":[1,2,3]}"
+  },
+  {
+    "label": "E-Commerce Product Catalog",
+    "json": "{\"id\":101,\"vector\":[0.23,-0.45,0.89,0.12],\"payload\":{\"product_details\":{\"brand\":\"FlexFit\",\"sku\":\"XYZ-9876-BL\",\"dimensions\":{\"weight_kg\":0.45,\"box\":{\"h\":10,\"w\":20,\"l\":30}}},\"marketplace\":{\"total_sellers\":3,\"sellers\":[{\"name\":\"Alpha Retail\",\"price\":89.99,\"shipping\":{\"free\":true,\"days\":2},\"badges\":[\"top_seller\",\"authorized_dealer\"]},{\"name\":\"Omega Goods\",\"price\":84.50,\"shipping\":{\"free\":false,\"days\":5},\"badges\":[]}]},\"history\":{\"release_date\":\"2025-11-12\",\"price_drops_2026\":[89.99,87.00,84.50]},\"search_tags\":[\"footwear\",\"running\",\"breathable\"]}}"
+  },
+  {
+    "label": "Healthcare Patient Records",
+    "json": "{\"id\":\"patient-f8c32\",\"vector\":[-0.11,0.76,0.34,-0.92],\"payload\":{\"demographics\":{\"age\":42,\"gender\":\"female\",\"habits\":{\"smoker\":false,\"exercise_days_week\":4}},\"clinical_data\":{\"primary_diagnosis\":\"Type 2 Diabetes\",\"vitals_log\":[{\"date\":\"2026-01-10\",\"blood_pressure\":\"120/80\",\"bmi\":24.5},{\"date\":\"2026-05-14\",\"blood_pressure\":\"118/79\",\"bmi\":24.1}],\"active_prescriptions\":[\"Metformin\",\"Vitamin D3\"]},\"care_facilities\":[{\"clinic_id\":\"NYC-MED-01\",\"primary\":true,\"location\":{\"lat\":40.7128,\"lon\":-74.0060}}]}}"
+  },
+  {
+    "label": "Financial Fraud Detection",
+    "json": "{\"id\":99942,\"vector\":[0.65,0.11,-0.54,0.33],\"payload\":{\"account\":{\"user_id\":\"usr_7721\",\"tier\":\"platinum\",\"risk_profile\":{\"score\":12.5,\"flagged_actions_30d\":0}},\"transaction\":{\"amount_usd\":1250.00,\"category\":\"luxury_goods\",\"terminal_location\":{\"lat\":48.8566,\"lon\":2.3522}},\"device_telemetry\":{\"os\":\"iOS\",\"vpn_detected\":false,\"known_ips\":[\"192.168.1.5\",\"10.0.0.12\"],\"session_tokens\":[{\"token_id\":\"tok_a1\",\"expires\":\"2026-07-01\"}]}}}"
+  },
+  {
+    "label": "Smart City IoT Sensor",
+    "json": "{\"id\":\"sensor-grid-east-04\",\"vector\":[0.02,-0.88,0.41,0.19],\"payload\":{\"hardware\":{\"model\":\"EnviroNode-X1\",\"firmware\":{\"version\":\"4.2.1\",\"last_patch\":\"2026-02-18\"}},\"deployment\":{\"zone\":\"District 9\",\"placement\":\"pole_mount\",\"geo\":{\"lat\":1.29027,\"lon\":103.85195}},\"metrics_stream\":{\"air_quality\":{\"pm2_5\":12.4,\"co2_ppm\":415},\"hourly_traffic_counts\":[142,198,310,285]},\"maintenance_logs\":[{\"technician\":\"Tech_7\",\"action\":\"sensor_cleaned\",\"status\":\"passed\"}]}}"
+  },
+  {
+    "label": "Media Streaming Engine",
+    "json": "{\"id\":\"video-content-771\",\"vector\":[0.51,0.52,-0.11,-0.74],\"payload\":{\"show_info\":{\"title\":\"Cyber Horizon\",\"type\":\"series\",\"attributes\":{\"duration_mins\":45,\"language\":\"en\",\"maturity_rating\":\"TV-MA\"}},\"localization\":{\"available_audio\":[\"en\",\"es\",\"fr\",\"de\"],\"available_subtitles\":[\"en\",\"es\",\"fr\",\"de\",\"ja\",\"zh\"]},\"user_engagement\":{\"total_global_views\":4500000,\"completion_rate_percent\":82.4,\"watch_history_nodes\":[{\"user_segment\":\"sci-fi-fans\",\"avg_rating\":4.9},{\"user_segment\":\"action-fans\",\"avg_rating\":4.1}]}}}"
+  },
+  {
+    "label": "Complex point from earlier",
+    "json": "{\"id\":42,\"vector\":[0.15,0.88,-0.23,0.45],\"payload\":{\"metadata\":{\"merchant\":\"TechZone\",\"category\":\"electronics\"},\"inventory\":{\"stock_count\":150,\"warehouses\":[{\"city\":\"Berlin\",\"coordinates\":{\"lon\":13.405,\"lat\":52.520}},{\"city\":\"Tokyo\",\"coordinates\":{\"lon\":139.65,\"lat\":35.67}}]},\"reviews\":[{\"user\":\"alice\",\"rating\":4.8,\"verified\":true},{\"user\":\"bob\",\"rating\":3.5,\"verified\":false}],\"tags\":[\"premium\",\"wireless\",\"noise-canceling\"]}}"
+  },
+  {
+    "label": "Filter must (scroll)",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}},{\"key\":\"color\",\"match\":{\"value\":\"red\"}}]}}"
+  },
+  {
+    "label": "Filter should (scroll)",
+    "json": "{\"filter\":{\"should\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}},{\"key\":\"color\",\"match\":{\"value\":\"red\"}}]}}"
+  },
+  {
+    "label": "Filter must_not (scroll)",
+    "json": "{\"filter\":{\"must_not\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}},{\"key\":\"color\",\"match\":{\"value\":\"red\"}}]}}"
+  },
+  {
+    "label": "Filter combined must+must_not",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}}],\"must_not\":[{\"key\":\"color\",\"match\":{\"value\":\"red\"}}]}}"
+  },
+  {
+    "label": "Filter nested must_not wrapping must",
+    "json": "{\"filter\":{\"must_not\":[{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}},{\"key\":\"color\",\"match\":{\"value\":\"red\"}}]}]}}"
+  },
+  {
+    "label": "Filter nested key dot notation",
+    "json": "{\"filter\":{\"should\":[{\"key\":\"country.name\",\"match\":{\"value\":\"Germany\"}}]}}"
+  },
+  {
+    "label": "Filter array projection range",
+    "json": "{\"filter\":{\"should\":[{\"key\":\"country.cities[].population\",\"range\":{\"gte\":9.0}}]}}"
+  },
+  {
+    "label": "Filter nested array match",
+    "json": "{\"filter\":{\"should\":[{\"key\":\"country.cities[].sightseeing\",\"match\":{\"value\":\"Osaka Castle\"}}]}}"
+  },
+  {
+    "label": "Filter nested object",
+    "json": "{\"filter\":{\"must\":[{\"nested\":{\"key\":\"diet\",\"filter\":{\"must\":[{\"key\":\"food\",\"match\":{\"value\":\"meat\"}},{\"key\":\"likes\",\"match\":{\"value\":true}}]}}}]}}"
+  },
+  {
+    "label": "Filter has_id",
+    "json": "{\"filter\":{\"must\":[{\"has_id\":[1,3,5,7,9,11]}]}}"
+  },
+  {
+    "label": "Filter has_vector",
+    "json": "{\"filter\":{\"must\":[{\"has_vector\":\"image\"}]}}"
+  },
+  {
+    "label": "Filter full text match",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"description\",\"match\":{\"text\":\"good cheap\"}}]}}"
+  },
+  {
+    "label": "Filter full text any",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"description\",\"match\":{\"text_any\":\"good cheap\"}}]}}"
+  },
+  {
+    "label": "Filter phrase match",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"description\",\"match\":{\"phrase\":\"brown fox\"}}]}}"
+  },
+  {
+    "label": "Filter range",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"price\",\"range\":{\"gte\":100.0,\"lte\":450.0}}]}}"
+  },
+  {
+    "label": "Filter datetime range",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"date\",\"range\":{\"gt\":\"2023-02-08T10:49:00Z\",\"lte\":\"2024-01-31T10:14:31Z\"}}]}}"
+  },
+  {
+    "label": "Filter UUID match",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"uuid\",\"match\":{\"value\":\"f47ac10b-58cc-4372-a567-0e02b2c3d479\"}}]}}"
+  },
+  {
+    "label": "Filter geo bounding box",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"location\",\"geo_bounding_box\":{\"bottom_right\":{\"lon\":13.455868,\"lat\":52.495862},\"top_left\":{\"lon\":13.403683,\"lat\":52.520711}}}]}}"
+  },
+  {
+    "label": "Filter geo radius",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"location\",\"geo_radius\":{\"center\":{\"lon\":13.403683,\"lat\":52.520711},\"radius\":1000.0}}]}}"
+  },
+  {
+    "label": "Filter values count",
+    "json": "{\"filter\":{\"must\":[{\"key\":\"comments\",\"values_count\":{\"gt\":2}}]}}"
+  },
+  {
+    "label": "Filter is_empty",
+    "json": "{\"filter\":{\"must\":[{\"is_empty\":{\"key\":\"reports\"}}]}}"
+  },
+  {
+    "label": "Filter is_null",
+    "json": "{\"filter\":{\"must\":[{\"is_null\":{\"key\":\"reports\"}}]}}"
+  },
+  {
+    "label": "Search by ID query",
+    "json": "{\"query\":\"43cf51e2-8777-4f52-bc74-c2cbde0c8b04\"}"
+  },
+  {
+    "label": "Search with vector + filter + params",
+    "json": "{\"query\":[0.2,0.1,0.9,0.79],\"filter\":{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}}]},\"params\":{\"hnsw_ef\":128,\"exact\":false},\"limit\":3}"
+  },
+  {
+    "label": "Search with using named vector",
+    "json": "{\"query\":[0.2,0.1,0.9,0.7],\"using\":\"image\",\"limit\":3}"
+  },
+  {
+    "label": "Sparse vector query",
+    "json": "{\"query\":{\"indices\":[1,3,5,7],\"values\":[0.1,0.2,0.3,0.4]},\"using\":\"text\"}"
+  },
+  {
+    "label": "Search with_vectors + with_payload true",
+    "json": "{\"query\":[0.2,0.1,0.9,0.7],\"with_vectors\":true,\"with_payload\":true}"
+  },
+  {
+    "label": "Search with_payload array",
+    "json": "{\"query\":[0.2,0.1,0.9,0.7],\"with_payload\":[\"city\",\"village\",\"town\"]}"
+  },
+  {
+    "label": "Search with_payload exclude",
+    "json": "{\"query\":[0.2,0.1,0.9,0.7],\"with_payload\":{\"exclude\":[\"city\"]}}"
+  },
+  {
+    "label": "Search ACORN params",
+    "json": "{\"query\":[0.2,0.1,0.9,0.7],\"params\":{\"acorn\":{\"enable\":true,\"max_selectivity\":0.4}},\"limit\":10}"
+  },
+  {
+    "label": "Batch search 2 queries",
+    "json": "{\"searches\":[{\"query\":[0.2,0.1,0.9,0.7],\"filter\":{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}}]},\"limit\":3},{\"query\":[0.5,0.3,0.2,0.3],\"filter\":{\"must\":[{\"key\":\"city\",\"match\":{\"value\":\"London\"}}]},\"limit\":3}]}"
+  },
+  {
+    "label": "Query by ID with lookup_from",
+    "json": "{\"query\":\"43cf51e2-8777-4f52-bc74-c2cbde0c8b04\",\"using\":\"512d-vector\",\"lookup_from\":{\"collection\":\"another_collection\",\"vector\":\"image-512\"}}"
+  },
+  {
+    "label": "Pagination with offset",
+    "json": "{\"query\":[0.2,0.1,0.9,0.7],\"with_vectors\":true,\"with_payload\":true,\"limit\":10,\"offset\":100}"
+  },
+  {
+    "label": "Search groups",
+    "json": "{\"query\":[1.1],\"group_by\":\"document_id\",\"limit\":4,\"group_size\":2}"
+  },
+  {
+    "label": "Groups with lookup",
+    "json": "{\"query\":[0.2,0.1,0.9,0.7],\"group_by\":\"document_id\",\"limit\":2,\"group_size\":2,\"with_lookup\":{\"collection\":\"documents\",\"with_payload\":[\"title\",\"text\"],\"with_vectors\":false}}"
+  },
+  {
+    "label": "Random sample",
+    "json": "{\"query\":{\"sample\":\"random\"}}"
+  },
+  {
+    "label": "RRF fusion sparse+dense",
+    "json": "{\"prefetch\":[{\"query\":{\"indices\":[1,42],\"values\":[0.22,0.8]},\"using\":\"sparse\",\"limit\":20},{\"query\":[0.01,0.45,0.67],\"using\":\"dense\",\"limit\":20}],\"query\":{\"rrf\":{}},\"limit\":10}"
+  },
+  {
+    "label": "RRF with k=60",
+    "json": "{\"prefetch\":[{\"query\":[0.01,0.45],\"using\":\"dense\",\"limit\":20},{\"query\":[0.01,0.45],\"using\":\"sparse\",\"limit\":20}],\"query\":{\"rrf\":{\"k\":60}},\"limit\":10}"
+  },
+  {
+    "label": "Weighted RRF",
+    "json": "{\"prefetch\":[{\"query\":[0.01,0.45],\"using\":\"dense\",\"limit\":20},{\"query\":[0.01,0.45],\"using\":\"sparse\",\"limit\":20}],\"query\":{\"rrf\":{\"weights\":[3.0,1.0]}},\"limit\":10}"
+  },
+  {
+    "label": "DBSF fusion",
+    "json": "{\"prefetch\":[{\"query\":[0.01,0.45,0.67],\"using\":\"dense\",\"limit\":20},{\"query\":[0.01,0.45,0.67],\"using\":\"sparse\",\"limit\":20}],\"query\":{\"fusion\":\"dbsf\"},\"limit\":10}"
+  },
+  {
+    "label": "Multi-stage rescore",
+    "json": "{\"prefetch\":{\"query\":[1,23,45,67],\"using\":\"mrl_byte\",\"limit\":1000},\"query\":[0.01,0.299,0.45,0.67],\"using\":\"full\",\"limit\":10}"
+  },
+  {
+    "label": "Multi-vector rescore",
+    "json": "{\"prefetch\":{\"query\":[0.01,0.45,0.67],\"limit\":100},\"query\":[[0.1,0.2],[0.2,0.1],[0.8,0.9]],\"using\":\"colbert\",\"limit\":10}"
+  },
+  {
+    "label": "Nested 3-level prefetch",
+    "json": "{\"prefetch\":{\"prefetch\":{\"query\":[1,23,45,67],\"using\":\"mrl_byte\",\"limit\":1000},\"query\":[0.01,0.45,0.67],\"using\":\"full\",\"limit\":100},\"query\":[[0.1,0.2],[0.2,0.1],[0.8,0.9]],\"using\":\"colbert\",\"limit\":10}"
+  },
+  {
+    "label": "Formula + RRF fusion",
+    "json": "{\"prefetch\":{\"prefetch\":[{\"query\":{\"indices\":[1,42],\"values\":[0.22,0.8]},\"using\":\"sparse\",\"limit\":100},{\"query\":[0.01,0.45,0.67],\"using\":\"dense\",\"limit\":100}],\"query\":{\"rrf\":{}},\"limit\":100},\"query\":{\"formula\":{\"sum\":[\"$score\",{\"mult\":[0.1,{\"exp_decay\":{\"x\":{\"datetime_key\":\"published_at\"},\"target\":{\"datetime\":\"2026-01-01\"},\"scale\":15552000,\"midpoint\":0.5}}]}]}},\"limit\":10}"
+  },
+  {
+    "label": "Single prefetch with USING",
+    "json": "{\"prefetch\":{\"query\":[0.1,0.2,0.3],\"using\":\"dense\",\"limit\":50},\"query\":[0.4,0.5,0.6],\"using\":\"colbert\",\"limit\":10}"
+  },
+  {
+    "label": "Multi-prefetch different USING (PDF retrieval)",
+    "json": "{\"prefetch\":[{\"query\":[0.1,0.2,0.3],\"using\":\"mean_pooling_columns\",\"limit\":100},{\"query\":[0.1,0.2,0.3],\"using\":\"mean_pooling_rows\",\"limit\":100}],\"query\":[0.1,0.2,0.3],\"using\":\"original\",\"limit\":10,\"with_payload\":true}"
+  },
+  {
+    "label": "Create multivector collection (PDF retrieval)",
+    "json": "{\"collection_name\":\"pdf_retrieval\",\"vectors\":{\"original\":{\"size\":128,\"distance\":\"Cosine\",\"multivector_config\":{\"comparator\":\"max_sim\"},\"hnsw_config\":{\"m\":0}},\"mean_pooling_columns\":{\"size\":128,\"distance\":\"Cosine\",\"multivector_config\":{\"comparator\":\"max_sim\"}},\"mean_pooling_rows\":{\"size\":128,\"distance\":\"Cosine\",\"multivector_config\":{\"comparator\":\"max_sim\"}}}}"
+  },
+  {
+    "label": "Insert with named multivector vectors",
+    "json": "{\"points\":[{\"id\":1,\"vector\":{\"dense\":[0.1,0.2,0.3],\"colbert\":[[0.1,0.2],[0.3,0.4],[0.5,0.6]]},\"payload\":{\"text\":\"sample document\"}}]}"
+  },
+  {
+    "label": "Nested prefetch with USING",
+    "json": "{\"prefetch\":{\"prefetch\":{\"query\":[0.1,0.2,0.3],\"using\":\"dense_small\",\"limit\":200},\"query\":[0.1,0.2,0.3],\"using\":\"dense_full\",\"limit\":50},\"query\":[[0.1,0.2],[0.3,0.4]],\"using\":\"colbert\",\"limit\":10}"
+  },
+  {
+    "label": "Prefetch with filter per prefetch",
+    "json": "{\"prefetch\":[{\"query\":[0.1,0.2,0.3],\"using\":\"dense\",\"limit\":50,\"filter\":{\"must\":[{\"key\":\"category\",\"match\":{\"value\":\"tech\"}}]}},{\"query\":[0.1,0.2,0.3],\"using\":\"sparse\",\"limit\":50}],\"query\":{\"fusion\":\"rrf\"},\"limit\":10}"
+  },
+  {
+    "label": "Multi-prefetch with text query and model",
+    "json": "{\"prefetch\":[{\"query\":{\"text\":\"machine learning\",\"model\":\"all-MiniLM-L6-v2\"},\"using\":\"dense\",\"limit\":50},{\"query\":{\"text\":\"machine learning\",\"model\":\"bm25\"},\"using\":\"sparse\",\"limit\":50}],\"query\":{\"fusion\":\"dbsf\"},\"limit\":10,\"with_payload\":true}"
+  },
+  {
+    "label": "Single prefetch vector rescore with USING",
+    "json": "{\"prefetch\":{\"query\":[0.1,0.2,0.3,0.4],\"using\":\"mrl_64\",\"limit\":500},\"query\":[0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8],\"using\":\"full_128\",\"limit\":10}"
+  },
+  {
+    "label": "3-level nested prefetch with USING",
+    "json": "{\"prefetch\":{\"prefetch\":{\"prefetch\":{\"query\":[0.1,0.2],\"using\":\"tiny\",\"limit\":1000},\"query\":[0.1,0.2,0.3],\"using\":\"medium\",\"limit\":100},\"query\":[0.1,0.2,0.3,0.4],\"using\":\"large\",\"limit\":50},\"query\":[[0.1,0.2],[0.3,0.4]],\"using\":\"colbert\",\"limit\":10}"
+  },
+  {
+    "label": "Multi-prefetch with score_threshold",
+    "json": "{\"prefetch\":[{\"query\":[0.1,0.2,0.3],\"using\":\"dense\",\"limit\":100,\"score_threshold\":0.5},{\"query\":[0.1,0.2,0.3],\"using\":\"sparse\",\"limit\":100}],\"query\":{\"fusion\":\"rrf\"},\"limit\":10}"
+  },
+  {
+    "label": "Multi-prefetch with offset per prefetch",
+    "json": "{\"prefetch\":[{\"query\":[0.1,0.2,0.3],\"using\":\"dense\",\"limit\":50},{\"query\":[0.1,0.2,0.3],\"using\":\"sparse\",\"limit\":50}],\"query\":{\"fusion\":\"rrf\"},\"limit\":10,\"offset\":20}"
+  },
+  {
+    "label": "Create collection 2 named vectors no multivector",
+    "json": "{\"vectors\":{\"dense\":{\"size\":384,\"distance\":\"Cosine\"},\"image\":{\"size\":512,\"distance\":\"Dot\"}}}"
+  },
+  {
+    "label": "Create collection 1 multivector 1 regular",
+    "json": "{\"vectors\":{\"dense\":{\"size\":384,\"distance\":\"Cosine\"},\"colbert\":{\"size\":128,\"distance\":\"Cosine\",\"multivector_config\":{\"comparator\":\"max_sim\"},\"hnsw_config\":{\"m\":0}}}}"
+  },
+  {
+    "label": "Insert single unnamed vector",
+    "json": "{\"points\":[{\"id\":42,\"vector\":[0.1,0.2,0.3,0.4],\"payload\":{\"title\":\"test\"}}]}"
+  },
+  {
+    "label": "Insert multiple points with vectors",
+    "json": "{\"points\":[{\"id\":1,\"vector\":{\"dense\":[0.1,0.2],\"sparse\":[0.3,0.4]},\"payload\":{\"a\":1}},{\"id\":2,\"vector\":{\"dense\":[0.5,0.6],\"sparse\":[0.7,0.8]},\"payload\":{\"a\":2}}]}"
+  },
+  {
+    "label": "Search with all fields combined",
+    "json": "{\"query\":[0.1,0.2,0.3],\"using\":\"dense\",\"filter\":{\"must\":[{\"key\":\"status\",\"match\":{\"value\":\"active\"}}]},\"with_payload\":{\"include\":[\"title\",\"score\"]},\"with_vectors\":[\"dense\"],\"score_threshold\":0.7,\"limit\":5,\"offset\":10}"
+  },
+  {
+    "label": "Search with using + group_by + group_size",
+    "json": "{\"query\":[0.1,0.2,0.3],\"using\":\"image\",\"group_by\":\"category\",\"group_size\":3,\"limit\":9,\"with_payload\":true}"
+  },
+  {
+    "label": "Multivector 2D query with USING",
+    "json": "{\"query\":[[0.1,0.2,0.3],[0.4,0.5,0.6],[0.7,0.8,0.9]],\"using\":\"colbert\",\"limit\":5}"
+  },
+  {
+    "label": "Wrapped endpoint search",
+    "json": "{\"method\":\"POST\",\"path\":\"/collections/docs/points/search\",\"body\":{\"query\":[0.1,0.2,0.3],\"using\":\"dense\",\"limit\":5}}"
+  },
+  {
+    "label": "Wrapped endpoint recommend",
+    "json": "{\"method\":\"POST\",\"path\":\"/collections/docs/points/recommend\",\"body\":{\"positive\":[1,2],\"negative\":[3],\"limit\":5}}"
+  },
+  {
+    "label": "Batch search mixed recommend+search",
+    "json": "{\"searches\":[{\"query\":[0.1,0.2,0.3],\"limit\":3},{\"query\":{\"recommend\":{\"positive\":[1,2],\"negative\":[3]}},\"limit\":5}]}"
+  },
+  {
+    "label": "Multi-prefetch RRF with weights and filter",
+    "json": "{\"prefetch\":[{\"query\":[0.1,0.2],\"using\":\"dense\",\"limit\":50,\"filter\":{\"must\":[{\"key\":\"lang\",\"match\":{\"value\":\"en\"}}]}},{\"query\":{\"text\":\"hello\",\"model\":\"bm25\"},\"using\":\"sparse\",\"limit\":50}],\"query\":{\"rrf\":{\"weights\":[2.0,1.0]}},\"limit\":10,\"with_payload\":true}"
+  },
+  {
+    "label": "Multi-prefetch DBSF with score_threshold",
+    "json": "{\"prefetch\":[{\"query\":[0.1,0.2,0.3],\"using\":\"dense\",\"limit\":100,\"score_threshold\":0.3},{\"query\":[0.1,0.2,0.3],\"using\":\"sparse\",\"limit\":100,\"score_threshold\":0.2}],\"query\":{\"fusion\":\"dbsf\"},\"limit\":10}"
+  },
+  {
+    "label": "Insert with vectors field (old format)",
+    "json": "{\"points\":[{\"id\":10,\"vectors\":{\"dense\":[0.1,0.2,0.3],\"image\":[0.4,0.5,0.6]},\"payload\":{\"name\":\"old format\"}}]}"
+  },
+  {
+    "label": "Single prefetch array with text model",
+    "json": "{\"prefetch\":[{\"query\":{\"text\":\"deep learning\",\"model\":\"all-MiniLM-L6-v2\"},\"using\":\"dense\",\"limit\":50}],\"query\":{\"text\":\"deep learning\",\"model\":\"colbert\"},\"using\":\"colbert\",\"limit\":10}"
+  }
+]

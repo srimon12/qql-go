@@ -98,6 +98,19 @@ func TestParseUpdate(t *testing.T) {
 			},
 		},
 		{
+			name:  "update custom named vector by id",
+			input: "UPDATE articles SET VECTOR 'colbert' = [0.1, 0.2] WHERE id = 42",
+			check: func(t *testing.T, node ast.ASTNode) {
+				stmt, ok := node.(*ast.UpdateVectorStmt)
+				require.True(t, ok)
+				assert.Equal(t, "articles", stmt.Collection)
+				assert.Equal(t, 42, stmt.PointID)
+				assert.Equal(t, []float32{0.1, 0.2}, stmt.Vector)
+				require.NotNil(t, stmt.VectorName)
+				assert.Equal(t, "colbert", *stmt.VectorName)
+			},
+		},
+		{
 			name:  "update payload by id",
 			input: "UPDATE articles SET PAYLOAD = {'year': 2025} WHERE id = 'abc-123'",
 			check: func(t *testing.T, node ast.ASTNode) {
