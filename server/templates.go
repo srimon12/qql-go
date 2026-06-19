@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"regexp"
 	"strings"
@@ -134,9 +135,7 @@ func (te *TemplateEngine) Resolve(name string, params map[string]string, claims 
 			}
 		}
 	}
-	for k, v := range params {
-		vars[k] = v
-	}
+	maps.Copy(vars, params)
 
 	// Resolve {variables}.
 	result := varPattern.ReplaceAllStringFunc(tmpl.Query, func(match string) string {

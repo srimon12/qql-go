@@ -120,8 +120,8 @@ DOCUMENTS = [
 def build_create_qql() -> list[str]:
     """Generate CREATE COLLECTION + indexes as individual statements."""
     return [
-        "CREATE COLLECTION docs HYBRID",
-        "CREATE INDEX ON COLLECTION docs FOR org TYPE keyword",
+        "CREATE COLLECTION docs HYBRID WITH HNSW (m = 0)",
+        "CREATE INDEX ON COLLECTION docs FOR org TYPE keyword WITH (is_tenant = true, on_disk = true)",
         "CREATE INDEX ON COLLECTION docs FOR team TYPE keyword",
         "CREATE INDEX ON COLLECTION docs FOR access TYPE keyword",
         "CREATE INDEX ON COLLECTION docs FOR topic TYPE keyword",

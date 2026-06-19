@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/qdrant/go-client/qdrant"
@@ -358,9 +359,7 @@ func (e *Executor) buildCTEPrefetch(ctx context.Context, stmt *ast.QueryStmt, ct
 
 	// Scoped map of available CTEs (inheriting parents + local nested CTEs)
 	scopedMap := make(map[string]*qdrant.PrefetchQuery, len(cteMap)+len(stmt.CTEs))
-	for k, v := range cteMap {
-		scopedMap[k] = v
-	}
+	maps.Copy(scopedMap, cteMap)
 	for _, localCte := range stmt.CTEs {
 		localPq, err := e.buildCTEPrefetch(ctx, localCte.Stmt, scopedMap)
 		if err != nil {

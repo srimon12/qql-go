@@ -547,7 +547,7 @@ func TestRateLimiter_AllowAndBlock(t *testing.T) {
 	})
 
 	// Should allow up to capacity.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if !rl.Allow("user1") {
 			t.Fatalf("request %d should be allowed", i)
 		}

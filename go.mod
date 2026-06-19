@@ -10,8 +10,8 @@ require (
 )
 
 require (
-	github.com/fsnotify/fsnotify v1.10.1 // indirect
-	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
+	github.com/fsnotify/fsnotify v1.10.1
+	github.com/golang-jwt/jwt/v5 v5.3.1
 )
 
 require (
@@ -28,5 +28,5 @@ require (
 	google.golang.org/grpc v1.80.0 // indirect
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gopkg.in/yaml.v3 v3.0.1
 )
