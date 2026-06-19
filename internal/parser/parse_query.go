@@ -9,6 +9,32 @@ import (
 )
 
 func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
+	tok := p.peek()
+	if tok.Kind == lexer.TokenKindFusion {
+		// Pure fusion query: FUSION rrf [FROM collection] LIMIT ... PREFETCH (...)
+		p.advance()
+		stmt := &ast.QueryStmt{
+			Mode: ast.QueryModeNearest,
+		}
+		// Parse fusion type (rrf, dbsf, etc.)
+		fusionTok := p.peek()
+		if fusionTok.Kind == lexer.TokenKindIdentifier || fusionTok.Kind == lexer.TokenKindString {
+			fusion := fusionTok.Value
+			stmt.FusionType = &fusion
+			p.advance()
+		}
+		// Optional FROM clause
+		if p.peek().Kind == lexer.TokenKindFrom {
+			p.advance()
+			coll, err := p.parseIdentifier()
+			if err != nil {
+				return nil, err
+			}
+			stmt.Collection = coll
+		}
+		p.parseQueryClauses(stmt)
+		return stmt, nil
+	}
 	if _, err := p.expect(lexer.TokenKindQuery); err != nil {
 		return nil, err
 	}
@@ -16,7 +42,7 @@ func (p *Parser) parseQuery() (*ast.QueryStmt, error) {
 	return p.parseQueryBody()
 }
 
-// parseQueryWithCTE handles statements starting with WITH (CTE block first, then QUERY).
+// parseQueryWithCTE handles statements starting with WITH (CTE block first, then QUERY or FUSION).
 func (p *Parser) parseQueryWithCTE() (*ast.QueryStmt, error) {
 	if _, err := p.expect(lexer.TokenKindWith); err != nil {
 		return nil, err
@@ -24,6 +50,32 @@ func (p *Parser) parseQueryWithCTE() (*ast.QueryStmt, error) {
 	ctes, err := p.parseCTEList()
 	if err != nil {
 		return nil, err
+	}
+	tok := p.peek()
+	if tok.Kind == lexer.TokenKindFusion {
+		// Pure fusion query with CTEs: WITH ... FUSION rrf [FROM collection] ...
+		p.advance()
+		stmt := &ast.QueryStmt{
+			Mode: ast.QueryModeNearest,
+			CTEs: ctes,
+		}
+		fusionTok := p.peek()
+		if fusionTok.Kind == lexer.TokenKindIdentifier || fusionTok.Kind == lexer.TokenKindString {
+			fusion := fusionTok.Value
+			stmt.FusionType = &fusion
+			p.advance()
+		}
+		// Optional FROM clause
+		if p.peek().Kind == lexer.TokenKindFrom {
+			p.advance()
+			coll, err := p.parseIdentifier()
+			if err != nil {
+				return nil, err
+			}
+			stmt.Collection = coll
+		}
+		p.parseQueryClauses(stmt)
+		return stmt, nil
 	}
 	if _, err := p.expect(lexer.TokenKindQuery); err != nil {
 		return nil, err
@@ -153,21 +205,32 @@ func (p *Parser) parseQueryBody() (*ast.QueryStmt, error) {
 			}
 			stmt.RawVector = vec
 		default:
-			return nil, errors.NewQQLSyntaxError("Expected a string query, a point ID, a raw vector [...], or a query mode (RECOMMEND/DISCOVER/CONTEXT) after QUERY", tok.Pos)
+			if tok.Kind == lexer.TokenKindFrom || tok.Kind == lexer.TokenKindLimit || tok.Kind == lexer.TokenKindPrefetch || tok.Kind == lexer.TokenKindEof {
+				// No search target specified. Valid for pure prefetch/fusion queries.
+			} else {
+				return nil, errors.NewQQLSyntaxError("Expected a string query, a point ID, a raw vector [...], or a query mode (RECOMMEND/DISCOVER/CONTEXT) after QUERY", tok.Pos)
+			}
 		}
 	}
 
-	if _, err := p.expect(lexer.TokenKindFrom); err != nil {
-		return nil, err
+	// FROM is optional for pure prefetch/fusion queries
+	if p.peek().Kind == lexer.TokenKindFrom {
+		p.advance()
+		coll, err := p.parseIdentifier()
+		if err != nil {
+			return nil, err
+		}
+		stmt.Collection = coll
 	}
-	coll, err := p.parseIdentifier()
-	if err != nil {
-		return nil, err
-	}
-	stmt.Collection = coll
 
 	// Parse trailing clauses in any order (with duplicate detection)
 	p.parseQueryClauses(stmt)
+
+	if stmt.Mode == ast.QueryModeNearest && stmt.QueryText == nil && stmt.QueryID == nil && len(stmt.RawVector) == 0 {
+		if len(stmt.PrefetchRefs) == 0 && len(stmt.CTEs) == 0 && stmt.Type != ast.QueryTypeHybrid && stmt.FusionType == nil {
+			return nil, p.setError(errors.NewQQLSyntaxError("Expected a string query, a point ID, a raw vector [...], or a query mode (RECOMMEND/DISCOVER/CONTEXT) after QUERY", tok.Pos))
+		}
+	}
 
 	return stmt, nil
 }
@@ -202,7 +265,7 @@ func (p *Parser) parseCTEList() ([]ast.CTE, error) {
 	}
 }
 
-// parseCTEQuery parses a QUERY statement inside a CTE body.
+// parseCTEQuery parses a QUERY or FUSION statement inside a CTE body.
 func (p *Parser) parseCTEQuery() (*ast.QueryStmt, error) {
 	var ctes []ast.CTE
 	var err error
@@ -214,12 +277,39 @@ func (p *Parser) parseCTEQuery() (*ast.QueryStmt, error) {
 		}
 	}
 
+	tok := p.peek()
+	if tok.Kind == lexer.TokenKindFusion {
+		// Pure fusion CTE: FUSION rrf [FROM collection] LIMIT ... PREFETCH (...)
+		p.advance()
+		stmt := &ast.QueryStmt{
+			Mode: ast.QueryModeNearest,
+			CTEs: ctes,
+		}
+		fusionTok := p.peek()
+		if fusionTok.Kind == lexer.TokenKindIdentifier || fusionTok.Kind == lexer.TokenKindString {
+			fusion := fusionTok.Value
+			stmt.FusionType = &fusion
+			p.advance()
+		}
+		// Optional FROM clause
+		if p.peek().Kind == lexer.TokenKindFrom {
+			p.advance()
+			coll, err := p.parseIdentifier()
+			if err != nil {
+				return nil, err
+			}
+			stmt.Collection = coll
+		}
+		p.parseQueryClauses(stmt)
+		return stmt, nil
+	}
+
 	if _, err := p.expect(lexer.TokenKindQuery); err != nil {
 		return nil, err
 	}
 
 	stmt := &ast.QueryStmt{CTEs: ctes}
-	tok := p.peek()
+	tok = p.peek()
 	if tok.Kind == lexer.TokenKindNearest {
 		p.advance()
 		tok = p.peek()
@@ -280,7 +370,11 @@ func (p *Parser) parseCTEQuery() (*ast.QueryStmt, error) {
 			}
 			stmt.RawVector = vec
 		default:
-			return nil, errors.NewQQLSyntaxError("Expected string, integer, raw vector [...], or query mode for CTE QUERY", tok.Pos)
+			if tok.Kind == lexer.TokenKindLimit || tok.Kind == lexer.TokenKindPrefetch || tok.Kind == lexer.TokenKindRparen || tok.Kind == lexer.TokenKindEof {
+				// No search target specified. Valid for pure prefetch/fusion queries in CTEs.
+			} else {
+				return nil, errors.NewQQLSyntaxError("Expected string, integer, raw vector [...], or query mode for CTE QUERY", tok.Pos)
+			}
 		}
 	}
 

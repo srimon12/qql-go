@@ -12,6 +12,14 @@ import (
 type Parser struct {
 	tokens []lexer.Token
 	pos    int
+	err    error
+}
+
+func (p *Parser) setError(err error) error {
+	if err != nil && p.err == nil {
+		p.err = err
+	}
+	return err
 }
 
 func NewParser() *Parser {
@@ -56,6 +64,10 @@ func (p *Parser) Parse(tokens []lexer.Token) (ast.ASTNode, error) {
 		return nil, err
 	}
 
+	if p.err != nil {
+		return nil, p.err
+	}
+
 	if tok := p.peek(); tok.Kind != lexer.TokenKindEof {
 		return nil, errors.NewQQLSyntaxError("Unexpected token '"+tok.Value+"'; expected end of input", tok.Pos)
 	}
@@ -91,7 +103,7 @@ func (p *Parser) advance() lexer.Token {
 func (p *Parser) expect(kind lexer.TokenKind) (lexer.Token, error) {
 	tok := p.peek()
 	if tok.Kind != kind {
-		return tok, errors.NewQQLSyntaxError("Expected "+kind.String()+" but got '"+tok.Value+"'", tok.Pos)
+		return tok, p.setError(errors.NewQQLSyntaxError("Expected "+kind.String()+" but got '"+tok.Value+"'", tok.Pos))
 	}
 	return p.advance(), nil
 }
@@ -102,7 +114,7 @@ func (p *Parser) parseIdentifier() (string, error) {
 		p.advance()
 		return tok.Value, nil
 	}
-	return "", errors.NewQQLSyntaxError("Expected identifier or quoted name, got '"+tok.Value+"'", tok.Pos)
+	return "", p.setError(errors.NewQQLSyntaxError("Expected identifier or quoted name, got '"+tok.Value+"'", tok.Pos))
 }
 
 func isContextualIdentifier(kind lexer.TokenKind) bool {
