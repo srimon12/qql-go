@@ -11,6 +11,8 @@ import httpx
 
 AUTH_URL = os.getenv("AUTH_URL", "http://127.0.0.1:8081")
 GW_URL = os.getenv("GW_URL", "http://127.0.0.1:50051")
+QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6333")
+EMBEDDING_URL = os.getenv("EMBEDDING_URL", "http://127.0.0.1:1234")
 SCRIPT_DIR = Path(__file__).parent
 EXAMPLE_DIR = SCRIPT_DIR.parent
 REPO_ROOT = EXAMPLE_DIR.parent.parent
@@ -73,6 +75,20 @@ def load_payload_examples() -> dict[str, str]:
         with open(PAYLOADS_FILE) as f:
             return {p["label"]: p["json"] for p in json.load(f)}
     return {}
+
+
+def embed_text(text: str, model: str = "text-embedding-all-minilm-l6-v2-embedding") -> list[float] | None:
+    """Get embedding vector from local embedding service."""
+    try:
+        resp = httpx.post(
+            f"{EMBEDDING_URL}/v1/embeddings",
+            json={"model": model, "input": text},
+            timeout=10
+        )
+        data = resp.json()
+        return data.get("data", [{}])[0].get("embedding")
+    except Exception:
+        return None
 
 
 DEMO_USERS = {

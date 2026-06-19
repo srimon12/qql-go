@@ -72,8 +72,9 @@ import tab_templates
 import tab_policy
 import tab_audit
 import tab_convert
+import tab_sec_playground
 
-tab_query_tab, tab_explain_tab, tab_tenant_tab, tab_templates_tab, tab_policy_tab, tab_audit_tab, tab_convert_tab = st.tabs([
+tab_query_tab, tab_explain_tab, tab_tenant_tab, tab_templates_tab, tab_policy_tab, tab_audit_tab, tab_convert_tab, tab_sec_playground_tab = st.tabs([
     "🔍 Query",
     "📋 Explain",
     "🏢 Tenant Isolation",
@@ -81,6 +82,7 @@ tab_query_tab, tab_explain_tab, tab_tenant_tab, tab_templates_tab, tab_policy_ta
     "📝 Policy Editor",
     "📊 Audit Log",
     "🔄 Convert",
+    "⚡ Security Playground",
 ])
 
 with tab_query_tab:
@@ -103,3 +105,6 @@ with tab_audit_tab:
 
 with tab_convert_tab:
     tab_convert.render()
+
+with tab_sec_playground_tab:
+    tab_sec_playground.render()
