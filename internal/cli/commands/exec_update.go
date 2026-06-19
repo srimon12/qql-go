@@ -33,6 +33,7 @@ func (e *Executor) doUpdateVector(n *ast.UpdateVectorStmt) (*ExecResponse, error
 	}
 	if n.VectorName != nil {
 		denseName = *n.VectorName
+		isMultiVector = true
 	}
 	request, err := e.buildUpdateVectorRequest(ctx, n, denseName, isMultiVector)
 	if err != nil {

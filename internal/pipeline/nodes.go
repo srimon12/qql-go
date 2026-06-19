@@ -324,16 +324,14 @@ func isUUID(u string) bool {
 	return true
 }
 
-func buildPointID(val any) (*qdrant.PointId, error) {
+// ToPointID converts any point ID value (string, int, float, etc.) to *qdrant.PointId.
+func ToPointID(val any) (*qdrant.PointId, error) {
 	switch v := val.(type) {
 	case string:
 		if num, err := strconv.ParseUint(v, 10, 64); err == nil {
 			return qdrant.NewIDNum(num), nil
 		}
-		if isUUID(v) {
-			return qdrant.NewIDUUID(v), nil
-		}
-		return nil, fmt.Errorf("string is neither valid uint64 nor UUID")
+		return qdrant.NewIDUUID(v), nil
 	case int:
 		if v < 0 {
 			return nil, fmt.Errorf("unsupported vector input type: negative integer")
@@ -382,7 +380,7 @@ func buildVectorInput(ctx context.Context, state *QueryState, val any) (*qdrant.
 	if v, ok := val.([]float32); ok {
 		return qdrant.NewVectorInputDense(v), nil
 	}
-	pid, err := buildPointID(val)
+	pid, err := ToPointID(val)
 	if err != nil {
 		return nil, err
 	}
@@ -510,7 +508,7 @@ func buildVectorInputFromValue(_ context.Context, _ *QueryState, val any) (*qdra
 		return qdrant.NewVectorInputDense(vec), nil
 	default:
 		// Treat as point ID
-		pid, err := buildPointID(val)
+		pid, err := ToPointID(val)
 		if err != nil {
 			return nil, err
 		}

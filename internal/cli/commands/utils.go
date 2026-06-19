@@ -8,6 +8,7 @@ import (
 	"github.com/qdrant/go-client/qdrant"
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/output"
+	"github.com/srimon12/qql-go/internal/pipeline"
 )
 
 // buildDocumentOptionsFromMap converts the string-keyed provider options from config
@@ -25,27 +26,7 @@ func buildDocumentOptionsFromMap(opts map[string]string) map[string]*qdrant.Valu
 }
 
 func newPointID(value any) (*qdrant.PointId, error) {
-	switch id := value.(type) {
-	case int:
-		if id < 0 {
-			return nil, fmt.Errorf("invalid point ID: negative integer")
-		}
-		return qdrant.NewIDNum(uint64(id)), nil
-	case int64:
-		if id < 0 {
-			return nil, fmt.Errorf("invalid point ID: negative integer")
-		}
-		return qdrant.NewIDNum(uint64(id)), nil
-	case uint64:
-		return qdrant.NewIDNum(id), nil
-	case string:
-		if num, err := parseUint64(id); err == nil {
-			return qdrant.NewIDNum(num), nil
-		}
-		return qdrant.NewIDUUID(id), nil
-	default:
-		return qdrant.NewIDUUID(fmt.Sprintf("%v", value)), nil
-	}
+	return pipeline.ToPointID(value)
 }
 
 func turboBitsEnum(value float64) *qdrant.TurboQuantBitSize {

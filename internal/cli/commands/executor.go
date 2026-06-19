@@ -868,7 +868,11 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 			plan.WriteString("Action: Delete point by ID\n")
 		}
 	case *ast.UpdateVectorStmt:
-		fmt.Fprintf(&plan, "Statement: UPDATE %s SET VECTOR = [...] WHERE id = '%v'\n", n.Collection, n.PointID)
+		name := ""
+		if n.VectorName != nil {
+			name = fmt.Sprintf(" '%s'", *n.VectorName)
+		}
+		fmt.Fprintf(&plan, "Statement: UPDATE %s SET VECTOR%s = [...] WHERE id = '%v'\n", n.Collection, name, n.PointID)
 		fmt.Fprintf(&plan, "Vector length: %d\n", len(n.Vector))
 		plan.WriteString("Action: Update point vector\n")
 	case *ast.UpdatePayloadStmt:

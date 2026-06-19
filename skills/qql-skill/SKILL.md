@@ -93,7 +93,7 @@ INSERT INTO <name> VALUES { 'text': '...', 'category': '...' }, {...}, {...}
 -- Insert with pre-computed named vectors (dense + multivector)
 INSERT INTO <name> VALUES { 'id': 1, 'text': '...', 'vector': {'dense': [0.1, 0.2], 'colbert': [[0.1, 0.2], [0.3, 0.4]]} }
 
-UPDATE <name> SET VECTOR = [<float>, ...] WHERE id = <id>
+UPDATE <name> SET VECTOR ['vector_name'] = [<float>, ...] WHERE id = <id>
 UPDATE <name> SET PAYLOAD = {...} WHERE <filter_expression>
 DELETE FROM <name> WHERE <filter_expression>
 ```
@@ -124,13 +124,14 @@ FUSION <RRF | DBSF> [FROM <collection>] [LIMIT <n>] [PREFETCH (<name1>, <name2>)
 ### BOOST Formula Expressions
 The `BOOST` clause applies a mathematical expression to modify search scores.
 - **Variables:** `$score` (current score), bare names for payload fields (e.g., `popularity`, `freshness`)
-- **Operators:** `+`, `-`, `*`, `/` with standard precedence (`*` and `/` before `+` and `-`)
+- **Operators:** `+`, `-`, `*`, `/` (where `/` supports optional `[default=value]` suffix for division-by-zero safety)
 - **Functions:** `ABS(x)`, `SQRT(x)`, `LOG(x)`, `LN(x)`, `EXP(x)`, `POW(base, exp)`
 - **Geo:** `GEO_DISTANCE(lat, lon, field)` or `GEO_DISTANCE({'lat': x, 'lon': y}, field)`
-- **Decay:** `GAUSS_DECAY(x, target, scale, midpoint)`, `EXP_DECAY(...)`, `LIN_DECAY(...)` — supports kwargs: `gauss_decay(x, scale=5000)`
+- **Decay:** `GAUSS_DECAY(x, target, scale, midpoint)`, `EXP_DECAY(...)`, `LIN_DECAY(...)` — supports kwargs: `gauss_decay(x, scale=5000, decay=0.5)` or `gauss_decay(x, target=datetime('2026-01-01'), scale=30d, midpoint=0.5)`
 - **Datetime:** `datetime('2026-01-01T00:00:00Z')` (literal), `datetime_key('field')` (payload field)
 - **Conditional:** `CASE WHEN <filter> THEN <expr> ELSE <expr> END`
 - **Defaults:** `DEFAULTS (var1 = 1.0, var2 = 0.0)` — fallback values for missing payload fields
+
 
 Examples:
 ```sql

@@ -87,6 +87,10 @@ The `text` field is required for auto-vectorization.
 
 The `vector` key stores pre-computed vectors. Use a map of named vectors for multi-vector collections. Each value can be a 1D array (dense) or 2D array (multivector).
 
+> [!WARNING]
+> Payload keys that collide with QQL reserved keywords (such as `type`, `limit`, `using`, etc.) must be quoted (e.g. `{'type': 'document'}`). Otherwise, they will cause a parser syntax error.
+
+
 ## QUERY
 
 The unified query statement with multiple modes:

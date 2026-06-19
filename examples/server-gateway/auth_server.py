@@ -6,8 +6,7 @@ Each user has: org, team (department), role.
 
 Endpoints:
     GET  /.well-known/jwks.json   → public keys (gateway polls this)
-    POST /auth/login              → authenticate, get JWT
-    POST /auth/token              → get JWT with custom claims
+    POST /auth/login              → authenticate, get JWT with custom claims.
     GET  /health                  → health check
     GET  /users                   → list all users (for UI)
 """

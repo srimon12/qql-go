@@ -356,8 +356,21 @@ func (e *Executor) buildCTEPrefetch(ctx context.Context, stmt *ast.QueryStmt, ct
 
 	denseModel := e.resolveDenseModel(stmt.Model)
 
+	// Scoped map of available CTEs (inheriting parents + local nested CTEs)
+	scopedMap := make(map[string]*qdrant.PrefetchQuery, len(cteMap)+len(stmt.CTEs))
+	for k, v := range cteMap {
+		scopedMap[k] = v
+	}
+	for _, localCte := range stmt.CTEs {
+		localPq, err := e.buildCTEPrefetch(ctx, localCte.Stmt, scopedMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build nested CTE '%s': %w", localCte.Name, err)
+		}
+		scopedMap[localCte.Name] = localPq
+	}
+
 	for _, ref := range stmt.PrefetchRefs {
-		if nested, ok := cteMap[ref.CTEName]; ok {
+		if nested, ok := scopedMap[ref.CTEName]; ok {
 			pq.Prefetch = append(pq.Prefetch, nested)
 		} else {
 			return nil, fmt.Errorf("unknown CTE referenced in prefetch: '%s'", ref.CTEName)
@@ -396,12 +409,12 @@ func (e *Executor) buildCTEPrefetch(ctx context.Context, stmt *ast.QueryStmt, ct
 	case ast.QueryModeRecommend:
 		pos := make([]*qdrant.VectorInput, len(stmt.PositiveIDs))
 		for i, id := range stmt.PositiveIDs {
-			pid, _ := buildPointID(id)
+			pid, _ := pipeline.ToPointID(id)
 			pos[i] = qdrant.NewVectorInputID(pid)
 		}
 		neg := make([]*qdrant.VectorInput, len(stmt.NegativeIDs))
 		for i, id := range stmt.NegativeIDs {
-			pid, _ := buildPointID(id)
+			pid, _ := pipeline.ToPointID(id)
 			neg[i] = qdrant.NewVectorInputID(pid)
 		}
 		pq.Query = qdrant.NewQueryRecommend(&qdrant.RecommendInput{
@@ -452,7 +465,7 @@ func (e *Executor) buildCTEPrefetch(ctx context.Context, stmt *ast.QueryStmt, ct
 				}
 			}
 		} else if stmt.QueryID != nil {
-			pid, _ := buildPointID(stmt.QueryID)
+			pid, _ := pipeline.ToPointID(stmt.QueryID)
 			pq.Query = qdrant.NewQueryNearest(qdrant.NewVectorInputID(pid))
 		}
 	}
@@ -460,21 +473,6 @@ func (e *Executor) buildCTEPrefetch(ctx context.Context, stmt *ast.QueryStmt, ct
 	return pq, nil
 }
 
-// buildPointID converts a point ID value (string or int) to *qdrant.PointId.
-func buildPointID(val any) (*qdrant.PointId, error) {
-	switch v := val.(type) {
-	case string:
-		return qdrant.NewIDUUID(v), nil
-	case int:
-		return qdrant.NewIDNum(uint64(v)), nil
-	case uint64:
-		return qdrant.NewIDNum(v), nil
-	case float64:
-		return qdrant.NewIDNum(uint64(v)), nil
-	default:
-		return nil, fmt.Errorf("unsupported point id type %T", val)
-	}
-}
 
 func (e *Executor) executeFlatQuery(ctx context.Context, p *pipeline.QueryPipeline, state *pipeline.QueryState) (*ExecResponse, error) {
 	req := p.BuildFlatRequest(state)

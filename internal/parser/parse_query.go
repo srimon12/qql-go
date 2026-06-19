@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/errors"
@@ -256,7 +257,7 @@ func (p *Parser) parseCTEList() ([]ast.CTE, error) {
 		if _, err := p.expect(lexer.TokenKindRparen); err != nil {
 			return nil, err
 		}
-		ctes = append(ctes, ast.CTE{Name: nameTok.Value, Stmt: subStmt})
+		ctes = append(ctes, ast.CTE{Name: strings.ToLower(nameTok.Value), Stmt: subStmt})
 		if p.peek().Kind == lexer.TokenKindComma {
 			p.advance()
 			continue
@@ -608,7 +609,7 @@ func (p *Parser) parseQueryClauses(stmt *ast.QueryStmt) {
 						Stmt: inlineStmt,
 					})
 				} else if p.peek().Kind == lexer.TokenKindIdentifier {
-					ref = ast.PrefetchRef{CTEName: p.peek().Value}
+					ref = ast.PrefetchRef{CTEName: strings.ToLower(p.peek().Value)}
 					p.advance()
 				} else {
 					return
