@@ -7,10 +7,35 @@ import (
 	"strings"
 )
 
-// JSONToQQL converts a Qdrant REST API JSON payload to QQL statements.
-// It auto-detects the operation from the JSON structure.
+// JSONToQQL converts a Qdrant REST API JSON payload into QQL statements.
+//
+// Two input formats are accepted:
+//
+//  1. Wrapped request — includes the full HTTP method and path so the
+//     collection name is resolved automatically from the URL:
+//     {"method":"POST","path":"/collections/docs/points/query","body":{...}}
+//
+//  2. Bare body — the raw Qdrant REST JSON body without path context.
+//     The collection name defaults to "unknown" in the generated QQL.
+//     Use JSONToQQLWithCollection to supply a collection name explicitly,
+//     or use the wrapped format to let the converter derive it from the path.
+//
+// The conversion is deterministic: the same JSON always produces the same QQL.
 func JSONToQQL(input []byte) ([]string, error) {
+	return JSONToQQLWithCollection(input, "unknown")
+}
+
+// JSONToQQLWithCollection converts a Qdrant REST API JSON payload to QQL
+// statements, using the supplied collection name as a fallback when the
+// payload does not include path information.
+//
+// If the payload is a wrapped request with a "path" field, the collection
+// is extracted from the path and the supplied collection argument is ignored.
+func JSONToQQLWithCollection(input []byte, collection string) ([]string, error) {
 	input = bytes.TrimSpace(input)
+	if collection == "" {
+		collection = "unknown"
+	}
 
 	// Try to detect if it's a wrapped request with method+path
 	var wrapped struct {
@@ -30,7 +55,7 @@ func JSONToQQL(input []byte) ([]string, error) {
 	}
 
 	// Try to detect by JSON structure
-	return convertByStructure(input)
+	return convertByStructure(input, collection)
 }
 
 func convertByEndpoint(method, path string, body []byte) ([]string, error) {
@@ -101,7 +126,7 @@ func extractCollection(path string) string {
 	return "unknown"
 }
 
-func convertByStructure(input []byte) ([]string, error) {
+func convertByStructure(input []byte, collection string) ([]string, error) {
 	var raw struct {
 		Query         json.RawMessage `json:"query"`
 		Prefetch      json.RawMessage `json:"prefetch"`
@@ -128,13 +153,13 @@ func convertByStructure(input []byte) ([]string, error) {
 		if raw.Query[0] == '[' {
 			// If there's a prefetch, route through formula query path for CTE generation
 			if len(raw.Prefetch) > 0 {
-				return convertFormulaQuery(input, "unknown")
+				return convertFormulaQuery(input, collection)
 			}
-			return convertSearch(input, "unknown")
+			return convertSearch(input, collection)
 		}
 		// Raw string ID: "43cf51e2-8777-..."
 		if raw.Query[0] == '"' {
-			return convertSearch(input, "unknown")
+			return convertSearch(input, collection)
 		}
 		var queryObj struct {
 			Formula           json.RawMessage `json:"formula"`
@@ -150,47 +175,47 @@ func convertByStructure(input []byte) ([]string, error) {
 		}
 		if json.Unmarshal(raw.Query, &queryObj) == nil {
 			if len(queryObj.Formula) > 0 {
-				return convertFormulaQuery(input, "unknown")
+				return convertFormulaQuery(input, collection)
 			}
 			if len(queryObj.Nearest) > 0 {
-				return convertMMRQuery(input, "unknown")
+				return convertMMRQuery(input, collection)
 			}
 			if len(queryObj.RelevanceFeedback) > 0 {
-				return convertRelevanceFeedback(input, "unknown")
+				return convertRelevanceFeedback(input, collection)
 			}
 			if len(queryObj.Text) > 0 {
 				if len(raw.Prefetch) > 0 {
-					return convertFormulaQuery(input, "unknown")
+					return convertFormulaQuery(input, collection)
 				}
-				return convertSearch(input, "unknown")
+				return convertSearch(input, collection)
 			}
 			if len(queryObj.Fusion) > 0 {
-				return convertFormulaQuery(input, "unknown")
+				return convertFormulaQuery(input, collection)
 			}
 			if len(queryObj.Recommend) > 0 {
-				return convertRecommend(input, "unknown")
+				return convertRecommend(input, collection)
 			}
 			if len(queryObj.Discover) > 0 {
-				return convertDiscover(input, "unknown")
+				return convertDiscover(input, collection)
 			}
 			if len(queryObj.Context) > 0 {
-				return convertDiscover(input, "unknown")
+				return convertDiscover(input, collection)
 			}
 			if len(queryObj.Sample) > 0 {
-				return convertSearch(input, "unknown")
+				return convertSearch(input, collection)
 			}
 			if len(queryObj.Indices) > 0 {
 				if len(raw.Prefetch) > 0 {
-					return convertFormulaQuery(input, "unknown")
+					return convertFormulaQuery(input, collection)
 				}
-				return convertSearch(input, "unknown")
+				return convertSearch(input, collection)
 			}
 		}
 	}
 
 	// Check for top-level prefetch (formula query with prefetch)
 	if len(raw.Prefetch) > 0 {
-		return convertFormulaQuery(input, "unknown")
+		return convertFormulaQuery(input, collection)
 	}
 
 	// Check for batch searches
@@ -201,7 +226,7 @@ func convertByStructure(input []byte) ([]string, error) {
 	// Check for set payload first (has "payload" field with "points" or "filter")
 	if len(raw.Payload) > 0 {
 		if len(raw.Points) > 0 || len(raw.Filter) > 0 {
-			return convertSetPayload(input, "unknown")
+			return convertSetPayload(input, collection)
 		}
 	}
 
@@ -219,44 +244,44 @@ func convertByStructure(input []byte) ([]string, error) {
 			}
 			if json.Unmarshal(probe.Points[0], &pointProbe) == nil {
 				if len(pointProbe.Vector) > 0 || len(pointProbe.Payload) > 0 {
-					return convertUpsert(input, "unknown")
+					return convertUpsert(input, collection)
 				}
 			}
 			// Points without vectors = delete by IDs
-			return convertDeletePoints(input, "unknown")
+			return convertDeletePoints(input, collection)
 		}
 	}
 
 	if len(raw.Vector) > 0 {
-		return convertSearch(input, "unknown")
+		return convertSearch(input, collection)
 	}
 
 	if len(raw.Positive) > 0 {
-		return convertRecommend(input, "unknown")
+		return convertRecommend(input, collection)
 	}
 
 	if len(raw.Target) > 0 {
-		return convertDiscover(input, "unknown")
+		return convertDiscover(input, collection)
 	}
 
 	if len(raw.Ids) > 0 {
-		return convertGetPoints(input, "unknown")
+		return convertGetPoints(input, collection)
 	}
 
 	if len(raw.Vectors) > 0 || len(raw.VectorsConfig) > 0 {
-		return convertCreateCollection(input, "unknown")
+		return convertCreateCollection(input, collection)
 	}
 
 	if len(raw.FieldName) > 0 {
-		return convertCreateIndex(input, "unknown")
+		return convertCreateIndex(input, collection)
 	}
 
 	if len(raw.Filter) > 0 {
 		// Could be scroll or delete by filter
 		if len(raw.Limit) > 0 {
-			return convertScroll(input, "unknown")
+			return convertScroll(input, collection)
 		}
-		return convertDeleteByFilter(input, "unknown")
+		return convertDeleteByFilter(input, collection)
 	}
 
 	return nil, fmt.Errorf("cannot detect operation from JSON structure")

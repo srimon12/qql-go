@@ -65,6 +65,7 @@ type RESTQuery struct {
 	Discover          *RESTDiscover          `json:"discover"`
 	Context           []RESTContextPair      `json:"context"`
 	RelevanceFeedback *RESTRelevanceFeedback `json:"relevance_feedback"`
+	Fusion            string                 `json:"fusion"`
 }
 
 func (q *RESTQuery) UnmarshalJSON(data []byte) error {
@@ -91,19 +92,29 @@ func (q *RESTQuery) UnmarshalJSON(data []byte) error {
 			q.Nearest = s
 			return nil
 		default:
+			// Try standard alias unmarshal first
 			type Alias RESTQuery
 			var alias Alias
-			if err := json.Unmarshal(data, &alias); err != nil {
-				return err
+			if err := json.Unmarshal(data, &alias); err == nil {
+				*q = RESTQuery(alias)
+				// If Fusion wasn't set, check for alternative format: {"rrf": {}} or {"dbsf": {}}
+				if q.Fusion == "" {
+					var obj map[string]json.RawMessage
+					if err := json.Unmarshal(data, &obj); err == nil {
+						for _, key := range []string{"rrf", "dbsf"} {
+							if _, ok := obj[key]; ok {
+								q.Fusion = key
+								break
+							}
+						}
+					}
+				}
+				return nil
 			}
-			*q = RESTQuery(alias)
 			return nil
 		}
 	}
 
-	// If Nearest wasn't set inside the object but it IS an object (like `{"nearest": ...}`), alias unmarshal works.
-	// But what if the object itself is the nearest vector? Qdrant sometimes allows named vectors `{"name": "vec", "vector": [0.1, 0.2]}` as query.
-	// We handle standard RESTQuery fields here.
 	return nil
 }
 

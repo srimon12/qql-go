@@ -11,8 +11,18 @@ func ConvertJSONToQQL(input string) ([]string, error) {
 	return convert.JSONToQQL([]byte(input))
 }
 
+// ConvertJSONToQQLWithCollection converts a Qdrant REST API JSON payload into QQL statements targeting a collection.
+func ConvertJSONToQQLWithCollection(input string, collection string) ([]string, error) {
+	return convert.JSONToQQLWithCollection([]byte(input), collection)
+}
+
 // ConvertJSONBytesToQQL converts a Qdrant REST API JSON payload into QQL statements.
 // This is the highly optimized path that avoids string allocations.
 func ConvertJSONBytesToQQL(input []byte) ([]string, error) {
 	return convert.JSONToQQL(input)
+}
+
+// ConvertJSONBytesToQQLWithCollection converts a Qdrant REST API JSON payload into QQL statements targeting a collection.
+func ConvertJSONBytesToQQLWithCollection(input []byte, collection string) ([]string, error) {
+	return convert.JSONToQQLWithCollection(input, collection)
 }
