@@ -1369,7 +1369,14 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 		if err != nil {
 			return nil, err
 		}
-		vectorsConfig = qdrant.NewVectorsConfigMap(collectionVectorParams(denseSize, n.Rerank))
+		params := collectionVectorParams(denseSize, n.Rerank)
+		if n.DenseVector != nil {
+			if vp, ok := params[denseVectorName]; ok {
+				delete(params, denseVectorName)
+				params[*n.DenseVector] = vp
+			}
+		}
+		vectorsConfig = qdrant.NewVectorsConfigMap(params)
 	}
 
 	collection := &qdrant.CreateCollection{
@@ -1407,8 +1414,12 @@ func (e *Executor) doCreateCollection(n *ast.CreateCollectionStmt) (*ExecRespons
 		}
 		collection.SparseVectorsConfig = qdrant.NewSparseVectorsConfig(sparseMap)
 	} else if n.Hybrid || n.Rerank {
+		sparseName := sparseVectorName
+		if n.SparseVector != nil {
+			sparseName = *n.SparseVector
+		}
 		collection.SparseVectorsConfig = qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
-			sparseVectorName: {
+			sparseName: {
 				Modifier: qdrant.Modifier_Idf.Enum(),
 			},
 		})

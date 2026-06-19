@@ -29,7 +29,10 @@ func (e *Executor) buildQueryStateAndPipeline(ctx context.Context, stmt *ast.Que
 		sparseVectorName = *stmt.Using
 	} else {
 		topo, err := e.resolveVectorTopology(ctx, stmt.Collection)
-		if err == nil && topo != nil && topo.DenseVector != nil && *topo.DenseVector != "" {
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve vector topology for collection '%s': %w", stmt.Collection, err)
+		}
+		if topo != nil && topo.DenseVector != nil && *topo.DenseVector != "" {
 			denseVectorName = *topo.DenseVector
 			if topo.SparseVector != nil && *topo.SparseVector != "" {
 				sparseVectorName = *topo.SparseVector

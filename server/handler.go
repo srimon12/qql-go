@@ -8,6 +8,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/srimon12/qql-go/gen/qqlpb"
 	"github.com/srimon12/qql-go/internal/ast"
+	"github.com/srimon12/qql-go/internal/cli/commands"
 	"github.com/srimon12/qql-go/internal/config"
 	"github.com/srimon12/qql-go/pkg/qql"
 )
@@ -284,12 +285,65 @@ func (h *Handler) ExecBatch(
 
 // Explain returns the execution plan without running the query.
 func (h *Handler) Explain(
-	_ context.Context,
+	ctx context.Context,
 	req *connect.Request[qqlpb.ExplainRequest],
 ) (*connect.Response[qqlpb.ExplainResponse], error) {
 	query := req.Msg.GetQuery()
 	if query == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("query is required"))
+	}
+
+	if req.Msg.GetJson() {
+		// Parse the query into AST.
+		node, err := qql.Parse(query)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("parse error: %w", err))
+		}
+
+		claims := ExtractClaimsFromContext(ctx)
+		policy := ExtractEvaluatedPolicy(ctx)
+
+		// Apply policy enforcement if we have a policy.
+		if policy != nil {
+			injector := NewASTInjector(*policy, claims)
+
+			// Enforce operation permission.
+			if err := injector.EnforceOperation(node); err != nil {
+				return nil, connect.NewError(connect.CodePermissionDenied, err)
+			}
+
+			// Transform the AST based on node type.
+			if err := transformNode(injector, node); err != nil {
+				return nil, connect.NewError(connect.CodePermissionDenied, err)
+			}
+		}
+
+		// Compile the AST to Qdrant's raw request JSON.
+		var jsonBytes []byte
+		executor := commands.NewExecutor(h.client, h.config)
+
+		switch stmt := node.(type) {
+		case *ast.QueryStmt:
+			qdrantReq, err := executor.BuildQueryPointsNode(ctx, stmt)
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to build query: %w", err))
+			}
+			jsonBytes, err = json.MarshalIndent(qdrantReq, "", "  ")
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal query: %w", err))
+			}
+		default:
+			actionDesc := map[string]any{
+				"unsupported_explain_json": fmt.Sprintf("%T statement type does not support compiled JSON explanation yet", node),
+			}
+			jsonBytes, _ = json.MarshalIndent(actionDesc, "", "  ")
+		}
+
+		return connect.NewResponse(&qqlpb.ExplainResponse{
+			Ok:    true,
+			Query: query,
+			Plan:  string(jsonBytes),
+		}), nil
 	}
 
 	ok, q, plan, err := qql.ExplainResult(query)
@@ -329,7 +383,18 @@ func (h *Handler) Health(
 	}), nil
 }
 
-// Convert translates Qdrant REST JSON into QQL statements.
+// Convert translates a Qdrant REST JSON payload into one or more QQL statements.
+//
+// Collection resolution: the converter reads the collection name from the
+// request payload itself. Two input formats are accepted:
+//
+//  1. Wrapped request — includes the HTTP method and path so the collection
+//     can be extracted automatically:
+//     {"method":"POST","path":"/collections/docs/points/query","body":{...}}
+//
+//  2. Bare body — the raw Qdrant REST JSON without path context. The converter
+//     will emit QQL with collection name "unknown". The caller is responsible
+//     for wrapping the payload or replacing the placeholder in the output.
 func (h *Handler) Convert(
 	_ context.Context,
 	req *connect.Request[qqlpb.ConvertRequest],
