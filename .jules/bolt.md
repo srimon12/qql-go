@@ -1,0 +1,3 @@
+## 2024-06-23 - Lexer keyword lookup optimization
+**Learning:** Keyword lookup in the Lexer is a critical path for parsing speed. The original implementation used string formatting/allocation for case-insensitive map lookups `string(buf[:len(s)])`. Replacing the dynamic map lookup with an AST-generated `switch` block (`go:generate`) testing specific byte indices drastically improves performance without making changes manually, keeping code readable by treating the source as config map.
+**Action:** When keyword lookups or static mappings start eating CPU and allocation cycles, code generation (like parsing AST to generate switch blocks) is a better choice than handwritten manual lookup code. Always remember to add `//go:generate` directive.
