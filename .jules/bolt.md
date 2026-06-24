@@ -1,0 +1,3 @@
+## 2026-06-19 - [Optimize Keyword Lookup in Lexer]
+**Learning:** Checking a `map[string]TokenKind` for keywords incurs significant map overhead (around ~200ns/op). Converting it to an array-based pre-processing loop combined with a `switch` statement on `string(buf[:len(s)])` brings it down to ~55ns/op (a ~4x improvement in the lookup path alone). Critically, Go's compiler is smart enough to optimize `switch string(buf[:len(s)])` to avoid allocations when `buf` is a fixed-size byte array, making the `switch` approach both much faster and zero-allocation.
+**Action:** Use a `switch` statement with `string(buf[:len(s)])` optimization instead of `map` lookups for fast static token matching in lexers or parsers.
