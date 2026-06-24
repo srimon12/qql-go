@@ -15,11 +15,12 @@ import (
 // Each key (typically a JWT subject or tenant ID) gets its own bucket
 // with independent refill and capacity.
 type RateLimiter struct {
-	mu       sync.Mutex
-	buckets  map[string]*bucket
-	rate     float64 // tokens per second
-	capacity int     // max burst
-	enabled  bool
+	mu         sync.Mutex
+	buckets    map[string]*bucket
+	rate       float64 // tokens per second
+	capacity   int     // max burst
+	maxBuckets int     // max number of tracked keys (0 = unlimited)
+	enabled    bool
 }
 
 type bucket struct {
@@ -33,6 +34,10 @@ type RateLimitConfig struct {
 	Rate float64
 	// Capacity is the maximum burst size per key.
 	Capacity int
+	// MaxBuckets limits the total number of tracked keys.
+	// This prevents memory exhaustion from many unique keys.
+	// 0 means unlimited.
+	MaxBuckets int
 	// Enabled turns on rate limiting.
 	Enabled bool
 }
@@ -49,10 +54,11 @@ func NewRateLimiter(cfg RateLimitConfig) *RateLimiter {
 		cfg.Capacity = 20 // default: burst of 20
 	}
 	rl := &RateLimiter{
-		buckets:  make(map[string]*bucket),
-		rate:     cfg.Rate,
-		capacity: cfg.Capacity,
-		enabled:  true,
+		buckets:    make(map[string]*bucket),
+		rate:       cfg.Rate,
+		capacity:   cfg.Capacity,
+		maxBuckets: cfg.MaxBuckets,
+		enabled:    true,
 	}
 	go rl.cleanup()
 	return rl
@@ -69,6 +75,10 @@ func (rl *RateLimiter) Allow(key string) bool {
 
 	b, exists := rl.buckets[key]
 	if !exists {
+		// Enforce max bucket count to prevent memory exhaustion.
+		if rl.maxBuckets > 0 && len(rl.buckets) >= rl.maxBuckets {
+			return false
+		}
 		b = &bucket{
 			tokens:   float64(rl.capacity) - 1,
 			lastFill: time.Now(),

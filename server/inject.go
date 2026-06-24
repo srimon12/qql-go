@@ -84,8 +84,16 @@ func (a *ASTInjector) TransformScroll(s *ast.ScrollStmt) error {
 }
 
 // TransformDelete applies policy transformations to a DeleteStmt.
+// Injects the tenant filter into the WHERE clause to prevent cross-tenant deletion.
 func (a *ASTInjector) TransformDelete(d *ast.DeleteStmt) error {
-	return a.EnforceCollection(d.Collection)
+	if err := a.EnforceCollection(d.Collection); err != nil {
+		return err
+	}
+	a.injectDeleteFilter(d)
+	if err := a.enforceFilterComplexity(d.QueryFilter); err != nil {
+		return err
+	}
+	return nil
 }
 
 // TransformInsert applies policy transformations to an InsertStmt.
@@ -94,8 +102,16 @@ func (a *ASTInjector) TransformInsert(i *ast.InsertStmt) error {
 }
 
 // TransformUpdatePayload applies policy transformations to an UpdatePayloadStmt.
+// Injects the tenant filter into the WHERE clause to prevent cross-tenant updates.
 func (a *ASTInjector) TransformUpdatePayload(u *ast.UpdatePayloadStmt) error {
-	return a.EnforceCollection(u.Collection)
+	if err := a.EnforceCollection(u.Collection); err != nil {
+		return err
+	}
+	a.injectUpdatePayloadFilter(u)
+	if err := a.enforceFilterComplexity(u.QueryFilter); err != nil {
+		return err
+	}
+	return nil
 }
 
 // TransformUpdateVector applies policy transformations to an UpdateVectorStmt.
@@ -185,6 +201,52 @@ func (a *ASTInjector) injectScrollFilter(s *ast.ScrollStmt) {
 		}
 		compare := a.buildFilterExpr(f.Field, f.Op, value)
 		s.QueryFilter = mergeFilters(s.QueryFilter, compare)
+	}
+}
+
+// injectDeleteFilter injects the policy's WHERE clause into a DeleteStmt.
+func (a *ASTInjector) injectDeleteFilter(d *ast.DeleteStmt) {
+	if a.policy.InjectField != "" {
+		resolved := a.resolveValue()
+		if resolved != "" {
+			injected := a.buildCompareExpr(resolved)
+			d.QueryFilter = mergeFilters(d.QueryFilter, injected)
+		}
+	}
+
+	for _, f := range a.policy.InjectFilters {
+		value := f.Value
+		if f.FromClaim != "" && a.claims != nil {
+			value = extractStringClaimFromJWT(a.claims, f.FromClaim)
+		}
+		if value == "" {
+			continue
+		}
+		compare := a.buildFilterExpr(f.Field, f.Op, value)
+		d.QueryFilter = mergeFilters(d.QueryFilter, compare)
+	}
+}
+
+// injectUpdatePayloadFilter injects the policy's WHERE clause into an UpdatePayloadStmt.
+func (a *ASTInjector) injectUpdatePayloadFilter(u *ast.UpdatePayloadStmt) {
+	if a.policy.InjectField != "" {
+		resolved := a.resolveValue()
+		if resolved != "" {
+			injected := a.buildCompareExpr(resolved)
+			u.QueryFilter = mergeFilters(u.QueryFilter, injected)
+		}
+	}
+
+	for _, f := range a.policy.InjectFilters {
+		value := f.Value
+		if f.FromClaim != "" && a.claims != nil {
+			value = extractStringClaimFromJWT(a.claims, f.FromClaim)
+		}
+		if value == "" {
+			continue
+		}
+		compare := a.buildFilterExpr(f.Field, f.Op, value)
+		u.QueryFilter = mergeFilters(u.QueryFilter, compare)
 	}
 }
 
@@ -402,9 +464,20 @@ func collectFilterFields(expr ast.FilterExpr, fields map[string]bool) {
 		fields[e.Field] = true
 	case ast.BetweenExpr:
 		fields[e.Field] = true
-	case ast.IsNullExpr, ast.IsNotNullExpr:
-		// These don't have a string Field on the interface level,
-		// but they're unlikely to be injected. Skip.
+	case ast.IsNullExpr:
+		fields[e.Field] = true
+	case ast.IsNotNullExpr:
+		fields[e.Field] = true
+	case ast.IsEmptyExpr:
+		fields[e.Field] = true
+	case ast.IsNotEmptyExpr:
+		fields[e.Field] = true
+	case ast.MatchTextExpr:
+		fields[e.Field] = true
+	case ast.MatchAnyExpr:
+		fields[e.Field] = true
+	case ast.MatchPhraseExpr:
+		fields[e.Field] = true
 	case ast.AndExpr:
 		for _, op := range e.Operands {
 			collectFilterFields(op, fields)

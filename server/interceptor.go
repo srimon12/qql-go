@@ -229,17 +229,15 @@ func operationFromProcedure(procedure string) string {
 // connectPeerFromContext extracts the peer IP from the connect request context.
 // Falls back to "unknown" if no peer info is available.
 func connectPeerFromContext(ctx context.Context) string {
-	// Try connect's peer info from the context.
-	if peer, ok := ctx.Value("connect-peer").(string); ok && peer != "" {
-		return peer
-	}
-	// Try extracting from remote addr if available in context.
-	if addr, ok := ctx.Value("remote-addr").(string); ok && addr != "" {
-		host, _, err := net.SplitHostPort(addr)
-		if err == nil {
-			return host
+	if callInfo, ok := connect.CallInfoForHandlerContext(ctx); ok {
+		peer := callInfo.Peer()
+		if peer.Addr != "" {
+			host, _, err := net.SplitHostPort(peer.Addr)
+			if err == nil {
+				return host
+			}
+			return peer.Addr
 		}
-		return addr
 	}
 	return ""
 }

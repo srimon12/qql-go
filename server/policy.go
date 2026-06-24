@@ -267,6 +267,9 @@ func (pe *PolicyEngine) buildPolicy(rule PolicyRule, index int) EvaluatedPolicy 
 	}
 
 	p.MaxLimit = rule.Limits.MaxLimit
+	p.MaxFilterDepth = rule.Limits.MaxFilterDepth
+	p.MaxOrOperands = rule.Limits.MaxOrOperands
+	p.MaxPrefetchDepth = rule.Limits.MaxPrefetchDepth
 
 	return p
 }

@@ -101,7 +101,7 @@ Any language can send QQL queries:
 			}
 
 			// Build gateway config if any gateway flag is set.
-			if jwksURL != "" || policyFile != "" || auditEnable || rateLimit > 0 || templateFile != "" {
+			if jwksURL != "" || policyFile != "" || auditEnable || rateLimit > 0 || anonRateLimit > 0 || templateFile != "" {
 				gw := &GatewayConfig{}
 
 				// Audit logger.
@@ -147,23 +147,23 @@ Any language can send QQL queries:
 					}
 				}
 
-			// Rate limiter.
-			if rateLimit > 0 {
-				gw.RateLimiter = NewRateLimiter(RateLimitConfig{
-					Rate:     rateLimit,
-					Capacity: rateLimitCapacity,
-					Enabled:  true,
-				})
-			}
+				// Rate limiter.
+				if rateLimit > 0 {
+					gw.RateLimiter = NewRateLimiter(RateLimitConfig{
+						Rate:     rateLimit,
+						Capacity: rateLimitCapacity,
+						Enabled:  true,
+					})
+				}
 
-			// Anonymous rate limiter (pre-auth, keyed by IP).
-			if anonRateLimit > 0 {
-				gw.AnonymousRateLimiter = NewRateLimiter(RateLimitConfig{
-					Rate:     anonRateLimit,
-					Capacity: anonRateLimitCapacity,
-					Enabled:  true,
-				})
-			}
+				// Anonymous rate limiter (pre-auth, keyed by IP).
+				if anonRateLimit > 0 {
+					gw.AnonymousRateLimiter = NewRateLimiter(RateLimitConfig{
+						Rate:     anonRateLimit,
+						Capacity: anonRateLimitCapacity,
+						Enabled:  true,
+					})
+				}
 
 				// Template engine.
 				if templateFile != "" {
