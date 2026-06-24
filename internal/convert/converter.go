@@ -36,6 +36,7 @@ func JSONToQQLWithCollection(input []byte, collection string) ([]string, error) 
 	if collection == "" {
 		collection = "unknown"
 	}
+	collection = sanitizeCollectionName(collection)
 
 	// Try to detect if it's a wrapped request with method+path
 	var wrapped struct {
@@ -121,7 +122,7 @@ func convertByEndpoint(method, path string, body []byte) ([]string, error) {
 func extractCollection(path string) string {
 	parts := strings.Split(path, "/")
 	if len(parts) >= 2 && parts[0] == "collections" {
-		return parts[1]
+		return sanitizeCollectionName(parts[1])
 	}
 	return "unknown"
 }
