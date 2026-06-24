@@ -64,6 +64,12 @@ func (h *Handler) Exec(
 		if err := transformNode(injector, node); err != nil {
 			return nil, connect.NewError(connect.CodePermissionDenied, err)
 		}
+
+		// Defense-in-depth: verify the injected filter is present in the AST.
+		// This catches compiler bugs where the filter might be silently dropped.
+		if err := injector.VerifyFilterInjection(node); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("filter verification failed: %w", err))
+		}
 	}
 
 	if meta := ExtractAuditMeta(ctx); meta != nil {
@@ -134,6 +140,9 @@ func (h *Handler) ExecBatch(
 			}
 			if err := transformNode(injector, node); err != nil {
 				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("query %d: %w", i, err))
+			}
+			if err := injector.VerifyFilterInjection(node); err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("query %d: filter verification failed: %w", i, err))
 			}
 			nodes[i] = node
 		}

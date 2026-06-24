@@ -84,6 +84,21 @@ type InjectWhere struct {
 type PolicyLimits struct {
 	// MaxLimit caps the LIMIT value in queries. 0 means no cap.
 	MaxLimit int `yaml:"max_limit"`
+
+	// MaxFilterDepth caps the maximum nesting depth of WHERE clauses
+	// (AND/OR trees). Prevents resource exhaustion from deeply nested filters.
+	// 0 means no cap.
+	MaxFilterDepth int `yaml:"max_filter_depth"`
+
+	// MaxOrOperands caps the number of OR operands in a single OR expression.
+	// Prevents unbounded fan-out in filter evaluation.
+	// 0 means no cap.
+	MaxOrOperands int `yaml:"max_or_operands"`
+
+	// MaxPrefetchDepth caps the maximum number of nested CTE/prefetch stages.
+	// Prevents unbounded query plan depth.
+	// 0 means no cap.
+	MaxPrefetchDepth int `yaml:"max_prefetch_depth"`
 }
 
 // EvaluatedPolicy is the result of matching a policy rule against a request.
@@ -99,8 +114,11 @@ type EvaluatedPolicy struct {
 	// InjectFilters holds multiple filter conditions to inject (AND logic).
 	// Each entry is resolved independently from claims or static values.
 	InjectFilters []ResolvedFilter
-	MaxLimit      int
-	MatchedRule   int // index of matched rule, -1 if none
+	MaxLimit          int
+	MaxFilterDepth    int
+	MaxOrOperands     int
+	MaxPrefetchDepth  int
+	MatchedRule       int // index of matched rule, -1 if none
 }
 
 // ResolvedFilter is a single resolved filter condition ready for injection.
