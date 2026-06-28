@@ -955,3 +955,21 @@ func TestTokenString(t *testing.T) {
 }
 
 // Note: Test coverage was enhanced by QQL Assistant.
+
+func BenchmarkLexer_Complex(b *testing.B) {
+	query := `SELECT * FROM collection WHERE x > 5 AND y = "test" OR z IN (1, 2, 3) AND a.b.c = 10`
+	lexer := &Lexer{}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = lexer.Tokenize(query)
+	}
+}
+
+func BenchmarkLexer_Keywords(b *testing.B) {
+	query := `SELECT FROM WHERE AND OR NOT IN BETWEEN IS NULL EMPTY MATCH ANY PHRASE OFFSET SCORE THRESHOLD LOOKUP COSINE DOT EUCLID MANHATTAN PREFETCH FUSION SAMPLE RELEVANCE FEEDBACK`
+	lexer := &Lexer{}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = lexer.Tokenize(query)
+	}
+}
