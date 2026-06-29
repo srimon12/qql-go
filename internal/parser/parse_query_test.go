@@ -560,3 +560,76 @@ func TestParseCTEQueryRawVector(t *testing.T) {
 	assert.Len(t, cte.Stmt.RawVector, 2)
 	assert.InDelta(t, 0.5, cte.Stmt.RawVector[0], 1e-9)
 }
+
+func TestParseQueryNestedFilter(t *testing.T) {
+	input := "QUERY 'pricing' FROM content LIMIT 5 WHERE branch = 'root' AND NOT NESTED('overwritten_in', by = 'root' AND seq <= 2)"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+	assert.Equal(t, "content", stmt.Collection)
+	require.NotNil(t, stmt.QueryFilter)
+
+	// The filter should be: branch = 'root' AND NOT NESTED('overwritten_in', by = 'root' AND seq <= 2)
+	andExpr, ok := stmt.QueryFilter.(*ast.AndExpr)
+	require.True(t, ok, "expected AndExpr, got %T", stmt.QueryFilter)
+	require.Len(t, andExpr.Operands, 2)
+
+	// First operand: branch = 'root'
+	compareExpr, ok := andExpr.Operands[0].(*ast.CompareExpr)
+	require.True(t, ok)
+	assert.Equal(t, "branch", compareExpr.Field)
+	assert.Equal(t, "root", compareExpr.Value)
+
+	// Second operand: NOT NESTED('overwritten_in', by = 'root' AND seq <= 2)
+	notExpr, ok := andExpr.Operands[1].(*ast.NotExpr)
+	require.True(t, ok, "expected NotExpr, got %T", andExpr.Operands[1])
+
+	nestedExpr, ok := notExpr.Operand.(*ast.NestedExpr)
+	require.True(t, ok, "expected NestedExpr, got %T", notExpr.Operand)
+	assert.Equal(t, "overwritten_in", nestedExpr.Path)
+
+	// Inner filter: by = 'root' AND seq <= 2
+	innerAnd, ok := nestedExpr.Filter.(*ast.AndExpr)
+	require.True(t, ok, "expected inner AndExpr, got %T", nestedExpr.Filter)
+	require.Len(t, innerAnd.Operands, 2)
+
+	innerBy, ok := innerAnd.Operands[0].(*ast.CompareExpr)
+	require.True(t, ok)
+	assert.Equal(t, "by", innerBy.Field)
+	assert.Equal(t, "root", innerBy.Value)
+
+	innerSeq, ok := innerAnd.Operands[1].(*ast.CompareExpr)
+	require.True(t, ok)
+	assert.Equal(t, "seq", innerSeq.Field)
+	assert.Equal(t, "<=", innerSeq.Op)
+}
+
+func TestParseQueryNestedFilterSimple(t *testing.T) {
+	input := "QUERY 'test' FROM docs LIMIT 5 WHERE NESTED('tags', name = 'important')"
+	l := &lexer.Lexer{}
+	tokens, err := l.Tokenize(input)
+	require.NoError(t, err)
+
+	p := NewParser()
+	node, err := p.Parse(tokens)
+	require.NoError(t, err)
+
+	stmt, ok := node.(*ast.QueryStmt)
+	require.True(t, ok)
+
+	nestedExpr, ok := stmt.QueryFilter.(*ast.NestedExpr)
+	require.True(t, ok, "expected NestedExpr, got %T", stmt.QueryFilter)
+	assert.Equal(t, "tags", nestedExpr.Path)
+
+	innerCompare, ok := nestedExpr.Filter.(*ast.CompareExpr)
+	require.True(t, ok)
+	assert.Equal(t, "name", innerCompare.Field)
+	assert.Equal(t, "important", innerCompare.Value)
+}

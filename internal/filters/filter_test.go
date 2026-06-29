@@ -329,3 +329,81 @@ func TestBuildFilterMatchExpressions(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildFilterNested(t *testing.T) {
+	converter := NewFilterConverter()
+
+	filter, err := converter.BuildFilter(&ast.NestedExpr{
+		Path: "overwritten_in",
+		Filter: &ast.AndExpr{
+			Operands: []ast.FilterExpr{
+				&ast.CompareExpr{Field: "by", Op: "=", Value: "root"},
+				&ast.CompareExpr{Field: "seq", Op: "<=", Value: float64(2)},
+			},
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, filter)
+	require.Len(t, filter.Must, 1)
+
+	nested := filter.Must[0].GetNested()
+	require.NotNil(t, nested, "expected nested condition")
+	assert.Equal(t, "overwritten_in", nested.GetKey())
+
+	innerFilter := nested.GetFilter()
+	require.NotNil(t, innerFilter)
+	require.Len(t, innerFilter.Must, 2)
+
+	byMatch := innerFilter.Must[0].GetField().GetMatch()
+	require.NotNil(t, byMatch)
+	assert.Equal(t, "root", byMatch.GetKeyword())
+
+	seqRange := innerFilter.Must[1].GetField().GetRange()
+	require.NotNil(t, seqRange)
+	assert.Equal(t, float64(2), seqRange.GetLte())
+}
+
+func TestBuildFilterNestedSimple(t *testing.T) {
+	converter := NewFilterConverter()
+
+	filter, err := converter.BuildFilter(&ast.NestedExpr{
+		Path:   "tags",
+		Filter: &ast.CompareExpr{Field: "name", Op: "=", Value: "important"},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, filter)
+	require.Len(t, filter.Must, 1)
+
+	nested := filter.Must[0].GetNested()
+	require.NotNil(t, nested)
+	assert.Equal(t, "tags", nested.GetKey())
+
+	innerFilter := nested.GetFilter()
+	require.NotNil(t, innerFilter)
+	require.Len(t, innerFilter.Must, 1)
+	assert.Equal(t, "important", innerFilter.Must[0].GetField().GetMatch().GetKeyword())
+}
+
+func TestBuildFilterNestedWithMustNot(t *testing.T) {
+	converter := NewFilterConverter()
+
+	// NOT NESTED('overwritten_in', by = 'root')
+	filter, err := converter.BuildFilter(&ast.NotExpr{
+		Operand: &ast.NestedExpr{
+			Path: "overwritten_in",
+			Filter: &ast.CompareExpr{
+				Field: "by", Op: "=", Value: "root",
+			},
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, filter)
+	require.Len(t, filter.MustNot, 1)
+
+	nested := filter.MustNot[0].GetNested()
+	require.NotNil(t, nested)
+	assert.Equal(t, "overwritten_in", nested.GetKey())
+}

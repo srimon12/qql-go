@@ -59,6 +59,29 @@ WHERE (a = 1 OR b = 2) AND c = 3
 WHERE (team = 'search' OR team = 'infra') AND severity >= 3
 ```
 
+## Nested object filters
+
+Filters on nested array fields using `NESTED('path', filter)`:
+
+```sql
+-- Filter by nested array field
+WHERE NESTED('reviews', rating > 4)
+
+-- Nested filter with AND
+WHERE NESTED('overwritten_in', by = 'root' AND seq <= 2)
+
+-- Negated nested filter
+WHERE NOT NESTED('overwritten_in', by = 'root')
+
+-- Combined with top-level filters
+WHERE branch = 'root' AND NOT NESTED('overwritten_in', by = 'root' AND seq <= 2)
+
+-- Nested filter in SCROLL
+SCROLL FROM content WHERE NESTED('tags', name = 'important') LIMIT 20
+```
+
+`NESTED` scopes a filter to a nested/array object path. The first argument is the field path (string), the second is any valid filter expression. Maps to Qdrant's `NestedCondition`.
+
 ## Operator precedence
 
 1. Comparison operators, `BETWEEN`, `IN`, `IS`, `MATCH`
@@ -100,6 +123,11 @@ DELETE FROM docs WHERE status = 'archived'
 
 -- Filter in UPDATE
 UPDATE docs SET PAYLOAD = {'status': 'reviewed'} WHERE status = 'pending'
+
+-- Nested filter (branch-aware search)
+QUERY 'pricing' FROM content LIMIT 5
+  WHERE branch = 'root'
+    AND NOT NESTED('overwritten_in', by = 'root' AND seq <= 2)
 ```
 
 ## Per-prefetch filters

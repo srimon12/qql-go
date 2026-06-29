@@ -126,7 +126,11 @@ func isContextualIdentifier(kind lexer.TokenKind) bool {
 }
 
 func isContextualFieldName(kind lexer.TokenKind) bool {
-	return isContextualIdentifier(kind)
+	switch kind {
+	case lexer.TokenKindOffset, lexer.TokenKindScore, lexer.TokenKindThreshold, lexer.TokenKindLookup, lexer.TokenKindId, lexer.TokenKindDense, lexer.TokenKindSparse, lexer.TokenKindVector, lexer.TokenKindBy:
+		return true
+	}
+	return false
 }
 
 func (p *Parser) parsePayloadDict() (map[string]any, error) {

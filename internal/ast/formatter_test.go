@@ -82,6 +82,56 @@ func TestFormatFilterExprNot(t *testing.T) {
 	assert.Equal(t, "NOT archived = true", FormatFilterExpr(expr))
 }
 
+func TestFormatFilterExprNested(t *testing.T) {
+	expr := NestedExpr{
+		Path: "overwritten_in",
+		Filter: AndExpr{
+			Operands: []FilterExpr{
+				CompareExpr{Field: "by", Op: "=", Value: "root"},
+				CompareExpr{Field: "seq", Op: "<=", Value: float64(2)},
+			},
+		},
+	}
+	assert.Equal(t, "NESTED('overwritten_in', by = 'root' AND seq <= 2)", FormatFilterExpr(expr))
+}
+
+func TestFormatFilterExprNestedInNot(t *testing.T) {
+	expr := NotExpr{
+		Operand: NestedExpr{
+			Path:   "tags",
+			Filter: CompareExpr{Field: "name", Op: "=", Value: "important"},
+		},
+	}
+	assert.Equal(t, "NOT NESTED('tags', name = 'important')", FormatFilterExpr(expr))
+}
+
+func TestFormatFilterExprNestedInQuery(t *testing.T) {
+	q := &QueryStmt{
+		Collection: "content",
+		Mode:       QueryModeNearest,
+		QueryText:  strPtr("pricing"),
+		Limit:      5,
+		QueryFilter: AndExpr{
+			Operands: []FilterExpr{
+				CompareExpr{Field: "branch", Op: "=", Value: "root"},
+				NotExpr{
+					Operand: NestedExpr{
+						Path: "overwritten_in",
+						Filter: AndExpr{
+							Operands: []FilterExpr{
+								CompareExpr{Field: "by", Op: "=", Value: "root"},
+								CompareExpr{Field: "seq", Op: "<=", Value: float64(2)},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	result := FormatQueryStmt(q)
+	assert.Contains(t, result, "WHERE branch = 'root' AND NOT NESTED('overwritten_in', by = 'root' AND seq <= 2)")
+}
+
 func TestFormatQueryStmtBasic(t *testing.T) {
 	q := &QueryStmt{
 		Collection: "docs",
@@ -174,11 +224,11 @@ func TestFormatQueryStmtScoreThreshold(t *testing.T) {
 func TestFormatQueryStmtOrderBy(t *testing.T) {
 	asc := true
 	q := &QueryStmt{
-		Collection:    "docs",
-		Mode:          QueryModeOrderBy,
-		OrderByField:  strPtr("price"),
-		OrderByAsc:    &asc,
-		Limit:         10,
+		Collection:   "docs",
+		Mode:         QueryModeOrderBy,
+		OrderByField: strPtr("price"),
+		OrderByAsc:   &asc,
+		Limit:        10,
 	}
 	result := FormatQueryStmt(q)
 	assert.Contains(t, result, "QUERY ORDER BY price ASC")
@@ -194,6 +244,6 @@ func TestFormatQueryStmtSample(t *testing.T) {
 	assert.Contains(t, result, "QUERY SAMPLE")
 }
 
-func strPtr(s string) *string { return &s }
-func intPtr(i int) *int       { return &i }
+func strPtr(s string) *string       { return &s }
+func intPtr(i int) *int             { return &i }
 func float64Ptr(f float64) *float64 { return &f }

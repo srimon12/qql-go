@@ -92,6 +92,8 @@ func FormatFilterExpr(expr FilterExpr) string {
 		return "(" + strings.Join(parts, " OR ") + ")"
 	case NotExpr:
 		return fmt.Sprintf("NOT %s", FormatFilterExpr(e.Operand))
+	case NestedExpr:
+		return fmt.Sprintf("NESTED('%s', %s)", e.Path, FormatFilterExpr(e.Filter))
 	default:
 		return "<unknown_filter>"
 	}

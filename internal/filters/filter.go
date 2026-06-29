@@ -60,6 +60,8 @@ func (fc *FilterConverter) buildCondition(expr ast.FilterExpr) (*qdrant.Conditio
 		return fc.buildOrExpr(e)
 	case ast.NotExpr:
 		return fc.buildNotExpr(e)
+	case ast.NestedExpr:
+		return fc.buildNestedExpr(e)
 	default:
 		return nil, errors.NewQQLRuntimeError("unknown filter expression type")
 	}
@@ -190,6 +192,11 @@ func derefFilterExprPtr(expr ast.FilterExpr) (ast.FilterExpr, bool) {
 			return nil, false
 		}
 		return *p, true
+	case *ast.NestedExpr:
+		if p == nil {
+			return nil, false
+		}
+		return *p, true
 	default:
 		return nil, false
 	}
@@ -294,6 +301,14 @@ func (fc *FilterConverter) buildNotExpr(expr ast.NotExpr) (*qdrant.Condition, er
 	return qdrant.NewFilterAsCondition(&qdrant.Filter{
 		MustNot: []*qdrant.Condition{cond},
 	}), nil
+}
+
+func (fc *FilterConverter) buildNestedExpr(expr ast.NestedExpr) (*qdrant.Condition, error) {
+	inner, err := fc.BuildFilter(expr.Filter)
+	if err != nil {
+		return nil, err
+	}
+	return qdrant.NewNestedFilter(expr.Path, inner), nil
 }
 
 func (fc *FilterConverter) wrapAsFilter(condition *qdrant.Condition) *qdrant.Filter {

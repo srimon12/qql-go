@@ -11,10 +11,10 @@ import (
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/config"
 	"github.com/srimon12/qql-go/internal/dump"
-	"github.com/srimon12/qql-go/internal/qdrantutil"
 	"github.com/srimon12/qql-go/internal/embedding"
 	"github.com/srimon12/qql-go/internal/lexer"
 	"github.com/srimon12/qql-go/internal/parser"
+	"github.com/srimon12/qql-go/internal/qdrantutil"
 	"github.com/srimon12/qql-go/internal/repl"
 	"github.com/srimon12/qql-go/internal/script"
 	"github.com/srimon12/qql-go/internal/sparse"
@@ -618,7 +618,18 @@ func (e *Executor) ExplainResult(query string) (*ExplainResponse, error) {
 		if n.Model != nil && *n.Model != "" {
 			fmt.Fprintf(&plan, "Model: %s\n", *n.Model)
 		}
-		if n.Hybrid {
+		if len(n.EmbedDirectives) > 0 {
+			plan.WriteString("Embed directives:\n")
+			for _, dir := range n.EmbedDirectives {
+				line := fmt.Sprintf("  %s -> %s", dir.SourceField, dir.TargetVector)
+				if dir.SparseModel != nil {
+					line += fmt.Sprintf(" (sparse: %s)", *dir.SparseModel)
+				} else if dir.Model != nil {
+					line += fmt.Sprintf(" (model: %s)", *dir.Model)
+				}
+				plan.WriteString(line + "\n")
+			}
+		} else if n.Hybrid {
 			plan.WriteString("Search: HYBRID (dense + sparse)\n")
 		} else {
 			plan.WriteString("Search: DENSE\n")
@@ -909,7 +920,7 @@ func (e *Executor) filterToString(filter ast.FilterExpr) string {
 	if filter == nil {
 		return ""
 	}
-	return fmt.Sprintf("%v", filter)
+	return ast.FormatFilterExpr(filter)
 }
 
 func (e *Executor) configuredModel() string {

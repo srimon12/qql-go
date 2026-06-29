@@ -79,13 +79,32 @@ INSERT INTO <name> VALUES {'id': 1, 'text': 'hello'} USING HYBRID DENSE MODEL '<
 
 -- Insert with pre-computed named vectors (dense + multivector)
 INSERT INTO docs VALUES {'id': 1, 'text': 'hello', 'vector': {'dense': [0.1, 0.2, 0.3], 'colbert': [[0.1, 0.2], [0.3, 0.4]]}}
+
+-- Insert with EMBED: route different fields to different named vectors
+INSERT INTO arxiv VALUES {
+  'id': '2104.01234',
+  'text': 'chunk text',
+  'title': 'Paper Title',
+  'abstract': 'Full abstract...'
+}
+EMBED text INTO dense_chunk,
+      title INTO dense_title,
+      abstract INTO dense_abstract,
+      title INTO sparse_title USING SPARSE
+
+-- EMBED with explicit model overrides
+INSERT INTO docs VALUES {'id': 1, 'text': 'hello', 'title': 'World'}
+EMBED text INTO dense_chunk USING MODEL 'all-MiniLM-L6-v2',
+      title INTO sparse_title USING SPARSE MODEL 'qdrant/bm25'
 ```
 
 The `id` field is required. It must be an unsigned integer or UUID string.
 
-The `text` field is required for auto-vectorization.
+The `text` field is required for auto-vectorization (unless `EMBED` is used).
 
 The `vector` key stores pre-computed vectors. Use a map of named vectors for multi-vector collections. Each value can be a 1D array (dense) or 2D array (multivector).
+
+The `EMBED` clause routes source payload fields to target named vectors. Each directive specifies a source field, a target vector name, and an optional model override. `EMBED` removes the requirement for a `text` field since each directive specifies its own source. Duplicate target vectors are rejected.
 
 > [!WARNING]
 > Payload keys that collide with QQL reserved keywords (such as `type`, `limit`, `using`, etc.) must be quoted (e.g. `{'type': 'document'}`). Otherwise, they will cause a parser syntax error.
@@ -199,7 +218,7 @@ CTEs can reference previously defined CTEs for nested prefetch DAGs.
 | `OFFSET <n>` | Skip first N results |
 | `SCORE THRESHOLD <float>` | Minimum score filter |
 | `LOOKUP FROM <col> [VECTOR '<name>']` | Cross-collection vector lookup |
-| `WHERE <filter>` | Payload filter |
+| `WHERE <filter>` | Payload filter (supports `NESTED('path', filter)` for nested arrays) |
 | `USING HYBRID` | Dense + sparse fusion |
 | `USING SPARSE` | Sparse-only |
 | `USING DENSE` | Dense-only |

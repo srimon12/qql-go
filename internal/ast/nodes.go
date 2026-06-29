@@ -1,13 +1,14 @@
 package ast
 
 type InsertStmt struct {
-	Collection   string
-	ValuesList   []map[string]any
-	Model        *string
-	Hybrid       bool
-	DenseVector  *string
-	SparseModel  *string
-	SparseVector *string
+	Collection      string
+	ValuesList      []map[string]any
+	Model           *string
+	Hybrid          bool
+	DenseVector     *string
+	SparseModel     *string
+	SparseVector    *string
+	EmbedDirectives []EmbedDirective
 }
 
 type VectorsConfig struct {

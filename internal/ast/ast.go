@@ -108,3 +108,17 @@ type NotExpr struct {
 }
 
 func (NotExpr) isFilterExpr() {}
+
+type NestedExpr struct {
+	Path   string
+	Filter FilterExpr
+}
+
+func (NestedExpr) isFilterExpr() {}
+
+type EmbedDirective struct {
+	SourceField  string
+	TargetVector string
+	Model        *string
+	SparseModel  *string
+}

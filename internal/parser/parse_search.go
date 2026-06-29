@@ -144,7 +144,33 @@ func (p *Parser) parseFilterPrimary() (ast.FilterExpr, error) {
 		}
 		return expr, nil
 	}
+	if p.peek().Kind == lexer.TokenKindIdentifier && asciiEqual(p.peek().Value, "NESTED") {
+		return p.parseNestedFunction()
+	}
 	return p.parsePredicate()
+}
+
+// parseNestedFunction parses: NESTED('path', inner_filter)
+func (p *Parser) parseNestedFunction() (ast.FilterExpr, error) {
+	p.advance() // consume NESTED
+	if _, err := p.expect(lexer.TokenKindLparen); err != nil {
+		return nil, err
+	}
+	pathTok, err := p.expect(lexer.TokenKindString)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(lexer.TokenKindComma); err != nil {
+		return nil, err
+	}
+	inner, err := p.parseFilterExpr()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := p.expect(lexer.TokenKindRparen); err != nil {
+		return nil, err
+	}
+	return &ast.NestedExpr{Path: pathTok.Value, Filter: inner}, nil
 }
 
 func (p *Parser) parsePredicate() (ast.FilterExpr, error) {

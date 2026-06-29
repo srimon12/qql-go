@@ -8,6 +8,8 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 ### Added
 
+- **Nested object filters (`NESTED`)** — `NESTED('path', filter)` in `WHERE` clauses scopes a filter to a nested/array object path. Maps to Qdrant's `NestedCondition`. Enables branch-aware search patterns, nested tag filtering, and any query that needs to filter inside array-of-objects payload fields. Syntax: `WHERE NESTED('overwritten_in', by = 'root' AND seq <= 2)`.
+- **EMBED clause for INSERT** — `EMBED source_field INTO target_vector [, ...]` routes different payload fields to different named vectors during insert. Each directive specifies a source field, a target vector name, and an optional model override (`USING MODEL '...'` or `USING SPARSE [MODEL '...']`). Enables multi-representation search where title, abstract, and body chunks each get their own embedding. Duplicate target vectors are rejected with a clear error. Removes the requirement for a `text` field when EMBED is used.
 - **Anonymous rate limiting** — Pre-auth rate limiter keyed by client IP prevents resource exhaustion from invalid-token floods. Configurable via `--anon-rate-limit` and `--anon-rate-limit-capacity` CLI flags.
 - **Query complexity guards** — `MaxFilterDepth`, `MaxOrOperands`, and `MaxPrefetchDepth` in policy limits prevent resource exhaustion from deeply nested filters or excessive CTEs.
 - **Configurable CORS origins** — `--allowed-origins` replaces the hardcoded `Access-Control-Allow-Origin: *` with an explicit allowlist. Adds `Vary: Origin` header when varying by origin.
