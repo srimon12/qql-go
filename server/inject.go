@@ -51,6 +51,13 @@ func (a *ASTInjector) TransformQuery(q *ast.QueryStmt) error {
 	a.injectFilter(q)
 	a.enforceLimit(&q.Limit)
 
+	if err := a.enforceFilterComplexity(q.QueryFilter); err != nil {
+		return err
+	}
+	if err := a.enforceCTEComplexity(q.CTEs); err != nil {
+		return err
+	}
+
 	for i := range q.CTEs {
 		if q.CTEs[i].Stmt != nil {
 			a.enforceLimit(&q.CTEs[i].Stmt.Limit)
@@ -69,12 +76,24 @@ func (a *ASTInjector) TransformScroll(s *ast.ScrollStmt) error {
 	a.injectScrollFilter(s)
 	a.enforceLimit(&s.Limit)
 
+	if err := a.enforceFilterComplexity(s.QueryFilter); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // TransformDelete applies policy transformations to a DeleteStmt.
+// Injects the tenant filter into the WHERE clause to prevent cross-tenant deletion.
 func (a *ASTInjector) TransformDelete(d *ast.DeleteStmt) error {
-	return a.EnforceCollection(d.Collection)
+	if err := a.EnforceCollection(d.Collection); err != nil {
+		return err
+	}
+	a.injectDeleteFilter(d)
+	if err := a.enforceFilterComplexity(d.QueryFilter); err != nil {
+		return err
+	}
+	return nil
 }
 
 // TransformInsert applies policy transformations to an InsertStmt.
@@ -83,8 +102,16 @@ func (a *ASTInjector) TransformInsert(i *ast.InsertStmt) error {
 }
 
 // TransformUpdatePayload applies policy transformations to an UpdatePayloadStmt.
+// Injects the tenant filter into the WHERE clause to prevent cross-tenant updates.
 func (a *ASTInjector) TransformUpdatePayload(u *ast.UpdatePayloadStmt) error {
-	return a.EnforceCollection(u.Collection)
+	if err := a.EnforceCollection(u.Collection); err != nil {
+		return err
+	}
+	a.injectUpdatePayloadFilter(u)
+	if err := a.enforceFilterComplexity(u.QueryFilter); err != nil {
+		return err
+	}
+	return nil
 }
 
 // TransformUpdateVector applies policy transformations to an UpdateVectorStmt.
@@ -177,6 +204,52 @@ func (a *ASTInjector) injectScrollFilter(s *ast.ScrollStmt) {
 	}
 }
 
+// injectDeleteFilter injects the policy's WHERE clause into a DeleteStmt.
+func (a *ASTInjector) injectDeleteFilter(d *ast.DeleteStmt) {
+	if a.policy.InjectField != "" {
+		resolved := a.resolveValue()
+		if resolved != "" {
+			injected := a.buildCompareExpr(resolved)
+			d.QueryFilter = mergeFilters(d.QueryFilter, injected)
+		}
+	}
+
+	for _, f := range a.policy.InjectFilters {
+		value := f.Value
+		if f.FromClaim != "" && a.claims != nil {
+			value = extractStringClaimFromJWT(a.claims, f.FromClaim)
+		}
+		if value == "" {
+			continue
+		}
+		compare := a.buildFilterExpr(f.Field, f.Op, value)
+		d.QueryFilter = mergeFilters(d.QueryFilter, compare)
+	}
+}
+
+// injectUpdatePayloadFilter injects the policy's WHERE clause into an UpdatePayloadStmt.
+func (a *ASTInjector) injectUpdatePayloadFilter(u *ast.UpdatePayloadStmt) {
+	if a.policy.InjectField != "" {
+		resolved := a.resolveValue()
+		if resolved != "" {
+			injected := a.buildCompareExpr(resolved)
+			u.QueryFilter = mergeFilters(u.QueryFilter, injected)
+		}
+	}
+
+	for _, f := range a.policy.InjectFilters {
+		value := f.Value
+		if f.FromClaim != "" && a.claims != nil {
+			value = extractStringClaimFromJWT(a.claims, f.FromClaim)
+		}
+		if value == "" {
+			continue
+		}
+		compare := a.buildFilterExpr(f.Field, f.Op, value)
+		u.QueryFilter = mergeFilters(u.QueryFilter, compare)
+	}
+}
+
 // resolveValue determines the injection value from policy config or JWT claims.
 func (a *ASTInjector) resolveValue() string {
 	if a.policy.InjectValue != "" {
@@ -228,6 +301,33 @@ func (a *ASTInjector) enforceLimit(limit *int) {
 	}
 }
 
+// enforceFilterComplexity checks the filter tree for resource-exhaustion risks.
+func (a *ASTInjector) enforceFilterComplexity(filter ast.FilterExpr) error {
+	if a.policy.MaxFilterDepth > 0 {
+		depth := measureFilterDepth(filter, 0)
+		if depth > a.policy.MaxFilterDepth {
+			return fmt.Errorf("filter nesting depth %d exceeds policy maximum %d", depth, a.policy.MaxFilterDepth)
+		}
+	}
+	if a.policy.MaxOrOperands > 0 {
+		orCount := countOrOperands(filter)
+		for _, cnt := range orCount {
+			if cnt > a.policy.MaxOrOperands {
+				return fmt.Errorf("OR operand count %d exceeds policy maximum %d", cnt, a.policy.MaxOrOperands)
+			}
+		}
+	}
+	return nil
+}
+
+// enforceCTEComplexity checks the number of nested CTE/prefetch stages.
+func (a *ASTInjector) enforceCTEComplexity(ctes []ast.CTE) error {
+	if a.policy.MaxPrefetchDepth > 0 && len(ctes) > a.policy.MaxPrefetchDepth {
+		return fmt.Errorf("CTE count %d exceeds policy maximum %d", len(ctes), a.policy.MaxPrefetchDepth)
+	}
+	return nil
+}
+
 // mergeFilters combines an existing filter with an injected one using AND.
 func mergeFilters(existing ast.FilterExpr, injected ast.FilterExpr) ast.FilterExpr {
 	if existing == nil {
@@ -237,6 +337,158 @@ func mergeFilters(existing ast.FilterExpr, injected ast.FilterExpr) ast.FilterEx
 		return existing
 	}
 	return ast.AndExpr{Operands: []ast.FilterExpr{existing, injected}}
+}
+
+// measureFilterDepth returns the maximum nesting depth of a filter tree.
+func measureFilterDepth(expr ast.FilterExpr, depth int) int {
+	if expr == nil {
+		return depth
+	}
+	switch e := expr.(type) {
+	case ast.AndExpr:
+		maxChild := depth
+		for _, op := range e.Operands {
+			d := measureFilterDepth(op, depth+1)
+			if d > maxChild {
+				maxChild = d
+			}
+		}
+		return maxChild
+	case ast.OrExpr:
+		maxChild := depth
+		for _, op := range e.Operands {
+			d := measureFilterDepth(op, depth+1)
+			if d > maxChild {
+				maxChild = d
+			}
+		}
+		return maxChild
+	case ast.NotExpr:
+		return measureFilterDepth(e.Operand, depth+1)
+	default:
+		return depth
+	}
+}
+
+// countOrOperands returns the maximum OR operand count at each level of the
+// filter tree. Returns a slice so we can check each level independently.
+func countOrOperands(expr ast.FilterExpr) []int {
+	if expr == nil {
+		return nil
+	}
+	switch e := expr.(type) {
+	case ast.OrExpr:
+		counts := []int{len(e.Operands)}
+		for _, op := range e.Operands {
+			counts = append(counts, countOrOperands(op)...)
+		}
+		return counts
+	case ast.AndExpr:
+		var counts []int
+		for _, op := range e.Operands {
+			counts = append(counts, countOrOperands(op)...)
+		}
+		return counts
+	case ast.NotExpr:
+		return countOrOperands(e.Operand)
+	default:
+		return nil
+	}
+}
+
+// VerifyFilterInjection checks that the policy filter is present in the AST
+// after injection. This is a defense-in-depth check that catches AST compiler
+// bugs where the injected filter might be silently dropped during compilation.
+// Returns nil if verification is skipped (no injection expected) or if the
+// filter is correctly present. Returns an error if injection was expected
+// but the filter tree does not contain it.
+func (a *ASTInjector) VerifyFilterInjection(node ast.ASTNode) error {
+	if a.policy.InjectField == "" && len(a.policy.InjectFilters) == 0 {
+		return nil
+	}
+
+	filter := filterFromNode(node)
+	if filter == nil {
+		return fmt.Errorf("policy requires filter injection but AST has no WHERE clause")
+	}
+
+	// Build the set of expected filter fields.
+	expectedFields := make(map[string]bool)
+	if a.policy.InjectField != "" {
+		expectedFields[a.policy.InjectField] = true
+	}
+	for _, f := range a.policy.InjectFilters {
+		expectedFields[f.Field] = true
+	}
+
+	// Walk the filter tree and collect all field names.
+	foundFields := make(map[string]bool)
+	collectFilterFields(filter, foundFields)
+
+	for field := range expectedFields {
+		if !foundFields[field] {
+			return fmt.Errorf("policy requires filter on field %q but it was not found in the WHERE clause", field)
+		}
+	}
+	return nil
+}
+
+// filterFromNode extracts the FilterExpr from an AST node.
+func filterFromNode(node ast.ASTNode) ast.FilterExpr {
+	switch n := node.(type) {
+	case *ast.QueryStmt:
+		return n.QueryFilter
+	case *ast.ScrollStmt:
+		return n.QueryFilter
+	case *ast.DeleteStmt:
+		return n.QueryFilter
+	case *ast.UpdatePayloadStmt:
+		return n.QueryFilter
+	default:
+		return nil
+	}
+}
+
+// collectFilterFields recursively walks a FilterExpr tree and collects
+// all field names that appear in comparisons.
+func collectFilterFields(expr ast.FilterExpr, fields map[string]bool) {
+	if expr == nil {
+		return
+	}
+	switch e := expr.(type) {
+	case ast.CompareExpr:
+		fields[e.Field] = true
+	case ast.InExpr:
+		fields[e.Field] = true
+	case ast.NotInExpr:
+		fields[e.Field] = true
+	case ast.BetweenExpr:
+		fields[e.Field] = true
+	case ast.IsNullExpr:
+		fields[e.Field] = true
+	case ast.IsNotNullExpr:
+		fields[e.Field] = true
+	case ast.IsEmptyExpr:
+		fields[e.Field] = true
+	case ast.IsNotEmptyExpr:
+		fields[e.Field] = true
+	case ast.MatchTextExpr:
+		fields[e.Field] = true
+	case ast.MatchAnyExpr:
+		fields[e.Field] = true
+	case ast.MatchPhraseExpr:
+		fields[e.Field] = true
+	case ast.AndExpr:
+		for _, op := range e.Operands {
+			collectFilterFields(op, fields)
+		}
+	case ast.OrExpr:
+		for _, op := range e.Operands {
+			collectFilterFields(op, fields)
+		}
+	case ast.NotExpr:
+		collectFilterFields(e.Operand, fields)
+	}
 }
 
 // operationFromNode extracts the operation type string from an AST node.

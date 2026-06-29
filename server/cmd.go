@@ -31,8 +31,10 @@ func NewServeCmd() *cobra.Command {
 		auditFile   string
 
 		// Rate limiting.
-		rateLimit         float64
-		rateLimitCapacity int
+		rateLimit              float64
+		rateLimitCapacity      int
+		anonRateLimit          float64
+		anonRateLimitCapacity  int
 
 		// Templates.
 		templateFile string
@@ -99,7 +101,7 @@ Any language can send QQL queries:
 			}
 
 			// Build gateway config if any gateway flag is set.
-			if jwksURL != "" || policyFile != "" || auditEnable || rateLimit > 0 || templateFile != "" {
+			if jwksURL != "" || policyFile != "" || auditEnable || rateLimit > 0 || anonRateLimit > 0 || templateFile != "" {
 				gw := &GatewayConfig{}
 
 				// Audit logger.
@@ -154,6 +156,15 @@ Any language can send QQL queries:
 					})
 				}
 
+				// Anonymous rate limiter (pre-auth, keyed by IP).
+				if anonRateLimit > 0 {
+					gw.AnonymousRateLimiter = NewRateLimiter(RateLimitConfig{
+						Rate:     anonRateLimit,
+						Capacity: anonRateLimitCapacity,
+						Enabled:  true,
+					})
+				}
+
 				// Template engine.
 				if templateFile != "" {
 					te, err := NewTemplateEngine(templateFile)
@@ -193,6 +204,8 @@ Any language can send QQL queries:
 	// Gateway: Rate limiting flags.
 	cmd.Flags().Float64Var(&rateLimit, "rate-limit", 0, "max requests per second per user (0 = unlimited)")
 	cmd.Flags().IntVar(&rateLimitCapacity, "rate-limit-capacity", 20, "max burst size per user for rate limiting")
+	cmd.Flags().Float64Var(&anonRateLimit, "anon-rate-limit", 0, "max unauthenticated requests per second per IP (0 = unlimited)")
+	cmd.Flags().IntVar(&anonRateLimitCapacity, "anon-rate-limit-capacity", 20, "max burst size for anonymous rate limiting")
 
 	// Gateway: Template flags.
 	cmd.Flags().StringVar(&templateFile, "templates", "", "path to YAML query template file for agent-safe operations")

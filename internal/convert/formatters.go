@@ -35,7 +35,7 @@ func formatMapBuilder(b *strings.Builder, val map[string]any) {
 func formatID(id any) string {
 	switch v := id.(type) {
 	case string:
-		return "'" + v + "'"
+		return "'" + strings.ReplaceAll(v, "'", "\\'") + "'"
 	case float64:
 		if v == float64(int64(v)) {
 			return strconv.FormatInt(int64(v), 10)

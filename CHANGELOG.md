@@ -6,7 +6,32 @@ The format is inspired by Keep a Changelog and uses calendar dates for repo rele
 
 ## [Unreleased]
 
-- No unreleased changes yet.
+### Added
+
+- **Anonymous rate limiting** — Pre-auth rate limiter keyed by client IP prevents resource exhaustion from invalid-token floods. Configurable via `--anon-rate-limit` and `--anon-rate-limit-capacity` CLI flags.
+- **Query complexity guards** — `MaxFilterDepth`, `MaxOrOperands`, and `MaxPrefetchDepth` in policy limits prevent resource exhaustion from deeply nested filters or excessive CTEs.
+- **Configurable CORS origins** — `--allowed-origins` replaces the hardcoded `Access-Control-Allow-Origin: *` with an explicit allowlist. Adds `Vary: Origin` header when varying by origin.
+- **Filter verification injection check** — `VerifyFilterInjection` defense-in-depth check catches AST injection bugs where the injected filter is silently dropped. Called in `Exec`, `ExecBatch`, and `Explain` (JSON) handlers.
+- **Generated lexer keyword switch** — `lookupKeywordFast` replaces runtime map-based keyword lookup with a generated length-based switch statement. Lexer benchmarks: ~2-3x improvement (`BenchmarkLex_Simple` ~192 ns/op from ~550, `BenchmarkLex_Full` ~643 ns/op from ~1890).
+- **AST formatter test coverage** — 199 tests covering `FormatFilterExpr` (all 14 expression types) and `FormatQueryStmt` (9 statement variants). Previously `internal/ast` had zero tests.
+- **Converter formatter test coverage** — Tests for `formatID` and `formatValueBuilder` covering clean strings, embedded quotes, float/int IDs, and all value types.
+- **Converter sanitization tests** — `sanitizeCollectionName` strips unsafe characters; tests cover empty string, all-unsafe, spaces, mixed-case, hyphens, and underscores.
+
+### Changed
+
+- `qdrantutil` package extracted shared `SerializeKeywordBoolFields` serialization from `executor.go` and `dump.go`, removing 50+ lines of duplicated code.
+
+### Fixed
+
+- **Critical gateway security patches** from red-team audit:
+  - `buildPolicy` now propagates `MaxFilterDepth`, `MaxOrOperands`, `MaxPrefetchDepth` to `EvaluatedPolicy` (complexity guards were silently disabled).
+  - `TransformDelete`/`TransformUpdatePayload` inject tenant `WHERE` filter to prevent cross-tenant data deletion/update (was only enforcing collection).
+  - `connectPeerFromContext` uses `connect.CallInfoForHandlerContext` instead of non-existent string context keys (anonymous rate limiting was completely broken).
+  - `collectFilterFields` handles `IsNullExpr`, `IsNotNullExpr`, `IsEmptyExpr`, `IsNotEmptyExpr`, `MatchTextExpr`, `MatchAnyExpr`, `MatchPhraseExpr` filter types.
+  - `RateLimiter` adds `MaxBuckets` cap to prevent unbounded memory growth from many unique keys.
+- `formatID` now escapes single quotes in string IDs to match `formatValueBuilder`, closing an injection vector.
+- `sanitizeCollectionName` strips unsafe characters from collection names used in generated QQL statements.
+- `cmd.go` adds `anonRateLimit` to gateway config condition so `--anon-rate-limit` alone creates `GatewayConfig`.
 
 ## [0.5.0] - 2026-06-19
 

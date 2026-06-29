@@ -94,6 +94,9 @@ uv run run.py
 | Policy engine | `--policy-file` | YAML rules: operation control, collection scoping, filter injection |
 | Policy hot-reload | `--policy-reload` | Watch file for changes, atomic swap |
 | Rate limiting | `--rate-limit 10` | Per-user token bucket, 429 with Retry-After |
+| Anonymous rate limiting | `--anon-rate-limit 5` | Pre-auth rate limiter by client IP, prevents invalid-token floods |
+| Query complexity guards | `--max-filter-depth 10` | Max filter nesting, OR operands, and prefetch depth |
+| CORS origins | `--allowed-origins` | Configurable CORS allowlist (replaces hardcoded `*`) |
 | Query templates | `--templates` | Named operations for agents |
 | Audit logging | `--audit --audit-file` | Structured JSON per request |
 | Embeddings | `--embedding-endpoint` | Local/external embedding server |

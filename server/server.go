@@ -28,6 +28,11 @@ type Config struct {
 	QdrantURL string
 	// QdrantAPIKey is the API key for Qdrant authentication.
 	QdrantAPIKey string
+	// AllowedOrigins is a list of permitted CORS origins.
+	// If empty, only the Origin request header is echoed back (nil values default to the
+	// request's Origin when the request is same-origin, but the caller must be careful).
+	// For development, set to ["*"] to allow all.
+	AllowedOrigins []string
 	// ShutdownTimeout is the grace period for in-flight requests.
 	ShutdownTimeout time.Duration
 	// QQLConfig is the QQL executor config (embedding, inference, BM25, etc.).
@@ -54,6 +59,11 @@ type GatewayConfig struct {
 	// RateLimiter enforces per-tenant request rate limits.
 	// If nil, no rate limiting is applied.
 	RateLimiter *RateLimiter
+
+	// AnonymousRateLimiter enforces rate limits on unauthenticated requests
+	// keyed by client IP. Prevents resource exhaustion from invalid-token floods.
+	// If nil, no anonymous rate limiting is applied.
+	AnonymousRateLimiter *RateLimiter
 
 	// Templates is the query template engine for agent-safe operations.
 	// If nil, template execution is disabled.
@@ -111,7 +121,7 @@ func Run(cfg Config) error {
 	})
 
 	// Wrap with h2c for HTTP/2 without TLS (Connect clients prefer HTTP/2)
-	h2cHandler := h2c.NewHandler(corsMiddleware(mux), &http2.Server{})
+	h2cHandler := h2c.NewHandler(corsMiddleware(mux, cfg.AllowedOrigins), &http2.Server{})
 
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,
@@ -162,10 +172,32 @@ func Run(cfg Config) error {
 	return nil
 }
 
-// corsMiddleware adds CORS headers for browser clients.
-func CORSForBrowser(next http.Handler) http.Handler {
+// corsMiddleware adds CORS headers for browser clients using the server Config.
+func corsMiddleware(next http.Handler, origins []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := r.Header.Get("Origin")
+		allowed := origin
+		if len(origins) == 0 {
+			if origin == "" {
+				allowed = "*"
+			}
+		} else {
+			allowed = ""
+			for _, o := range origins {
+				if o == "*" {
+					allowed = "*"
+					break
+				}
+				if o == origin {
+					allowed = origin
+					break
+				}
+			}
+		}
+		if allowed != "" {
+			w.Header().Set("Access-Control-Allow-Origin", allowed)
+			w.Header().Add("Vary", "Origin")
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Connect-Protocol-Version, Connect-Timeout-Ms")
 		w.Header().Set("Access-Control-Expose-Headers", "Connect-Protocol-Version")
@@ -175,8 +207,4 @@ func CORSForBrowser(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-func corsMiddleware(next http.Handler) http.Handler {
-	return CORSForBrowser(next)
 }

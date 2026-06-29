@@ -715,3 +715,279 @@ func TestTemplate_ExtractParams(t *testing.T) {
 
 func boolPtr(b bool) *bool    { return &b }
 func strPtr(s string) *string { return &s }
+
+// --- Injection Edge-Case Tests ---
+
+func TestASTInjector_TrueEqualsTrueOrBypass(t *testing.T) {
+	// WHERE true = true OR org = 'globex' parses (true is a field name).
+	// Injection wraps it: (true = true OR org = 'globex') AND org = 'acme'
+	// Boolean logic: (true AND acme) = acme — safe.
+	policy := EvaluatedPolicy{
+		Allowed:         true,
+		AllowOps:        map[string]bool{"SCROLL": true},
+		InjectField:     "org",
+		InjectFromClaim: "org_id",
+		InjectOp:        "=",
+	}
+	claims := &JWTClaims{
+		Subject: "alice@acme.com",
+		Raw:     map[string]any{"org_id": "acme"},
+	}
+
+	injector := NewASTInjector(policy, claims)
+
+	scroll := &ast.ScrollStmt{
+		Collection: "docs",
+		Limit:      20,
+		QueryFilter: ast.OrExpr{
+			Operands: []ast.FilterExpr{
+				ast.CompareExpr{Field: "true", Op: "=", Value: true},
+				ast.CompareExpr{Field: "org", Op: "=", Value: "globex"},
+			},
+		},
+	}
+
+	err := injector.TransformScroll(scroll)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should be AND of OrExpr + CompareExpr
+	andExpr, ok := scroll.QueryFilter.(ast.AndExpr)
+	if !ok {
+		t.Fatalf("expected AndExpr at top level, got %T", scroll.QueryFilter)
+	}
+	if len(andExpr.Operands) != 2 {
+		t.Fatalf("expected 2 operands, got %d", len(andExpr.Operands))
+	}
+
+	// Verify injected filter is the second operand
+	injected, ok := andExpr.Operands[1].(ast.CompareExpr)
+	if !ok {
+		t.Fatalf("expected CompareExpr for injected filter, got %T", andExpr.Operands[1])
+	}
+	if injected.Field != "org" || injected.Value != "acme" {
+		t.Fatalf("injected filter should be org = 'acme', got %s = %v", injected.Field, injected.Value)
+	}
+}
+
+func TestASTInjector_VerifyFilterInjection(t *testing.T) {
+	policy := EvaluatedPolicy{
+		Allowed:         true,
+		AllowOps:        map[string]bool{"SCROLL": true},
+		InjectFilters: []ResolvedFilter{
+			{Field: "org", Op: "=", Value: "acme"},
+			{Field: "team", Op: "in", Value: "engineering,all"},
+		},
+	}
+	claims := &JWTClaims{Subject: "test", Raw: map[string]any{"org_id": "acme"}}
+	injector := NewASTInjector(policy, claims)
+
+	// Verify passes after injection
+	scroll := &ast.ScrollStmt{Collection: "docs", Limit: 10}
+	err := injector.TransformScroll(scroll)
+	if err != nil {
+		t.Fatalf("TransformScroll: %v", err)
+	}
+	err = injector.VerifyFilterInjection(scroll)
+	if err != nil {
+		t.Fatalf("VerifyFilterInjection should pass: %v", err)
+	}
+}
+
+func TestASTInjector_VerifyFilterInjection_MissingField(t *testing.T) {
+	// Simulate a bug where the filter was dropped
+	policy := EvaluatedPolicy{
+		Allowed:         true,
+		AllowOps:        map[string]bool{"SCROLL": true},
+		InjectField:     "org",
+		InjectFromClaim: "org_id",
+		InjectOp:        "=",
+	}
+	claims := &JWTClaims{Subject: "test", Raw: map[string]any{}}
+	injector := NewASTInjector(policy, claims)
+
+	// Empty claims → resolveValue returns "" → no injection → verify should fail
+	scroll := &ast.ScrollStmt{Collection: "docs", Limit: 10}
+	err := injector.TransformScroll(scroll)
+	if err != nil {
+		t.Fatalf("TransformScroll: %v", err)
+	}
+	err = injector.VerifyFilterInjection(scroll)
+	if err == nil {
+		t.Fatal("VerifyFilterInjection should fail when no filter was injected")
+	}
+}
+
+func TestASTInjector_VerifyFilterInjection_NoPolicy(t *testing.T) {
+	// No injection required → verification should pass (skipped)
+	policy := EvaluatedPolicy{Allowed: true}
+	injector := NewASTInjector(policy, nil)
+	scroll := &ast.ScrollStmt{Collection: "docs", Limit: 10}
+	err := injector.VerifyFilterInjection(scroll)
+	if err != nil {
+		t.Fatalf("VerifyFilterInjection should skip when no injection required: %v", err)
+	}
+}
+
+// --- Query Complexity Guard Tests ---
+
+func TestASTInjector_MaxFilterDepth(t *testing.T) {
+	policy := EvaluatedPolicy{
+		Allowed:        true,
+		AllowOps:       map[string]bool{"SCROLL": true},
+		MaxFilterDepth: 2,
+	}
+	injector := NewASTInjector(policy, nil)
+
+	// Depth 3: OR( AND( OR(a, b), c ), d ) — exceeds max of 2
+	deep := ast.OrExpr{
+		Operands: []ast.FilterExpr{
+			ast.AndExpr{
+				Operands: []ast.FilterExpr{
+					ast.OrExpr{
+						Operands: []ast.FilterExpr{
+							ast.CompareExpr{Field: "a", Op: "=", Value: "1"},
+							ast.CompareExpr{Field: "b", Op: "=", Value: "2"},
+						},
+					},
+					ast.CompareExpr{Field: "c", Op: "=", Value: "3"},
+				},
+			},
+			ast.CompareExpr{Field: "d", Op: "=", Value: "4"},
+		},
+	}
+
+	scroll := &ast.ScrollStmt{Collection: "docs", Limit: 10, QueryFilter: deep}
+	err := injector.TransformScroll(scroll)
+	if err == nil {
+		t.Fatal("expected error for filter depth exceeding max")
+	}
+	t.Logf("Got expected error: %v", err)
+}
+
+func TestASTInjector_MaxOrOperands(t *testing.T) {
+	policy := EvaluatedPolicy{
+		Allowed:       true,
+		AllowOps:      map[string]bool{"SCROLL": true},
+		MaxOrOperands: 2,
+	}
+	injector := NewASTInjector(policy, nil)
+
+	// 3 OR operands — exceeds max of 2
+	bigOr := ast.OrExpr{
+		Operands: []ast.FilterExpr{
+			ast.CompareExpr{Field: "a", Op: "=", Value: "1"},
+			ast.CompareExpr{Field: "b", Op: "=", Value: "2"},
+			ast.CompareExpr{Field: "c", Op: "=", Value: "3"},
+		},
+	}
+
+	scroll := &ast.ScrollStmt{Collection: "docs", Limit: 10, QueryFilter: bigOr}
+	err := injector.TransformScroll(scroll)
+	if err == nil {
+		t.Fatal("expected error for OR operand count exceeding max")
+	}
+	t.Logf("Got expected error: %v", err)
+}
+
+func TestASTInjector_MaxPrefetchDepth(t *testing.T) {
+	policy := EvaluatedPolicy{
+		Allowed:          true,
+		AllowOps:         map[string]bool{"QUERY": true},
+		MaxPrefetchDepth: 1,
+	}
+	injector := NewASTInjector(policy, nil)
+
+	// 2 CTEs — exceeds max of 1
+	stmt := &ast.QueryStmt{
+		Collection: "docs",
+		Mode:       ast.QueryModeNearest,
+		Limit:      10,
+		QueryText:  strPtr("test"),
+		CTEs: []ast.CTE{
+			{Name: "a", Stmt: &ast.QueryStmt{Collection: "docs", Mode: ast.QueryModeNearest, Limit: 5, QueryText: strPtr("a")}},
+			{Name: "b", Stmt: &ast.QueryStmt{Collection: "docs", Mode: ast.QueryModeNearest, Limit: 5, QueryText: strPtr("b")}},
+		},
+	}
+
+	err := injector.TransformQuery(stmt)
+	if err == nil {
+		t.Fatal("expected error for CTE count exceeding max")
+	}
+	t.Logf("Got expected error: %v", err)
+}
+
+func TestASTInjector_LegacyAndMultiFilters(t *testing.T) {
+	policy := EvaluatedPolicy{
+		Allowed:         true,
+		AllowOps:        map[string]bool{"SCROLL": true},
+		InjectField:     "org",
+		InjectFromClaim: "org_id",
+		InjectOp:        "=",
+		InjectFilters: []ResolvedFilter{
+			{Field: "team", Op: "in", Value: "engineering,all"},
+		},
+	}
+	claims := &JWTClaims{Subject: "test", Raw: map[string]any{"org_id": "acme"}}
+	injector := NewASTInjector(policy, claims)
+
+	scroll := &ast.ScrollStmt{Collection: "docs", Limit: 10}
+	err := injector.TransformScroll(scroll)
+	if err != nil {
+		t.Fatalf("TransformScroll: %v", err)
+	}
+
+	// Should be AND with 2 injected filters (legacy single + multi)
+	err = injector.VerifyFilterInjection(scroll)
+	if err != nil {
+		t.Fatalf("VerifyFilterInjection should pass: %v", err)
+	}
+}
+
+func TestMeasureFilterDepth(t *testing.T) {
+	tests := []struct {
+		name string
+		expr ast.FilterExpr
+		want int
+	}{
+		{"nil", nil, 0},
+		{"leaf", ast.CompareExpr{Field: "a", Op: "=", Value: "1"}, 0},
+		{"AND depth 1", ast.AndExpr{Operands: []ast.FilterExpr{
+			ast.CompareExpr{Field: "a", Op: "=", Value: "1"},
+			ast.CompareExpr{Field: "b", Op: "=", Value: "2"},
+		}}, 1},
+		{"OR inside AND", ast.AndExpr{Operands: []ast.FilterExpr{
+			ast.CompareExpr{Field: "a", Op: "=", Value: "1"},
+			ast.OrExpr{Operands: []ast.FilterExpr{
+				ast.CompareExpr{Field: "b", Op: "=", Value: "2"},
+				ast.CompareExpr{Field: "c", Op: "=", Value: "3"},
+			}},
+		}}, 2},
+		{"NOT", ast.NotExpr{Operand: ast.CompareExpr{Field: "a", Op: "=", Value: "1"}}, 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := measureFilterDepth(tt.expr, 0)
+			if got != tt.want {
+				t.Errorf("measureFilterDepth() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCountOrOperands(t *testing.T) {
+	expr := ast.AndExpr{Operands: []ast.FilterExpr{
+		ast.OrExpr{Operands: []ast.FilterExpr{
+			ast.CompareExpr{Field: "a", Op: "=", Value: "1"},
+			ast.CompareExpr{Field: "b", Op: "=", Value: "2"},
+			ast.CompareExpr{Field: "c", Op: "=", Value: "3"},
+		}},
+		ast.CompareExpr{Field: "d", Op: "=", Value: "4"},
+	}}
+	counts := countOrOperands(expr)
+	if len(counts) != 1 || counts[0] != 3 {
+		t.Errorf("countOrOperands() = %v, want [3]", counts)
+	}
+}

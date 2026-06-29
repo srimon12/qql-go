@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/qdrant/go-client/qdrant"
+	"github.com/srimon12/qql-go/internal/qdrantutil"
 )
 
 type Client interface {
@@ -612,17 +613,7 @@ func serializeKeywordParams(params *qdrant.KeywordIndexParams) map[string]any {
 	if params == nil {
 		return nil
 	}
-	data := map[string]any{}
-	if params.IsTenant != nil {
-		data["is_tenant"] = params.GetIsTenant()
-	}
-	if params.OnDisk != nil {
-		data["on_disk"] = params.GetOnDisk()
-	}
-	if params.EnableHnsw != nil {
-		data["enable_hnsw"] = params.GetEnableHnsw()
-	}
-	return data
+	return qdrantutil.SerializeKeywordBoolFields(params.IsTenant, params.OnDisk, params.EnableHnsw)
 }
 
 func serializeTextParams(params *qdrant.TextIndexParams) map[string]any {
@@ -661,17 +652,7 @@ func serializeUUIDParams(params *qdrant.UuidIndexParams) map[string]any {
 	if params == nil {
 		return nil
 	}
-	data := map[string]any{}
-	if params.IsTenant != nil {
-		data["is_tenant"] = params.GetIsTenant()
-	}
-	if params.OnDisk != nil {
-		data["on_disk"] = params.GetOnDisk()
-	}
-	if params.EnableHnsw != nil {
-		data["enable_hnsw"] = params.GetEnableHnsw()
-	}
-	return data
+	return qdrantutil.SerializeKeywordBoolFields(params.IsTenant, params.OnDisk, params.EnableHnsw)
 }
 
 func serializeIntegerParams(params *qdrant.IntegerIndexParams) map[string]any {

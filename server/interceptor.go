@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"time"
 
@@ -62,8 +63,9 @@ func (c *chainInt) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 		start := time.Now()
 		procedure := req.Spec().Procedure
 
-		// Skip auth for health checks, convert, and explain (utility endpoints).
-		if procedure == "/qql.QQL/Health" || procedure == "/qql.QQL/Convert" || procedure == "/qql.QQL/Explain" {
+		// Skip auth for health checks and convert (utility endpoints).
+		// Explain requires auth — it can reveal collection schema and query plans.
+		if procedure == "/qql.QQL/Health" || procedure == "/qql.QQL/Convert" {
 			resp, err := next(ctx, req)
 			c.cfg.Audit.Log(AuditEntry{
 				Timestamp: time.Now(),
@@ -73,6 +75,21 @@ func (c *chainInt) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 				Status:    "ok",
 			})
 			return resp, err
+		}
+
+		// Step 0: Anonymous rate limit (pre-auth, keyed by peer IP).
+		if c.cfg.AnonymousRateLimiter != nil {
+			token := extractBearerToken(req.Header().Get("Authorization"))
+			if token == "" {
+				key := connectPeerFromContext(ctx)
+				if key == "" {
+					key = "unknown"
+				}
+				if !c.cfg.AnonymousRateLimiter.Allow(key) {
+					c.cfg.Audit.LogDenied(nil, operationFromProcedure(procedure), "", "anonymous rate limit exceeded", time.Since(start))
+					return nil, connect.NewError(connect.CodeResourceExhausted, fmt.Errorf("rate limit exceeded"))
+				}
+			}
 		}
 
 		// Step 1: JWT validation (if JWKS is configured).
@@ -207,4 +224,20 @@ func operationFromProcedure(procedure string) string {
 	default:
 		return "UNKNOWN"
 	}
+}
+
+// connectPeerFromContext extracts the peer IP from the connect request context.
+// Falls back to "unknown" if no peer info is available.
+func connectPeerFromContext(ctx context.Context) string {
+	if callInfo, ok := connect.CallInfoForHandlerContext(ctx); ok {
+		peer := callInfo.Peer()
+		if peer.Addr != "" {
+			host, _, err := net.SplitHostPort(peer.Addr)
+			if err == nil {
+				return host
+			}
+			return peer.Addr
+		}
+	}
+	return ""
 }

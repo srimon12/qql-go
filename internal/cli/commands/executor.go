@@ -11,6 +11,7 @@ import (
 	"github.com/srimon12/qql-go/internal/ast"
 	"github.com/srimon12/qql-go/internal/config"
 	"github.com/srimon12/qql-go/internal/dump"
+	"github.com/srimon12/qql-go/internal/qdrantutil"
 	"github.com/srimon12/qql-go/internal/embedding"
 	"github.com/srimon12/qql-go/internal/lexer"
 	"github.com/srimon12/qql-go/internal/parser"
@@ -1240,34 +1241,14 @@ func serializeKeywordIndexParams(params *qdrant.KeywordIndexParams) map[string]a
 	if params == nil {
 		return nil
 	}
-	data := map[string]any{}
-	if params.IsTenant != nil {
-		data["is_tenant"] = params.GetIsTenant()
-	}
-	if params.OnDisk != nil {
-		data["on_disk"] = params.GetOnDisk()
-	}
-	if params.EnableHnsw != nil {
-		data["enable_hnsw"] = params.GetEnableHnsw()
-	}
-	return data
+	return qdrantutil.SerializeKeywordBoolFields(params.IsTenant, params.OnDisk, params.EnableHnsw)
 }
 
 func serializeUUIDIndexParams(params *qdrant.UuidIndexParams) map[string]any {
 	if params == nil {
 		return nil
 	}
-	data := map[string]any{}
-	if params.IsTenant != nil {
-		data["is_tenant"] = params.GetIsTenant()
-	}
-	if params.OnDisk != nil {
-		data["on_disk"] = params.GetOnDisk()
-	}
-	if params.EnableHnsw != nil {
-		data["enable_hnsw"] = params.GetEnableHnsw()
-	}
-	return data
+	return qdrantutil.SerializeKeywordBoolFields(params.IsTenant, params.OnDisk, params.EnableHnsw)
 }
 
 func serializeTextIndexParams(params *qdrant.TextIndexParams) map[string]any {
