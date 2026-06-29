@@ -280,8 +280,28 @@ Write to a file with `--audit-file audit.jsonl`, or omit to write to stderr.
 |------|---------|-------------|
 | `--rate-limit` | `0` | Max requests per second per user (0 = unlimited) |
 | `--rate-limit-capacity` | `20` | Max burst size per user |
+| `--anon-rate-limit` | `0` | Max requests per second for anonymous (pre-auth) clients (0 = disabled) |
+| `--anon-rate-limit-capacity` | `10` | Max burst size for anonymous clients |
 
-Uses a token bucket per JWT subject. When the bucket is empty, requests get `429 Resource Exhausted` with a `Retry-After` header. Stale buckets are cleaned up every 5 minutes.
+Uses a token bucket per JWT subject (or client IP for anonymous). When the bucket is empty, requests get `429 Resource Exhausted` with a `Retry-After` header. Stale buckets are cleaned up every 5 minutes. Anonymous rate limiting runs before auth to prevent resource exhaustion from invalid-token floods.
+
+### Query Complexity Guards
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--max-filter-depth` | `0` | Maximum nesting depth for filter expressions (0 = unlimited) |
+| `--max-or-operands` | `0` | Maximum number of OR operands in a filter (0 = unlimited) |
+| `--max-prefetch-depth` | `0` | Maximum nesting depth for CTE prefetch subqueries (0 = unlimited) |
+
+These guards prevent resource exhaustion from deeply nested filters or excessive CTEs. Requests exceeding limits get `429 Resource Exhausted` with a descriptive message.
+
+### CORS
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--allowed-origins` | `*` | Comma-separated list of allowed CORS origins, or `*` for all |
+
+When set to specific origins, the gateway checks the request `Origin` header and only echoes it back when it matches. Responses include `Vary: Origin` when varying by origin.
 
 ### Templates
 
