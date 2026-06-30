@@ -322,6 +322,11 @@ func (l *Lexer) readIdentifier(query string, start int) Token {
 }
 
 func lookupKeyword(s string) (TokenKind, bool) {
+	// Fast path using generated perfect switch
+	if kind, ok := lookupKeywordFast(s); ok {
+		return kind, true
+	}
+
 	if kind, ok := keywords[s]; ok {
 		return kind, true
 	}
