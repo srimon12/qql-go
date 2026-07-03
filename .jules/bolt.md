@@ -1,0 +1,3 @@
+## 2025-07-03 - [Lexer Keyword Lookup Optimization]
+**Learning:** The QQL lexer uses a string-based hash map lookup for keywords. Since keywords only contain valid characters and are restricted in length, replacing the generic map lookup with a generated length-and-first-character switch statement significantly reduces memory allocations and parse times for every token processed.
+**Action:** Implemented a `go generate` script to automatically generate `lookupKeywordFast` to replace map-based `lookupKeyword` in `internal/lexer/lexer.go`. This improves Lexer benchmarks by reducing memory allocations.
