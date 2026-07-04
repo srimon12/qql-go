@@ -322,31 +322,7 @@ func (l *Lexer) readIdentifier(query string, start int) Token {
 }
 
 func lookupKeyword(s string) (TokenKind, bool) {
-	if kind, ok := keywords[s]; ok {
-		return kind, true
-	}
-
-	if len(s) <= 16 {
-		var buf [16]byte
-		for i := 0; i < len(s); i++ {
-			c := s[i]
-			if c >= 'a' && c <= 'z' {
-				c -= 32
-			}
-			buf[i] = c
-		}
-		if kind, ok := keywords[string(buf[:len(s)])]; ok {
-			return kind, true
-		}
-		return 0, false
-	}
-
-	for kw, kind := range keywords {
-		if len(kw) == len(s) && hasPrefixCaseInsensitive(s, kw) {
-			return kind, true
-		}
-	}
-	return 0, false
+	return lookupKeywordFast(s)
 }
 
 func hasPrefixCaseInsensitive(s, upper string) bool {
