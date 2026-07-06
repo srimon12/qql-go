@@ -1,109 +1,10 @@
+//go:generate go run ../../cmd/gen_keywords/main.go
 package lexer
 
 import (
 	"github.com/srimon12/qql-go/internal/errors"
 )
 
-var keywords = map[string]TokenKind{
-	"GEO_BBOX":     TokenKindGeoBbox,
-	"GEO_RADIUS":   TokenKindGeoRadius,
-	"VALUES_COUNT": TokenKindValuesCount,
-	"HAS_VECTOR":   TokenKindHasVector,
-	"BOOST":        TokenKindBoost,
-	"DEFAULTS":     TokenKindDefaults,
-	"CASE":         TokenKindCase,
-	"WHEN":         TokenKindWhen,
-	"THEN":         TokenKindThen,
-	"ELSE":         TokenKindElse,
-	"END":          TokenKindEnd,
-	"INSERT":       TokenKindInsert,
-	"INTO":         TokenKindInto,
-	"COLLECTION":   TokenKindCollection,
-	"VALUES":       TokenKindValues,
-	"USING":        TokenKindUsing,
-	"MODEL":        TokenKindModel,
-	"HYBRID":       TokenKindHybrid,
-	"DENSE":        TokenKindDense,
-	"SPARSE":       TokenKindSparse,
-	"RERANK":       TokenKindRerank,
-	"EXACT":        TokenKindExact,
-	"WITH":         TokenKindWith,
-	"AS":           TokenKindAs,
-	"ACORN":        TokenKindAcorn,
-	"QUANTIZE":     TokenKindQuantize,
-	"SCALAR":       TokenKindScalar,
-	"BINARY":       TokenKindBinary,
-	"PRODUCT":      TokenKindProduct,
-	"TURBO":        TokenKindTurbo,
-	"BITS":         TokenKindBits,
-	"QUANTILE":     TokenKindQuantile,
-	"ALWAYS":       TokenKindAlways,
-	"RAM":          TokenKindRam,
-	"HNSW":         TokenKindHnsw,
-	"VECTORS":      TokenKindVectors,
-	"OPTIMIZERS":   TokenKindOptimizers,
-	"PARAMS":       TokenKindParams,
-	"DISABLED":     TokenKindDisabled,
-	"CREATE":       TokenKindCreate,
-	"ALTER":        TokenKindAlter,
-	"DROP":         TokenKindDrop,
-	"SHOW":         TokenKindShow,
-	"COLLECTIONS":  TokenKindCollections,
-	"SELECT":       TokenKindSelect,
-	"SCROLL":       TokenKindScroll,
-	"AFTER":        TokenKindAfter,
-	"RECOMMEND":    TokenKindRecommend,
-	"QUERY":        TokenKindQuery,
-	"NEAREST":      TokenKindNearest,
-	"CONTEXT":      TokenKindContext,
-	"DISCOVER":     TokenKindDiscover,
-	"PAIRS":        TokenKindPairs,
-	"TARGET":       TokenKindTarget,
-	"ORDER":        TokenKindOrder,
-	"ASC":          TokenKindAsc,
-	"DESC":         TokenKindDesc,
-	"LIMIT":        TokenKindLimit,
-	"GROUP":        TokenKindGroup,
-	"BY":           TokenKindBy,
-	"GROUP_SIZE":   TokenKindGroupSize,
-	"STRATEGY":     TokenKindStrategy,
-	"DELETE":       TokenKindDelete,
-	"UPDATE":       TokenKindUpdate,
-	"SET":          TokenKindSet,
-	"VECTOR":       TokenKindVector,
-	"PAYLOAD":      TokenKindPayload,
-	"FROM":         TokenKindFrom,
-	"WHERE":        TokenKindWhere,
-	"ID":           TokenKindId,
-	"INDEX":        TokenKindIndex,
-	"ON":           TokenKindOn,
-	"FOR":          TokenKindFor,
-	"TYPE":         TokenKindType,
-	"AND":          TokenKindAnd,
-	"OR":           TokenKindOr,
-	"NOT":          TokenKindNot,
-	"IN":           TokenKindIn,
-	"BETWEEN":      TokenKindBetween,
-	"IS":           TokenKindIs,
-	"NULL":         TokenKindNull,
-	"EMPTY":        TokenKindEmpty,
-	"MATCH":        TokenKindMatch,
-	"ANY":          TokenKindAny,
-	"PHRASE":       TokenKindPhrase,
-	"OFFSET":       TokenKindOffset,
-	"SCORE":        TokenKindScore,
-	"THRESHOLD":    TokenKindThreshold,
-	"LOOKUP":       TokenKindLookup,
-	"COSINE":       TokenKindCosine,
-	"DOT":          TokenKindDot,
-	"EUCLID":       TokenKindEuclid,
-	"MANHATTAN":    TokenKindManhattan,
-	"PREFETCH":     TokenKindPrefetch,
-	"FUSION":       TokenKindFusion,
-	"SAMPLE":       TokenKindSample,
-	"RELEVANCE":    TokenKindRelevance,
-	"FEEDBACK":     TokenKindFeedback,
-}
 
 type Lexer struct{}
 
@@ -322,44 +223,7 @@ func (l *Lexer) readIdentifier(query string, start int) Token {
 }
 
 func lookupKeyword(s string) (TokenKind, bool) {
-	if kind, ok := keywords[s]; ok {
-		return kind, true
-	}
-
-	if len(s) <= 16 {
-		var buf [16]byte
-		for i := 0; i < len(s); i++ {
-			c := s[i]
-			if c >= 'a' && c <= 'z' {
-				c -= 32
-			}
-			buf[i] = c
-		}
-		if kind, ok := keywords[string(buf[:len(s)])]; ok {
-			return kind, true
-		}
-		return 0, false
-	}
-
-	for kw, kind := range keywords {
-		if len(kw) == len(s) && hasPrefixCaseInsensitive(s, kw) {
-			return kind, true
-		}
-	}
-	return 0, false
-}
-
-func hasPrefixCaseInsensitive(s, upper string) bool {
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c >= 'a' && c <= 'z' {
-			c -= 32
-		}
-		if c != upper[i] {
-			return false
-		}
-	}
-	return true
+	return lookupKeywordFast(s)
 }
 
 func findDot(s string) int {
