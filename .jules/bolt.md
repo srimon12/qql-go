@@ -1,0 +1,3 @@
+## 2024-07-06 - Optimized Lexer Keyword Lookup
+**Learning:** Replaced the hashmap `keywords` and its associated case-insensitive string parsing logic with an auto-generated, length-based `switch` statement in the lexer. This prevents unnecessary string allocations and hashmap lookups during parsing. The `keywords` map definition was moved to `cmd/gen_keywords/main.go` and is no longer part of the compiled application binary.
+**Action:** When working on lexer or parser performance, prefer generated switch statements over hashmaps or regexes. Always remove the original hashmap from the source file to prevent silent failure for future developers who might try to add to the old map.
