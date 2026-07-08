@@ -1,6 +1,7 @@
 package convert
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -12,10 +13,10 @@ import (
 func convertUpsert(input []byte, collection string) ([]string, error) {
 	var req struct {
 		Points []struct {
-			ID      any                  `json:"id"`
-			Vector  any                  `json:"vector"`
-			Vectors map[string][]float32 `json:"vectors"`
-			Payload map[string]any       `json:"payload"`
+			ID      any                        `json:"id"`
+			Vector  json.RawMessage            `json:"vector"`
+			Vectors map[string]json.RawMessage `json:"vectors"`
+			Payload map[string]any             `json:"payload"`
 		} `json:"points"`
 	}
 	if err := json.Unmarshal(input, &req); err != nil {
@@ -33,10 +34,14 @@ func convertUpsert(input []byte, collection string) ([]string, error) {
 		}
 
 		// Include vector data if present
-		if point.Vector != nil {
+		if len(point.Vector) > 0 && !bytes.Equal(point.Vector, []byte("null")) {
 			payload["vector"] = point.Vector
 		} else if len(point.Vectors) > 0 {
-			payload["vector"] = point.Vectors
+			vecs := make(map[string]any, len(point.Vectors))
+			for k, v := range point.Vectors {
+				vecs[k] = v
+			}
+			payload["vector"] = vecs
 		}
 
 		// Build VALUES dict
