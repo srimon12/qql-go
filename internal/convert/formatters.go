@@ -1,6 +1,7 @@
 package convert
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -91,6 +92,8 @@ func formatValueBuilder(b *strings.Builder, v any) {
 		}
 	case nil:
 		b.WriteString("null")
+	case json.RawMessage:
+		b.Write(val)
 	case []any:
 		b.WriteByte('[')
 		for i, item := range val {
